@@ -31,6 +31,23 @@ export default async function DashboardLayout({
     .eq('id', user.id)
     .single()
 
+  // Bootstrap: se o usuário não tem perfil definido, verifica se existe algum admin.
+  // Se não houver nenhum admin, promove este usuário automaticamente.
+  let perfil = usuario?.perfil || null
+  if (!perfil || perfil === '') {
+    const { count: adminCount } = await supabase
+      .from('usuarios')
+      .select('*', { count: 'exact', head: true })
+      .eq('perfil', 'admin')
+
+    perfil = (adminCount === 0) ? 'admin' : 'operador'
+
+    // Persiste o perfil resolvido na tabela para não repetir essa lógica toda vez
+    await supabase
+      .from('usuarios')
+      .upsert({ id: user.id, perfil, nome: usuario?.nome || user.email || '' }, { onConflict: 'id' })
+  }
+
   const { data: acessos } = await supabase
     .from('usuario_unidades')
     .select('unidade_id, unidade:unidades(id, nome, cidade)')
@@ -45,7 +62,7 @@ export default async function DashboardLayout({
       unidade={unidade}
       unidades={unidades}
       userName={usuario?.nome || user.email || ''}
-      perfil={usuario?.perfil || 'operador'}
+      perfil={perfil}
     >
       {children}
     </DashboardShell>
