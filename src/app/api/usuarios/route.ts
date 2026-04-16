@@ -48,23 +48,37 @@ export async function POST(req: NextRequest) {
 
   const adminClient = createAdminClient()
 
-  // Verifica se o email já existe
+  // Verifica se o email já existe no Auth
   const { data: lista } = await adminClient.auth.admin.listUsers({ perPage: 1000 })
-  const emailJaExiste = lista?.users?.some(u => u.email?.toLowerCase() === email.toLowerCase())
-  if (emailJaExiste) {
-    return NextResponse.json({ error: 'Este email já está cadastrado no sistema.' }, { status: 400 })
+  const authExistente = lista?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+
+  let userId: string
+
+  if (authExistente) {
+    // Auth já existe — verifica se já tem registro em usuarios
+    const { data: usuarioExistente } = await adminClient
+      .from('usuarios')
+      .select('id')
+      .eq('id', authExistente.id)
+      .single()
+
+    if (usuarioExistente) {
+      return NextResponse.json({ error: 'Este email já está cadastrado no sistema.' }, { status: 400 })
+    }
+
+    // Auth existe mas sem registro em usuarios — só cria o registro
+    userId = authExistente.id
+  } else {
+    // Cria novo usuário no Auth
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+      email,
+      password: senha,
+      email_confirm: true,
+    })
+
+    if (authError) return NextResponse.json({ error: authError.message }, { status: 400 })
+    userId = authData.user.id
   }
-
-  // Cria usuário no Auth
-  const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-    email,
-    password: senha,
-    email_confirm: true,
-  })
-
-  if (authError) return NextResponse.json({ error: authError.message }, { status: 400 })
-
-  const userId = authData.user.id
 
   // Insere em usuarios
   const { error: dbError } = await adminClient
@@ -72,7 +86,7 @@ export async function POST(req: NextRequest) {
     .insert({ id: userId, nome, email, perfil, ativo: true })
 
   if (dbError) {
-    await adminClient.auth.admin.deleteUser(userId)
+    if (!authExistente) await adminClient.auth.admin.deleteUser(userId)
     return NextResponse.json({ error: dbError.message }, { status: 400 })
   }
 
