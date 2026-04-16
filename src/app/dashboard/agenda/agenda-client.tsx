@@ -316,10 +316,10 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
           </div>
         ) : (
           /* ===== VISÃO SEMANA / DIA ===== */
-          <div className="min-w-[700px]">
+          <div className={visualizacao === 'semana' ? 'min-w-[640px]' : 'min-w-[320px]'}>
             {/* Cabeçalho dos dias */}
             <div className="flex border-b border-gray-200 sticky top-0 bg-white z-10 shadow-sm">
-              <div className="w-16 flex-shrink-0" />
+              <div className="w-14 flex-shrink-0" />
               {diasVisiveis.map(dia => (
                 <div key={dia.toISOString()}
                   className={`flex-1 text-center py-3 border-l border-gray-100 ${isSameDay(dia, new Date()) ? 'bg-amber-50' : ''}`}>
@@ -337,43 +337,82 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
               ))}
             </div>
 
-            {/* Linhas de hora */}
-            {HORAS.map(hora => (
-              <div key={hora} className="flex border-b border-gray-100" style={{ minHeight: 64 }}>
-                <div className="w-16 flex-shrink-0 px-2 pt-2 text-right pr-3">
-                  <span className="text-xs text-gray-400">{hora}:00</span>
-                </div>
-                {diasVisiveis.map(dia => {
-                  const ags = getAgendamentosHora(dia, hora)
-                  return (
-                    <div key={dia.toISOString()}
-                      onClick={() => {
-                        const data = new Date(dia)
-                        data.setHours(hora, 0, 0, 0)
-                        abrirNovo(data)
-                      }}
-                      className={`flex-1 border-l border-gray-100 p-1 cursor-pointer hover:bg-gray-50 transition-colors ${
-                        isSameDay(dia, new Date()) ? 'bg-amber-50/30' : ''
-                      }`}>
-                      {ags.map(ag => {
-                        const profs = ag.itens?.map(i => i.profissional).filter(Boolean) || []
-                        const cor = profs[0]?.cor_agenda || '#6366f1'
-                        const servNome = ag.itens?.[0]?.servico?.nome || 'Serviço'
-                        return (
-                          <div key={ag.id}
-                            onClick={e => { e.stopPropagation(); abrirEdicao(ag) }}
-                            className={`text-xs rounded px-2 py-1 mb-1 border-l-2 cursor-pointer hover:opacity-80 transition-opacity ${statusCor[ag.status] || statusCor.agendado}`}
-                            style={{ borderLeftColor: cor }}>
-                            <p className="font-semibold truncate">{ag.cliente?.nome || 'Cliente'}</p>
-                            <p className="truncate opacity-75">{servNome}</p>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
+            {/* Corpo com posicionamento absoluto */}
+            <div className="flex">
+              {/* Coluna de horas */}
+              <div className="w-14 flex-shrink-0 relative" style={{ height: totalAltura }}>
+                {HORAS.map(hora => (
+                  <div
+                    key={hora}
+                    className="absolute left-0 right-0 pr-2 flex items-start justify-end pt-1 border-t border-gray-100"
+                    style={{ top: (hora - HORAS[0]) * SLOT_HEIGHT, height: SLOT_HEIGHT }}
+                  >
+                    <span className="text-xs text-gray-400">{hora}:00</span>
+                  </div>
+                ))}
               </div>
-            ))}
+
+              {/* Colunas dos dias */}
+              {diasVisiveis.map(dia => {
+                const agsNoDia = agendamentos.filter(ag =>
+                  isSameDay(parseISO(ag.data_hora_inicio), dia)
+                )
+                return (
+                  <div
+                    key={dia.toISOString()}
+                    className={`flex-1 border-l border-gray-200 relative min-w-0 overflow-hidden ${
+                      isSameDay(dia, new Date()) ? 'bg-amber-50/20' : ''
+                    }`}
+                    style={{ height: totalAltura }}
+                  >
+                    {/* Linhas de hora clicáveis */}
+                    {HORAS.map(hora => (
+                      <div
+                        key={hora}
+                        className="absolute left-0 right-0 border-t border-gray-100 cursor-pointer hover:bg-gray-50/60 transition-colors"
+                        style={{ top: (hora - HORAS[0]) * SLOT_HEIGHT, height: SLOT_HEIGHT }}
+                        onClick={() => {
+                          const data = new Date(dia)
+                          data.setHours(hora, 0, 0, 0)
+                          abrirNovo(data)
+                        }}
+                      />
+                    ))}
+
+                    {/* Agendamentos posicionados */}
+                    {agsNoDia.map(ag => {
+                      const top = calcTop(ag.data_hora_inicio)
+                      const height = calcAltura(ag)
+                      const profs = ag.itens?.map(i => i.profissional).filter(Boolean) || []
+                      const cor = profs[0]?.cor_agenda || '#6366f1'
+                      const servNome = ag.itens?.[0]?.servico?.nome || 'Serviço'
+                      const statusClass = statusCor[ag.status] || statusCor.agendado
+                      return (
+                        <div
+                          key={ag.id}
+                          onClick={e => { e.stopPropagation(); abrirEdicao(ag) }}
+                          className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${statusClass}`}
+                          style={{
+                            top: top + 1,
+                            height: height - 2,
+                            borderLeftColor: cor,
+                          }}
+                        >
+                          <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
+                          <p className="text-xs truncate opacity-75 leading-tight">{servNome}</p>
+                          {height >= 52 && (
+                            <p className="text-xs opacity-60 leading-tight mt-0.5">
+                              {format(parseISO(ag.data_hora_inicio), 'HH:mm')}
+                              {ag.data_hora_fim && ` – ${format(parseISO(ag.data_hora_fim), 'HH:mm')}`}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
 
