@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Comanda, Profissional } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
-import { FileText, Users } from 'lucide-react'
+import { FileText, Users, Printer } from 'lucide-react'
 
 const formaPagamentoLabel: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -108,15 +108,40 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
     setDataFim(format(endOfMonth(new Date()), 'yyyy-MM-dd'))
   }
 
+  const tituloPrint = aba === 'comandas'
+    ? 'Relatório de Comandas Fechadas'
+    : profissionalId === 'todos'
+      ? 'Relatório de Comissão — Todos os Profissionais'
+      : `Relatório de Comissão — ${resumoProf?.profissional.nome || ''}`
+
+  const periodoFormatado = `${format(new Date(dataInicio + 'T12:00:00'), 'dd/MM/yyyy')} a ${format(new Date(dataFim + 'T12:00:00'), 'dd/MM/yyyy')}`
+
   return (
     <div className="p-4 md:p-6">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Relatórios</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Análise de comandas e comissionamento</p>
+      {/* Cabeçalho visível apenas na impressão */}
+      <div className="hidden print:block mb-6 pb-4 border-b-2 border-gray-300">
+        <p className="text-lg font-bold text-gray-900">Danelon</p>
+        <p className="text-base font-semibold text-gray-800 mt-1">{tituloPrint}</p>
+        <p className="text-sm text-gray-600 mt-0.5">Período: {periodoFormatado}</p>
+      </div>
+
+      <div className="print:hidden mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Relatórios</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Análise de comandas e comissionamento</p>
+        </div>
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+        >
+          <Printer className="w-4 h-4" />
+          <span className="hidden sm:inline">Imprimir / PDF</span>
+          <span className="sm:hidden">PDF</span>
+        </button>
       </div>
 
       {/* Filtro de período */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+      <div className="print:hidden bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600 whitespace-nowrap">De:</label>
@@ -142,7 +167,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
+      <div className="print:hidden flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
         <button onClick={() => setAba('comandas')}
           className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${aba === 'comandas' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}>
           Comandas Fechadas
@@ -183,8 +208,8 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              {/* Desktop */}
-              <table className="w-full hidden md:table">
+              {/* Tabela */}
+              <table className="w-full hidden md:table print:table">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
                     <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Data fechamento</th>
@@ -242,8 +267,8 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                 </tfoot>
               </table>
 
-              {/* Mobile */}
-              <div className="md:hidden divide-y divide-gray-50">
+              {/* Mobile cards */}
+              <div className="md:hidden print:hidden divide-y divide-gray-50">
                 {comandas.map(c => (
                   <div key={c.id} className="px-4 py-3">
                     <div className="flex justify-between items-start mb-1.5">
@@ -277,7 +302,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
 
         /* ===== RELATÓRIO 2: COMISSÃO POR PROFISSIONAL ===== */
         <div>
-          <div className="flex items-center gap-3 mb-6">
+          <div className="print:hidden flex items-center gap-3 mb-6">
             <label className="text-sm text-gray-600 whitespace-nowrap">Profissional:</label>
             <select value={profissionalId} onChange={e => setProfissionalId(e.target.value)}
               className="flex-1 max-w-xs px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600">
@@ -353,7 +378,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                           <td className="px-4 py-3 text-sm font-semibold text-amber-700 text-right">{formatCurrency(r.totalComissao)}</td>
                           <td className="px-4 py-3 text-right">
                             <button onClick={() => setProfissionalId(r.profissional.id)}
-                              className="text-xs text-amber-700 hover:underline">
+                              className="print:hidden text-xs text-amber-700 hover:underline">
                               Ver detalhes →
                             </button>
                           </td>
@@ -389,7 +414,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                         <div className="text-right flex-shrink-0">
                           <p className="text-sm font-bold text-amber-700">{formatCurrency(r.totalComissao)}</p>
                           <button onClick={() => setProfissionalId(r.profissional.id)}
-                            className="text-xs text-amber-700 hover:underline">Detalhes</button>
+                            className="print:hidden text-xs text-amber-700 hover:underline">Detalhes</button>
                         </div>
                       </div>
                     ))}

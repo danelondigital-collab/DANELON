@@ -29,6 +29,7 @@ export default function DashboardShell({ unidade, unidades, userName, children }
       <div className={`
         fixed inset-y-0 left-0 z-40 transition-transform duration-300
         md:relative md:translate-x-0 md:flex-shrink-0
+        print:hidden
         ${sidebarAberto ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <Sidebar
@@ -42,7 +43,7 @@ export default function DashboardShell({ unidade, unidades, userName, children }
       {/* Conteúdo principal */}
       <main className="flex-1 min-h-0 overflow-y-auto flex flex-col min-w-0">
         {/* Barra superior mobile */}
-        <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 sticky top-0 z-20 flex-shrink-0">
+        <div className="md:hidden print:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 sticky top-0 z-20 flex-shrink-0">
           <button
             onClick={() => setSidebarAberto(true)}
             className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
