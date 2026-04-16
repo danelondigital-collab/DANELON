@@ -82,12 +82,48 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
   }, [aba, cliente])
 
   async function handleUpload(files: FileList | null) {
-    if (!files || files.length === 0 || !cliente) return
-    setUploadando(true)
+    if (!files || files.length === 0) return
+
+    let clienteId = cliente?.id
+
+    // Se o cliente ainda não foi salvo, salva agora
+    if (!clienteId) {
+      if (!form.nome.trim()) {
+        setErro('Preencha o nome do cliente antes de enviar documentos.')
+        setAba('cadastro')
+        return
+      }
+      setUploadando(true)
+      const { data, error } = await supabase
+        .from('clientes')
+        .insert({
+          nome: form.nome.trim(),
+          telefone: form.telefone || null,
+          email: form.email || null,
+          cpf: form.cpf || null,
+          data_nascimento: form.data_nascimento || null,
+          observacoes: form.observacoes || null,
+          ativo: form.ativo,
+          unidade_id: unidadeId,
+        })
+        .select()
+        .single()
+
+      if (error) {
+        setErro(error.message)
+        setUploadando(false)
+        return
+      }
+
+      onSalvo(data)
+      clienteId = data.id
+    } else {
+      setUploadando(true)
+    }
 
     for (const file of Array.from(files)) {
       const ext = file.name.split('.').pop()
-      const path = `${cliente.id}/${crypto.randomUUID()}.${ext}`
+      const path = `${clienteId}/${crypto.randomUUID()}.${ext}`
 
       const { error: uploadError } = await supabase.storage
         .from('clientes')
@@ -96,7 +132,7 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
       if (uploadError) continue
 
       await supabase.from('cliente_documentos').insert({
-        cliente_id: cliente.id,
+        cliente_id: clienteId,
         nome: file.name,
         storage_path: path,
       })
@@ -270,13 +306,12 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
 
             {aba === 'documentos' && (
               <div className="space-y-4">
-                {!cliente ? (
-                  <div className="text-center py-10 text-gray-400">
-                    <ImageIcon className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                    <p className="text-sm">Salve o cliente primeiro para adicionar documentos.</p>
-                  </div>
-                ) : (
-                  <>
+                <>
+                    {!cliente && (
+                      <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        O cliente será salvo automaticamente ao enviar o primeiro documento.
+                      </p>
+                    )}
                     {/* Área de upload */}
                     <div
                       onClick={() => !uploadando && inputRef.current?.click()}
@@ -379,8 +414,7 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
                         ))}
                       </div>
                     )}
-                  </>
-                )}
+                </>
               </div>
             )}
 
