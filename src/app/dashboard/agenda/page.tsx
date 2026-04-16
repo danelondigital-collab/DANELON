@@ -18,7 +18,7 @@ export default async function AgendaPage() {
       unidadeId={unidadeId}
       profissionais={profissionais || []}
       servicos={servicos || []}
-      clientes={clientes || []}
+      clientes={(clientes as unknown as import('@/types').Cliente[]) || []}
     />
   )
 }

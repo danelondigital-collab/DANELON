@@ -22,7 +22,7 @@ export default async function ComandasPage() {
   return (
     <ComandasClient
       comandas={(comandas as unknown as import('@/types').Comanda[]) || []}
-      clientes={clientes || []}
+      clientes={(clientes as unknown as import('@/types').Cliente[]) || []}
       profissionais={profissionais || []}
       servicos={servicos || []}
       produtos={produtos || []}
