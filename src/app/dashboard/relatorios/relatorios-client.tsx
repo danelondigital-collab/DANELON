@@ -64,6 +64,9 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
   // Resumo relatório 1
   const totalFaturamento = comandas.reduce((s, c) => s + (c.valor_final || 0), 0)
   const totalDesconto = comandas.reduce((s, c) => s + (c.desconto || 0), 0)
+  const totalComissoes = comandas.reduce((s, c) =>
+    s + (c.itens?.reduce((si, item) =>
+      si + (item.profissionais?.reduce((sp, cp) => sp + (cp.valor_comissao || 0), 0) || 0), 0) || 0), 0)
 
   // Resumo por profissional
   const resumoPorProfissional = profissionais.map(prof => {
@@ -196,7 +199,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
 
         /* ===== RELATÓRIO 1: COMANDAS FECHADAS ===== */
         <div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <p className="text-xs text-gray-500 mb-1">Comandas fechadas</p>
               <p className="text-2xl font-bold text-gray-900">{comandas.length}</p>
@@ -205,9 +208,13 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
               <p className="text-xs text-gray-500 mb-1">Faturamento</p>
               <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalFaturamento)}</p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-4 col-span-2 md:col-span-1">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
               <p className="text-xs text-gray-500 mb-1">Descontos</p>
               <p className="text-2xl font-bold text-red-600">- {formatCurrency(totalDesconto)}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-amber-200 p-4">
+              <p className="text-xs text-gray-500 mb-1">Total comissões</p>
+              <p className="text-2xl font-bold" style={{ color: '#B8924A' }}>{formatCurrency(totalComissoes)}</p>
             </div>
           </div>
 
