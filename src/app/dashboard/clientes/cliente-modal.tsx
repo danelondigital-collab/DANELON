@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { X } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, Upload, Trash2, FileImage, Loader2, ImageIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Cliente } from '@/types'
 
@@ -12,7 +12,15 @@ interface Props {
   onSalvo: (cliente: Cliente) => void
 }
 
-type Aba = 'cadastro' | 'configuracoes'
+interface Documento {
+  id: string
+  nome: string
+  storage_path: string
+  url: string
+  created_at: string
+}
+
+type Aba = 'cadastro' | 'documentos' | 'configuracoes'
 
 export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: Props) {
   const supabase = createClient()
@@ -30,8 +38,80 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
     ativo: cliente?.ativo ?? true,
   })
 
+  // Documentos
+  const [documentos, setDocumentos] = useState<Documento[]>([])
+  const [carregandoDocs, setCarregandoDocs] = useState(false)
+  const [uploadando, setUploadando] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const [deletando, setDeletando] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
   function set(field: string, value: string | boolean) {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  async function carregarDocumentos() {
+    if (!cliente) return
+    setCarregandoDocs(true)
+    const { data } = await supabase
+      .from('cliente_documentos')
+      .select('*')
+      .eq('cliente_id', cliente.id)
+      .order('created_at')
+
+    if (data && data.length > 0) {
+      const docs = await Promise.all(
+        data.map(async (doc) => {
+          const { data: signed } = await supabase.storage
+            .from('clientes')
+            .createSignedUrl(doc.storage_path, 3600)
+          return { ...doc, url: signed?.signedUrl || '' }
+        })
+      )
+      setDocumentos(docs)
+    } else {
+      setDocumentos([])
+    }
+    setCarregandoDocs(false)
+  }
+
+  useEffect(() => {
+    if (aba === 'documentos' && cliente) {
+      carregarDocumentos()
+    }
+  }, [aba, cliente])
+
+  async function handleUpload(files: FileList | null) {
+    if (!files || files.length === 0 || !cliente) return
+    setUploadando(true)
+
+    for (const file of Array.from(files)) {
+      const ext = file.name.split('.').pop()
+      const path = `${cliente.id}/${crypto.randomUUID()}.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('clientes')
+        .upload(path, file)
+
+      if (uploadError) continue
+
+      await supabase.from('cliente_documentos').insert({
+        cliente_id: cliente.id,
+        nome: file.name,
+        storage_path: path,
+      })
+    }
+
+    await carregarDocumentos()
+    setUploadando(false)
+  }
+
+  async function deletarDocumento(doc: Documento) {
+    setDeletando(doc.id)
+    await supabase.storage.from('clientes').remove([doc.storage_path])
+    await supabase.from('cliente_documentos').delete().eq('id', doc.id)
+    setDocumentos(prev => prev.filter(d => d.id !== doc.id))
+    setDeletando(null)
   }
 
   async function handleSalvar() {
@@ -74,6 +154,15 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
     setLoading(false)
   }
 
+  const isImage = (nome: string) =>
+    /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(nome)
+
+  const abas: [Aba, string][] = [
+    ['cadastro', 'Cadastro'],
+    ['documentos', 'Documentos'],
+    ['configuracoes', 'Configurações'],
+  ]
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 flex flex-col max-h-[90vh]">
@@ -88,7 +177,7 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar abas */}
           <nav className="w-44 flex-shrink-0 border-r border-gray-100 py-4 px-3 space-y-0.5">
-            {([['cadastro', 'Cadastro'], ['configuracoes', 'Configurações']] as [Aba, string][]).map(([key, label]) => (
+            {abas.map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setAba(key)}
@@ -179,6 +268,122 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
               </div>
             )}
 
+            {aba === 'documentos' && (
+              <div className="space-y-4">
+                {!cliente ? (
+                  <div className="text-center py-10 text-gray-400">
+                    <ImageIcon className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">Salve o cliente primeiro para adicionar documentos.</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Área de upload */}
+                    <div
+                      onClick={() => !uploadando && inputRef.current?.click()}
+                      onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                      onDragLeave={() => setDragging(false)}
+                      onDrop={e => {
+                        e.preventDefault()
+                        setDragging(false)
+                        handleUpload(e.dataTransfer.files)
+                      }}
+                      className={`relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                        dragging
+                          ? 'border-amber-500 bg-amber-50'
+                          : 'border-gray-200 hover:border-amber-400 hover:bg-amber-50/50'
+                      }`}
+                    >
+                      {uploadando ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
+                          <p className="text-sm text-amber-700 font-medium">Enviando...</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2">
+                          <Upload className="w-8 h-8 text-gray-400" />
+                          <p className="text-sm font-medium text-gray-700">
+                            Clique ou arraste arquivos aqui
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Fotos e documentos (JPG, PNG, PDF)
+                          </p>
+                        </div>
+                      )}
+                      <input
+                        ref={inputRef}
+                        type="file"
+                        multiple
+                        accept="image/*,.pdf"
+                        className="sr-only"
+                        onChange={e => handleUpload(e.target.files)}
+                      />
+                    </div>
+
+                    {/* Grid de documentos */}
+                    {carregandoDocs ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="w-6 h-6 text-amber-600 animate-spin" />
+                      </div>
+                    ) : documentos.length === 0 ? (
+                      <div className="text-center py-6 text-gray-400">
+                        <FileImage className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                        <p className="text-sm">Nenhum documento enviado ainda.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-3">
+                        {documentos.map(doc => (
+                          <div key={doc.id} className="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                            {isImage(doc.nome) ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={doc.url}
+                                alt={doc.nome}
+                                className="w-full h-28 object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-28 flex flex-col items-center justify-center gap-1 bg-gray-100">
+                                <FileImage className="w-8 h-8 text-gray-400" />
+                                <span className="text-xs text-gray-500 px-2 text-center truncate w-full text-center">PDF</span>
+                              </div>
+                            )}
+                            <div className="px-2 py-1.5 bg-white">
+                              <p className="text-xs text-gray-600 truncate">{doc.nome}</p>
+                            </div>
+                            {/* Botões ao hover */}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                              {isImage(doc.nome) && (
+                                <a
+                                  href={doc.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 bg-white rounded-lg hover:bg-gray-100"
+                                  title="Ver imagem"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <ImageIcon className="w-4 h-4 text-gray-700" />
+                                </a>
+                              )}
+                              <button
+                                onClick={() => deletarDocumento(doc)}
+                                disabled={deletando === doc.id}
+                                className="p-1.5 bg-white rounded-lg hover:bg-red-50"
+                                title="Excluir"
+                              >
+                                {deletando === doc.id
+                                  ? <Loader2 className="w-4 h-4 text-red-500 animate-spin" />
+                                  : <Trash2 className="w-4 h-4 text-red-500" />
+                                }
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {aba === 'configuracoes' && (
               <div className="space-y-4">
                 <div className="flex items-start justify-between py-3 border-b border-gray-100">
@@ -212,13 +417,15 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
             >
               Cancelar
             </button>
-            <button
-              onClick={handleSalvar}
-              disabled={loading}
-              className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              {loading ? 'Salvando...' : 'Salvar'}
-            </button>
+            {aba !== 'documentos' && (
+              <button
+                onClick={handleSalvar}
+                disabled={loading}
+                className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {loading ? 'Salvando...' : 'Salvar'}
+              </button>
+            )}
           </div>
         </div>
       </div>
