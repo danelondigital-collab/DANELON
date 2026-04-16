@@ -1,4 +1,4 @@
-export type PerfilUsuario = 'admin' | 'gerente' | 'recepcionista'
+export type PerfilUsuario = 'admin' | 'gerente' | 'recepcionista' | 'operador'
 export type StatusAgendamento = 'agendado' | 'confirmado' | 'em_atendimento' | 'concluido' | 'cancelado' | 'faltou'
 export type StatusComanda = 'aberta' | 'fechada' | 'cancelada'
 export type FormaPagamento = 'dinheiro' | 'cartao_debito' | 'cartao_credito' | 'pix' | 'misto'

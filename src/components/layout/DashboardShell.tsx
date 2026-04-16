@@ -9,10 +9,11 @@ interface Props {
   unidade: Unidade
   unidades: { id: string; nome: string; cidade: string }[]
   userName: string
+  perfil: string
   children: React.ReactNode
 }
 
-export default function DashboardShell({ unidade, unidades, userName, children }: Props) {
+export default function DashboardShell({ unidade, unidades, userName, perfil, children }: Props) {
   const [sidebarAberto, setSidebarAberto] = useState(false)
 
   return (
@@ -36,6 +37,7 @@ export default function DashboardShell({ unidade, unidades, userName, children }
           unidade={unidade}
           unidades={unidades}
           userName={userName}
+          perfil={perfil}
           onClose={() => setSidebarAberto(false)}
         />
       </div>

@@ -27,7 +27,7 @@ export default async function DashboardLayout({
 
   const { data: usuario } = await supabase
     .from('usuarios')
-    .select('nome, perfil')
+    .select('nome, perfil, ativo')
     .eq('id', user.id)
     .single()
 
@@ -45,6 +45,7 @@ export default async function DashboardLayout({
       unidade={unidade}
       unidades={unidades}
       userName={usuario?.nome || user.email || ''}
+      perfil={usuario?.perfil || 'operador'}
     >
       {children}
     </DashboardShell>

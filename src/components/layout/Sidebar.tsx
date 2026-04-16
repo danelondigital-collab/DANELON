@@ -16,30 +16,34 @@ import {
   ChevronDown,
   Building2,
   Check,
+  ShieldCheck,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import type { Unidade } from '@/types'
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/clientes', label: 'Clientes', icon: Users },
-  { href: '/dashboard/profissionais', label: 'Profissionais', icon: UserCog },
-  { href: '/dashboard/servicos', label: 'Serviços', icon: Scissors },
-  { href: '/dashboard/produtos', label: 'Produtos', icon: Package },
-  { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarDays },
-  { href: '/dashboard/comandas', label: 'Comandas', icon: ClipboardList },
-  { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3 },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, adminOnly: false },
+  { href: '/dashboard/clientes', label: 'Clientes', icon: Users, adminOnly: false },
+  { href: '/dashboard/profissionais', label: 'Profissionais', icon: UserCog, adminOnly: false },
+  { href: '/dashboard/servicos', label: 'Serviços', icon: Scissors, adminOnly: false },
+  { href: '/dashboard/produtos', label: 'Produtos', icon: Package, adminOnly: false },
+  { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarDays, adminOnly: false },
+  { href: '/dashboard/comandas', label: 'Comandas', icon: ClipboardList, adminOnly: false },
+  { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3, adminOnly: true },
+  { href: '/dashboard/usuarios', label: 'Usuários', icon: ShieldCheck, adminOnly: true },
 ]
 
 interface Props {
   unidade: Unidade
   unidades: { id: string; nome: string; cidade: string }[]
   userName: string
+  perfil: string
   onClose?: () => void
 }
 
-export default function Sidebar({ unidade, unidades, userName, onClose }: Props) {
+export default function Sidebar({ unidade, unidades, userName, perfil, onClose }: Props) {
+  const isAdmin = perfil === 'admin'
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -125,7 +129,7 @@ export default function Sidebar({ unidade, unidades, userName, onClose }: Props)
 
       {/* Navegação */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => {
+        {navItems.filter(item => !item.adminOnly || isAdmin).map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href ||
             (item.href !== '/dashboard' && pathname.startsWith(item.href))
@@ -150,7 +154,13 @@ export default function Sidebar({ unidade, unidades, userName, onClose }: Props)
       {/* Footer */}
       <div className="px-3 py-4 border-t border-white/10">
         <div className="px-3 py-2 mb-1">
-          <p className="text-xs font-medium text-white/60 truncate">{userName}</p>
+          <p className="text-xs font-medium text-white/80 truncate">{userName}</p>
+          <span className={cn(
+            'inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5',
+            isAdmin ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 text-white/40'
+          )}>
+            {isAdmin ? 'Administrador' : 'Operador'}
+          </span>
         </div>
         <button
           onClick={handleLogout}
