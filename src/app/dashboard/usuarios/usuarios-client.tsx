@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ShieldCheck, Plus, Pencil, Trash2, X, Check, Eye, EyeOff, AlertTriangle } from 'lucide-react'
+import { ShieldCheck, Plus, Pencil, Trash2, X, Check, Eye, EyeOff, AlertTriangle, KeyRound } from 'lucide-react'
 
 interface Unidade {
   id: string
@@ -50,6 +50,12 @@ export default function UsuariosClient({ unidades }: Props) {
   const [confirmandoDelete, setConfirmandoDelete] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
+  const [resetModal, setResetModal] = useState<Usuario | null>(null)
+  const [novaSenha, setNovaSenha] = useState('')
+  const [mostrarNovaSenha, setMostrarNovaSenha] = useState(false)
+  const [resetando, setResetando] = useState(false)
+  const [resetErro, setResetErro] = useState('')
+  const [resetSucesso, setResetSucesso] = useState(false)
 
   // Campos do form
   const [nome, setNome] = useState('')
@@ -155,6 +161,29 @@ export default function UsuariosClient({ unidades }: Props) {
     buscarUsuarios()
   }
 
+  async function abrirReset(u: Usuario) {
+    setResetModal(u)
+    setNovaSenha('')
+    setResetErro('')
+    setResetSucesso(false)
+  }
+
+  async function salvarNovaSenha() {
+    if (!resetModal) return
+    if (novaSenha.length < 6) { setResetErro('Mínimo 6 caracteres.'); return }
+    setResetando(true)
+    setResetErro('')
+    const res = await fetch('/api/usuarios', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: resetModal.id, novaSenha }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setResetErro(data.error || 'Erro ao redefinir senha.'); setResetando(false); return }
+    setResetSucesso(true)
+    setResetando(false)
+  }
+
   async function toggleAtivo(u: Usuario) {
     await fetch('/api/usuarios', {
       method: 'PATCH',
@@ -246,6 +275,11 @@ export default function UsuariosClient({ unidades }: Props) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">
+                        <button onClick={() => abrirReset(u)}
+                          title="Redefinir senha"
+                          className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors text-gray-400 hover:text-blue-600">
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
                         <button onClick={() => abrirEditar(u)}
                           className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-700">
                           <Pencil className="w-3.5 h-3.5" />
@@ -329,6 +363,66 @@ export default function UsuariosClient({ unidades }: Props) {
             ))}
           </div>
         </>
+      )}
+
+      {/* Modal redefinir senha */}
+      {resetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setResetModal(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Redefinir senha</h2>
+              <button onClick={() => setResetModal(null)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-600">
+                Definindo nova senha para <strong>{resetModal.nome}</strong>
+              </p>
+              {resetSucesso ? (
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50 border border-green-200 rounded-lg">
+                  <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  <p className="text-sm text-green-700">Senha redefinida com sucesso!</p>
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <input
+                      type={mostrarNovaSenha ? 'text' : 'password'}
+                      value={novaSenha}
+                      onChange={e => setNovaSenha(e.target.value)}
+                      placeholder="Nova senha (mín. 6 caracteres)"
+                      autoFocus
+                      className="w-full px-3 py-2.5 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                    />
+                    <button type="button" onClick={() => setMostrarNovaSenha(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      {mostrarNovaSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {resetErro && (
+                    <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{resetErro}</p>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="px-6 pb-5 flex gap-3">
+              <button onClick={() => setResetModal(null)}
+                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
+                {resetSucesso ? 'Fechar' : 'Cancelar'}
+              </button>
+              {!resetSucesso && (
+                <button onClick={salvarNovaSenha} disabled={resetando}
+                  className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-white disabled:opacity-60"
+                  style={{ backgroundColor: '#B8924A' }}>
+                  {resetando ? 'Salvando...' : 'Salvar senha'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal criar/editar */}

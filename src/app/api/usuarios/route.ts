@@ -106,15 +106,25 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, id: userId })
 }
 
-// PATCH — editar usuário (nome, perfil, unidades, ativo)
+// PATCH — editar usuário (nome, perfil, unidades, ativo, novaSenha)
 export async function PATCH(req: NextRequest) {
   const admin = await verificarAdmin()
   if (!admin) return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
 
-  const { id, nome, perfil, unidadeIds, ativo } = await req.json()
+  const { id, nome, perfil, unidadeIds, ativo, novaSenha } = await req.json()
   if (!id) return NextResponse.json({ error: 'ID obrigatório' }, { status: 400 })
 
   const adminClient = createAdminClient()
+
+  // Redefinir senha
+  if (novaSenha) {
+    if (novaSenha.length < 6) {
+      return NextResponse.json({ error: 'A senha deve ter no mínimo 6 caracteres.' }, { status: 400 })
+    }
+    const { error } = await adminClient.auth.admin.updateUserById(id, { password: novaSenha })
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ success: true })
+  }
 
   // Atualiza usuarios
   const updates: Record<string, unknown> = {}
