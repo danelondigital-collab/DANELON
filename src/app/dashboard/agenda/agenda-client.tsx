@@ -51,7 +51,9 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   const [selecionado, setSelecionado] = useState<Agendamento | null>(null)
   const [horarioInicial, setHorarioInicial] = useState<{ data: Date; profissional_id?: string } | null>(null)
   const [loading, setLoading] = useState(false)
-  const [visualizacao, setVisualizacao] = useState<'semana' | 'dia' | 'profissional'>('semana')
+  const [visualizacao, setVisualizacao] = useState<'semana' | 'dia' | 'profissional'>(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 'dia' : 'semana'
+  )
   const [diaAtual, setDiaAtual] = useState(() => new Date())
 
   const inicioSemana = startOfWeek(semanaAtual, { weekStartsOn: 1 })
@@ -165,7 +167,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   return (
     <div className="flex flex-col" style={{ height: '100%' }}>
       {/* Header */}
-      <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-center justify-between gap-4 flex-shrink-0">
+      <div className="px-4 py-3 bg-white border-b border-gray-200 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
             <button onClick={navAnterior}
@@ -200,12 +202,15 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
             </button>
             <button onClick={() => setVisualizacao('profissional')}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${visualizacao === 'profissional' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}>
-              Profissionais
+              <span className="hidden sm:inline">Profissionais</span>
+              <span className="sm:hidden">Profs</span>
             </button>
           </div>
           <button onClick={() => abrirNovo()}
             className="flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-            <Plus className="w-4 h-4" /> Novo agendamento
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Novo agendamento</span>
+            <span className="sm:hidden">Novo</span>
           </button>
         </div>
       </div>

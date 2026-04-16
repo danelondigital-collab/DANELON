@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import Sidebar from '@/components/layout/Sidebar'
+import DashboardShell from '@/components/layout/DashboardShell'
 
 export default async function DashboardLayout({
   children,
@@ -41,15 +41,12 @@ export default async function DashboardLayout({
     .filter(Boolean) as { id: string; nome: string; cidade: string }[]
 
   return (
-    <div className="flex h-screen" style={{ backgroundColor: '#F5F3EE' }}>
-      <Sidebar
-        unidade={unidade}
-        unidades={unidades}
-        userName={usuario?.nome || user.email || ''}
-      />
-      <main className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-        {children}
-      </main>
-    </div>
+    <DashboardShell
+      unidade={unidade}
+      unidades={unidades}
+      userName={usuario?.nome || user.email || ''}
+    >
+      {children}
+    </DashboardShell>
   )
 }

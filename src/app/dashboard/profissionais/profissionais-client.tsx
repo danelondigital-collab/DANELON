@@ -35,7 +35,7 @@ export default function ProfissionaisClient({ profissionais: initial, unidadeId 
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Profissionais</h1>
@@ -46,7 +46,8 @@ export default function ProfissionaisClient({ profissionais: initial, unidadeId 
           className="flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Novo profissional
+          <span className="hidden sm:inline">Novo profissional</span>
+          <span className="sm:hidden">Novo</span>
         </button>
       </div>
 
@@ -77,48 +78,78 @@ export default function ProfissionaisClient({ profissionais: initial, unidadeId 
             )}
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Nome</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Telefone</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Comissão</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Tabela desktop */}
+            <table className="w-full hidden md:table">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Nome</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Telefone</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Comissão</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.map(p => (
+                  <tr
+                    key={p.id}
+                    onClick={() => abrirEdicao(p)}
+                    className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-medium"
+                          style={{ backgroundColor: p.cor_agenda }}
+                        >
+                          {p.nome.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{p.nome}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {p.telefone ? formatPhone(p.telefone) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{p.comissao_padrao}%</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        p.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {p.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Cards mobile */}
+            <div className="md:hidden divide-y divide-gray-50">
               {filtrados.map(p => (
-                <tr
+                <div
                   key={p.id}
                   onClick={() => abrirEdicao(p)}
-                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
                 >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-medium"
-                        style={{ backgroundColor: p.cor_agenda }}
-                      >
-                        {p.nome.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">{p.nome}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {p.telefone ? formatPhone(p.telefone) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{p.comissao_padrao}%</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      p.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {p.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                </tr>
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-medium"
+                    style={{ backgroundColor: p.cor_agenda }}
+                  >
+                    {p.nome.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{p.nome}</p>
+                    <p className="text-xs text-gray-500">{p.comissao_padrao}% comissão</p>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                    p.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {p.ativo ? 'Ativo' : 'Inativo'}
+                  </span>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
 

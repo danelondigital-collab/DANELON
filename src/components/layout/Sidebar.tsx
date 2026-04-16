@@ -36,9 +36,10 @@ interface Props {
   unidade: Unidade
   unidades: { id: string; nome: string; cidade: string }[]
   userName: string
+  onClose?: () => void
 }
 
-export default function Sidebar({ unidade, unidades, userName }: Props) {
+export default function Sidebar({ unidade, unidades, userName, onClose }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -132,6 +133,7 @@ export default function Sidebar({ unidade, unidades, userName }: Props) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onClose}
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                 isActive ? 'text-white font-medium' : 'text-white/50 hover:text-white/80 hover:bg-white/8'

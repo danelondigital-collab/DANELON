@@ -58,7 +58,7 @@ export default function ComandasClient({ comandas: initial, clientes, profission
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Comandas</h1>
@@ -68,7 +68,9 @@ export default function ComandasClient({ comandas: initial, clientes, profission
         </div>
         <button onClick={abrirNova}
           className="flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-          <Plus className="w-4 h-4" /> Nova comanda
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Nova comanda</span>
+          <span className="sm:hidden">Nova</span>
         </button>
       </div>
 
@@ -97,34 +99,62 @@ export default function ComandasClient({ comandas: initial, clientes, profission
             )}
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Cliente</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Abertura</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
-                <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Total</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Tabela desktop */}
+            <table className="w-full hidden md:table">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Cliente</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Abertura</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
+                  <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtradas.map(c => (
+                  <tr key={c.id} onClick={() => abrirExistente(c)}
+                    className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-medium text-gray-900">{c.cliente?.nome || '—'}</p>
+                      {c.cliente?.telefone && <p className="text-xs text-gray-500">{c.cliente.telefone}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{formatDateTime(c.data_abertura)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusCor[c.status]}`}>
+                        {statusLabel[c.status]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right">{formatCurrency(c.valor_final)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Cards mobile */}
+            <div className="md:hidden divide-y divide-gray-50">
               {filtradas.map(c => (
-                <tr key={c.id} onClick={() => abrirExistente(c)}
-                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors">
-                  <td className="px-4 py-3">
-                    <p className="text-sm font-medium text-gray-900">{c.cliente?.nome || '—'}</p>
-                    {c.cliente?.telefone && <p className="text-xs text-gray-500">{c.cliente.telefone}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{formatDateTime(c.data_abertura)}</td>
-                  <td className="px-4 py-3">
+                <div
+                  key={c.id}
+                  onClick={() => abrirExistente(c)}
+                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  <div className="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center flex-shrink-0">
+                    <ClipboardList className="w-4 h-4 text-amber-700" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{c.cliente?.nome || '—'}</p>
+                    <p className="text-xs text-gray-500">{formatDateTime(c.data_abertura)}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusCor[c.status]}`}>
                       {statusLabel[c.status]}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right">{formatCurrency(c.valor_final)}</td>
-                </tr>
+                    <span className="text-xs font-medium text-gray-900">{formatCurrency(c.valor_final)}</span>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
 

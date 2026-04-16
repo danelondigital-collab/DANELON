@@ -26,7 +26,7 @@ export default function ProdutosClient({ produtos: initial, unidadeId }: Props) 
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Produtos</h1>
@@ -34,7 +34,9 @@ export default function ProdutosClient({ produtos: initial, unidadeId }: Props) 
         </div>
         <button onClick={() => { setSelecionado(null); setModalAberto(true) }}
           className="flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-          <Plus className="w-4 h-4" /> Novo produto
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Novo produto</span>
+          <span className="sm:hidden">Novo</span>
         </button>
       </div>
 
@@ -53,33 +55,58 @@ export default function ProdutosClient({ produtos: initial, unidadeId }: Props) 
             <p className="text-gray-500 text-sm">{busca ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Nome</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Marca</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Preço venda</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Estoque</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map(p => (
-                <tr key={p.id} onClick={() => { setSelecionado(p); setModalAberto(true) }}
-                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.nome}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{p.marca || '—'}</td>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatCurrency(p.preco_venda)}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{p.estoque} un.</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${p.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {p.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
+          <>
+            {/* Tabela desktop */}
+            <table className="w-full hidden md:table">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Nome</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Marca</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Preço venda</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Estoque</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
                 </tr>
+              </thead>
+              <tbody>
+                {filtrados.map(p => (
+                  <tr key={p.id} onClick={() => { setSelecionado(p); setModalAberto(true) }}
+                    className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.nome}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{p.marca || '—'}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatCurrency(p.preco_venda)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{p.estoque} un.</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${p.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {p.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Cards mobile */}
+            <div className="md:hidden divide-y divide-gray-50">
+              {filtrados.map(p => (
+                <div
+                  key={p.id}
+                  onClick={() => { setSelecionado(p); setModalAberto(true) }}
+                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Package className="w-4 h-4 text-gray-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{p.nome}</p>
+                    <p className="text-xs text-gray-500">{p.marca ? `${p.marca} · ` : ''}{formatCurrency(p.preco_venda)} · {p.estoque} un.</p>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${p.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {p.ativo ? 'Ativo' : 'Inativo'}
+                  </span>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
 

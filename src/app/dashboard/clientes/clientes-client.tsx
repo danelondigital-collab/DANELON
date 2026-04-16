@@ -56,7 +56,7 @@ export default function ClientesClient({ clientes: initial, unidadeId, busca: bu
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Clientes</h1>
@@ -69,7 +69,8 @@ export default function ClientesClient({ clientes: initial, unidadeId, busca: bu
           className="flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Novo cliente
+          <span className="hidden sm:inline">Novo cliente</span>
+          <span className="sm:hidden">Novo</span>
         </button>
       </div>
 
@@ -105,51 +106,82 @@ export default function ClientesClient({ clientes: initial, unidadeId, busca: bu
             )}
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Nome</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Telefone</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Email</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Aniversário</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Tabela desktop */}
+            <table className="w-full hidden md:table">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Nome</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Telefone</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Email</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Aniversário</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.map(cliente => (
+                  <tr
+                    key={cliente.id}
+                    onClick={() => abrirEdicao(cliente)}
+                    className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-medium text-amber-700">
+                            {cliente.nome.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{cliente.nome}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {cliente.telefone ? formatPhone(cliente.telefone) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{cliente.email || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {cliente.data_nascimento ? formatDate(cliente.data_nascimento) : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        cliente.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {cliente.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Cards mobile */}
+            <div className="md:hidden divide-y divide-gray-50">
               {filtrados.map(cliente => (
-                <tr
+                <div
                   key={cliente.id}
                   onClick={() => abrirEdicao(cliente)}
-                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
                 >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-medium text-amber-700">
-                          {cliente.nome.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">{cliente.nome}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {cliente.telefone ? formatPhone(cliente.telefone) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{cliente.email || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {cliente.data_nascimento ? formatDate(cliente.data_nascimento) : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      cliente.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {cliente.ativo ? 'Ativo' : 'Inativo'}
+                  <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-medium text-amber-700">
+                      {cliente.nome.charAt(0).toUpperCase()}
                     </span>
-                  </td>
-                </tr>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{cliente.nome}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {cliente.telefone ? formatPhone(cliente.telefone) : cliente.email || '—'}
+                    </p>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                    cliente.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {cliente.ativo ? 'Ativo' : 'Inativo'}
+                  </span>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
 
