@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Comanda, Profissional } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
-import { FileText, Users, Printer } from 'lucide-react'
+import { FileText, Users, Printer, ExternalLink } from 'lucide-react'
 
 const formaPagamentoLabel: Record<string, string> = {
   dinheiro: 'Dinheiro',
@@ -125,19 +125,29 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
         <p className="text-sm text-gray-600 mt-0.5">Período: {periodoFormatado}</p>
       </div>
 
-      <div className="print:hidden mb-6 flex items-start justify-between gap-4">
+      <div className="print:hidden mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Relatórios</h1>
           <p className="text-sm text-gray-500 mt-0.5">Análise de comandas e comissionamento</p>
         </div>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0"
-        >
-          <Printer className="w-4 h-4" />
-          <span className="hidden sm:inline">Imprimir / PDF</span>
-          <span className="sm:hidden">PDF</span>
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => window.open(`/print/comandas?inicio=${dataInicio}&fim=${dataFim}`, '_blank')}
+            className="flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg transition-colors flex-shrink-0"
+          >
+            <ExternalLink className="w-4 h-4" />
+            <span className="hidden sm:inline">PDF Comandas</span>
+            <span className="sm:hidden">Cmd.</span>
+          </button>
+          <button
+            onClick={() => window.open(`/print/comissao?inicio=${dataInicio}&fim=${dataFim}&profissional=${profissionalId}`, '_blank')}
+            className="flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-3 py-2 rounded-lg transition-colors flex-shrink-0"
+          >
+            <ExternalLink className="w-4 h-4" />
+            <span className="hidden sm:inline">PDF Comissão</span>
+            <span className="sm:hidden">Com.</span>
+          </button>
+        </div>
       </div>
 
       {/* Filtro de período */}
