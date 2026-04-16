@@ -80,10 +80,10 @@ export async function POST(req: NextRequest) {
     userId = authData.user.id
   }
 
-  // Insere em usuarios
+  // Cria ou atualiza o registro em usuarios
   const { error: dbError } = await adminClient
     .from('usuarios')
-    .insert({ id: userId, nome, email, perfil, ativo: true })
+    .upsert({ id: userId, nome, email, perfil, ativo: true }, { onConflict: 'id' })
 
   if (dbError) {
     if (!authExistente) await adminClient.auth.admin.deleteUser(userId)
