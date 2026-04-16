@@ -1,10 +1,25 @@
 export const dynamic = 'force-dynamic'
 
-export default function RelatoriosPage() {
+import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
+import RelatoriosClient from './relatorios-client'
+
+export default async function RelatoriosPage() {
+  const supabase = await createClient()
+  const cookieStore = await cookies()
+  const unidadeId = cookieStore.get('unidade_id')?.value!
+
+  const { data: profissionais } = await supabase
+    .from('profissionais')
+    .select('*')
+    .eq('unidade_id', unidadeId)
+    .eq('ativo', true)
+    .order('nome')
+
   return (
-    <div className="p-6">
-      <h1 className="text-xl font-bold text-gray-900 mb-2">Relatórios</h1>
-      <p className="text-sm text-gray-500">Em desenvolvimento...</p>
-    </div>
+    <RelatoriosClient
+      profissionais={profissionais || []}
+      unidadeId={unidadeId}
+    />
   )
 }
