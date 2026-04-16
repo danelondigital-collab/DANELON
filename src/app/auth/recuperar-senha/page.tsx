@@ -17,7 +17,7 @@ export default function RecuperarSenhaPage() {
     setErro('')
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/nova-senha`,
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/nova-senha`,
     })
 
     if (error) {

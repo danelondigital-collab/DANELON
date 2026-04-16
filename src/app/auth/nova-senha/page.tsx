@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff, CheckCircle2 } from 'lucide-react'
@@ -14,16 +14,6 @@ export default function NovaSenhaPage() {
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState(false)
-  const [sessaoValida, setSessaoValida] = useState(false)
-
-  useEffect(() => {
-    // Supabase injeta a sessão via hash na URL após o clique no email
-    supabase.auth.onAuthStateChange(async (event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setSessaoValida(true)
-      }
-    })
-  }, [supabase.auth])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
