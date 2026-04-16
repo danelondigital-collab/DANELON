@@ -48,6 +48,13 @@ export async function POST(req: NextRequest) {
 
   const adminClient = createAdminClient()
 
+  // Verifica se o email já existe
+  const { data: lista } = await adminClient.auth.admin.listUsers({ perPage: 1000 })
+  const emailJaExiste = lista?.users?.some(u => u.email?.toLowerCase() === email.toLowerCase())
+  if (emailJaExiste) {
+    return NextResponse.json({ error: 'Este email já está cadastrado no sistema.' }, { status: 400 })
+  }
+
   // Cria usuário no Auth
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
