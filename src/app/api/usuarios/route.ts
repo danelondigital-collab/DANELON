@@ -111,7 +111,7 @@ export async function PATCH(req: NextRequest) {
   const admin = await verificarAdmin()
   if (!admin) return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
 
-  const { id, nome, perfil, unidadeIds, ativo, novaSenha } = await req.json()
+  const { id, nome, email, perfil, unidadeIds, ativo, novaSenha } = await req.json()
   if (!id) return NextResponse.json({ error: 'ID obrigatório' }, { status: 400 })
 
   const adminClient = createAdminClient()
@@ -126,9 +126,23 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
+  // Atualiza email no Auth se fornecido
+  if (email) {
+    const { data: lista } = await adminClient.auth.admin.listUsers({ perPage: 1000 })
+    const emailEmUso = lista?.users?.some(
+      u => u.email?.toLowerCase() === email.toLowerCase() && u.id !== id
+    )
+    if (emailEmUso) {
+      return NextResponse.json({ error: 'Este email já está em uso por outro usuário.' }, { status: 400 })
+    }
+    const { error } = await adminClient.auth.admin.updateUserById(id, { email, email_confirm: true })
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  }
+
   // Atualiza usuarios
   const updates: Record<string, unknown> = {}
   if (nome !== undefined) updates.nome = nome
+  if (email !== undefined) updates.email = email
   if (perfil !== undefined) updates.perfil = perfil
   if (ativo !== undefined) updates.ativo = ativo
 

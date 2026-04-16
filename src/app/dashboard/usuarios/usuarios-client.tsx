@@ -60,6 +60,7 @@ export default function UsuariosClient({ unidades }: Props) {
   // Campos do form
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
+  const [emailOriginal, setEmailOriginal] = useState('')
   const [senha, setSenha] = useState('')
   const [mostrarSenha, setMostrarSenha] = useState(false)
   const [perfil, setPerfil] = useState<'admin' | 'operador'>('operador')
@@ -94,6 +95,7 @@ export default function UsuariosClient({ unidades }: Props) {
     setEditando(u)
     setNome(u.nome)
     setEmail(u.email)
+    setEmailOriginal(u.email)
     setSenha('')
     setPerfil(u.perfil === 'admin' ? 'admin' : 'operador')
     setUnidadesSelecionadas(u.usuario_unidades?.map(uu => uu.unidade_id) || [])
@@ -129,7 +131,14 @@ export default function UsuariosClient({ unidades }: Props) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(
         editando
-          ? { id: editando.id, nome, perfil, unidadeIds: unidadesSelecionadas }
+          ? {
+              id: editando.id,
+              nome,
+              perfil,
+              unidadeIds: unidadesSelecionadas,
+              // só envia email se foi alterado
+              ...(email.toLowerCase() !== emailOriginal.toLowerCase() ? { email } : {}),
+            }
           : { nome, email, senha, perfil, unidadeIds: unidadesSelecionadas }
       ),
     })
@@ -455,21 +464,24 @@ export default function UsuariosClient({ unidades }: Props) {
                 />
               </div>
 
-              {/* Email — só no cadastro */}
-              {!editando && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="email@exemplo.com"
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
-                  />
-                </div>
-              )}
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                />
+                {editando && email.toLowerCase() !== emailOriginal.toLowerCase() && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    O email será atualizado no login e na recuperação de senha.
+                  </p>
+                )}
+              </div>
 
               {/* Senha — só no cadastro */}
               {!editando && (
