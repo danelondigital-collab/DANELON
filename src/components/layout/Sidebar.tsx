@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -77,16 +78,15 @@ export default function Sidebar({ unidade, unidades, userName, perfil, onClose }
   return (
     <aside className="w-56 flex-shrink-0 flex flex-col h-screen sticky top-0" style={{ backgroundColor: '#1C1917' }}>
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#B8924A' }}>
-            <span className="text-white font-bold text-sm">D</span>
-          </div>
-          <div>
-            <p className="font-bold text-white text-sm leading-tight">Danelon</p>
-            <p className="text-xs text-white/40 leading-tight">Gestão</p>
-          </div>
-        </div>
+      <div className="px-5 py-5 border-b border-white/10 flex items-center justify-center">
+        <Image
+          src="/logo.png"
+          alt="Danelon"
+          width={140}
+          height={16}
+          className="brightness-0 invert opacity-90"
+          priority
+        />
       </div>
 
       {/* Seletor de unidade */}

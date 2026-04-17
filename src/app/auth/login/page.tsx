@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -35,11 +36,16 @@ export default function LoginPage() {
       <div className="w-full max-w-md px-4">
         <div className="bg-white rounded-2xl shadow-lg p-8">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-2xl mb-4">
-              <span className="text-2xl font-bold text-amber-700">D</span>
+            <div className="flex justify-center mb-6">
+              <Image
+                src="/logo.png"
+                alt="Danelon"
+                width={200}
+                height={22}
+                priority
+              />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Danelon</h1>
-            <p className="text-gray-500 text-sm mt-1">Sistema de Gestão</p>
+            <p className="text-gray-500 text-sm">Sistema de Gestão</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
