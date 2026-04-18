@@ -72,6 +72,8 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   const inicioSemana = startOfWeek(semanaAtual, { weekStartsOn: 1 })
   const diasSemana = Array.from({ length: 7 }, (_, i) => addDays(inicioSemana, i))
 
+  const [erroSlot, setErroSlot] = useState('')
+
   const fetchingRef = useRef(false)
   const dragRef = useRef<{ agId: string; offsetY: number } | null>(null)
   const wasDraggingRef = useRef(false)
@@ -177,6 +179,21 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
 
   function isProfDiaTodoBloqueado(profId: string, dia: Date): boolean {
     return getBloqueiosDia(profId, dia).some(b => !b.hora_inicio && !b.hora_fim)
+  }
+
+  function isProfHorarioBloqueado(profId: string, dia: Date, hora: number): boolean {
+    return getBloqueiosDia(profId, dia).some(b => {
+      if (!b.hora_inicio || !b.hora_fim) return false
+      const [h1] = b.hora_inicio.split(':').map(Number)
+      const [h2, m2] = b.hora_fim.split(':').map(Number)
+      const fimMin = h2 * 60 + m2
+      return hora >= h1 && hora * 60 < fimMin
+    })
+  }
+
+  function mostrarErroSlot(msg: string) {
+    setErroSlot(msg)
+    setTimeout(() => setErroSlot(''), 3500)
   }
 
   // ===== DRAG AND DROP =====
@@ -291,6 +308,13 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
         </div>
       </div>
 
+      {/* Toast de erro de slot bloqueado */}
+      {erroSlot && (
+        <div className="px-4 py-2 bg-red-50 border-b border-red-200 flex items-center gap-2">
+          <span className="text-sm text-red-700">{erroSlot}</span>
+        </div>
+      )}
+
       {/* Grade */}
       <div className="flex-1 overflow-auto bg-white">
         {loading ? (
@@ -356,6 +380,10 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                         }`}
                         style={{ top: (hora - HORAS[0]) * SLOT_HEIGHT, height: SLOT_HEIGHT }}
                         onClick={bloqueadaHoje ? undefined : () => {
+                          if (isProfHorarioBloqueado(prof.id, diaAtual, hora)) {
+                            mostrarErroSlot(`${prof.nome} não está disponível neste horário.`)
+                            return
+                          }
                           const d = new Date(diaAtual)
                           d.setHours(hora, 0, 0, 0)
                           abrirNovo(d, prof.id)
@@ -369,13 +397,14 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                     {bloqueiosParciais.map(b => (
                       <div
                         key={b.id}
-                        className="absolute left-0 right-0 z-[5] bg-gray-300/60 border-l-2 border-gray-400 flex items-center px-2 pointer-events-none"
+                        className="absolute left-0 right-0 z-[5] bg-gray-300/60 border-l-2 border-gray-400 flex flex-col justify-center px-2 pointer-events-none"
                         style={{
                           top: calcTopFromTime(b.hora_inicio!),
                           height: calcAlturaFromTimes(b.hora_inicio!, b.hora_fim!),
                         }}
                       >
-                        <span className="text-xs text-gray-500 truncate">{b.motivo || 'Bloqueado'}</span>
+                        <span className="text-xs text-gray-600 font-medium truncate">Bloqueio de Agenda</span>
+                        {b.motivo && <span className="text-xs text-gray-400 truncate">{b.motivo}</span>}
                       </div>
                     ))}
 

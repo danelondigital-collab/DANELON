@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Trash2 } from 'lucide-react'
+import { X, Trash2, Pencil } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
@@ -37,6 +37,7 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
   const [bloqueios, setBloqueios] = useState<BloqueioAgenda[]>([])
   const [loadingBloqueios, setLoadingBloqueios] = useState(false)
   const [savingBloqueio, setSavingBloqueio] = useState(false)
+  const [editandoBloqueioId, setEditandoBloqueioId] = useState<string | null>(null)
   const [bloqueioForm, setBloqueioForm] = useState({
     data: '',
     hora_inicio: '',
@@ -65,20 +66,41 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     setLoadingBloqueios(false)
   }
 
-  async function adicionarBloqueio() {
+  async function salvarBloqueio() {
     if (!profissional || !bloqueioForm.data) return
     setSavingBloqueio(true)
-    await supabase.from('bloqueios_agenda').insert({
+    const payload = {
       profissional_id: profissional.id,
       unidade_id: unidadeId,
       data: bloqueioForm.data,
       hora_inicio: bloqueioForm.hora_inicio || null,
       hora_fim: bloqueioForm.hora_fim || null,
       motivo: bloqueioForm.motivo || null,
-    })
+    }
+    if (editandoBloqueioId) {
+      await supabase.from('bloqueios_agenda').update(payload).eq('id', editandoBloqueioId)
+      setEditandoBloqueioId(null)
+    } else {
+      await supabase.from('bloqueios_agenda').insert(payload)
+    }
     setBloqueioForm({ data: '', hora_inicio: '', hora_fim: '', motivo: '' })
     await fetchBloqueios()
     setSavingBloqueio(false)
+  }
+
+  function iniciarEdicaoBloqueio(b: BloqueioAgenda) {
+    setEditandoBloqueioId(b.id)
+    setBloqueioForm({
+      data: b.data,
+      hora_inicio: b.hora_inicio || '',
+      hora_fim: b.hora_fim || '',
+      motivo: b.motivo || '',
+    })
+  }
+
+  function cancelarEdicaoBloqueio() {
+    setEditandoBloqueioId(null)
+    setBloqueioForm({ data: '', hora_inicio: '', hora_fim: '', motivo: '' })
   }
 
   async function removerBloqueio(id: string) {
@@ -236,7 +258,7 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
                 ) : (
                   <>
                     <div className="space-y-3">
-                      <h3 className="text-sm font-medium text-gray-900">Adicionar bloqueio</h3>
+                      <h3 className="text-sm font-medium text-gray-900">{editandoBloqueioId ? 'Editar bloqueio' : 'Adicionar bloqueio'}</h3>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Data <span className="text-red-500">*</span></label>
                         <input
@@ -277,13 +299,23 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
                         />
                       </div>
-                      <button
-                        onClick={adicionarBloqueio}
-                        disabled={!bloqueioForm.data || savingBloqueio}
-                        className="w-full px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors"
-                      >
-                        {savingBloqueio ? 'Adicionando...' : 'Adicionar bloqueio'}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={salvarBloqueio}
+                          disabled={!bloqueioForm.data || savingBloqueio}
+                          className="flex-1 px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          {savingBloqueio ? 'Salvando...' : editandoBloqueioId ? 'Atualizar' : 'Adicionar bloqueio'}
+                        </button>
+                        {editandoBloqueioId && (
+                          <button
+                            onClick={cancelarEdicaoBloqueio}
+                            className="px-4 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="border-t border-gray-100 pt-4">
@@ -308,12 +340,20 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
                                 </p>
                                 {b.motivo && <p className="text-xs text-gray-500 mt-0.5">{b.motivo}</p>}
                               </div>
-                              <button
-                                onClick={() => removerBloqueio(b.id)}
-                                className="ml-3 text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <div className="flex items-center gap-1 ml-3 flex-shrink-0">
+                                <button
+                                  onClick={() => iniciarEdicaoBloqueio(b)}
+                                  className="text-gray-400 hover:text-amber-600 transition-colors"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => removerBloqueio(b.id)}
+                                  className="text-red-400 hover:text-red-600 transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
