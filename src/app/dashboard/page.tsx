@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import { CalendarDays, ClipboardList, Users, TrendingUp, Clock, CheckCircle2 } from 'lucide-react'
+import { CalendarDays, ClipboardList, Users, TrendingUp, Clock, CheckCircle2, Ban } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import type { Agendamento } from '@/types'
 
@@ -29,10 +29,23 @@ export default async function DashboardPage() {
   const cookieStore = await cookies()
   const unidadeId = cookieStore.get('unidade_id')?.value
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: usuarioData } = await supabase
+    .from('usuarios')
+    .select('perfil')
+    .eq('id', user!.id)
+    .single()
+  const isAdmin = usuarioData?.perfil === 'admin'
+
   const hoje = new Date()
   hoje.setHours(0, 0, 0, 0)
   const amanha = new Date(hoje)
   amanha.setDate(amanha.getDate() + 1)
+
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+  const fimMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1)
+  const inicioMesStr = inicioMes.toISOString().slice(0, 10)
+  const fimMesStr = fimMes.toISOString().slice(0, 10)
 
   const [
     { count: agendamentosHoje },
@@ -40,6 +53,7 @@ export default async function DashboardPage() {
     { count: totalClientes },
     { data: rawAgendamentos },
     { data: faturamentoHoje },
+    { data: rawBloqueiosMes },
   ] = await Promise.all([
     supabase.from('agendamentos')
       .select('*', { count: 'exact', head: true })
@@ -77,10 +91,31 @@ export default async function DashboardPage() {
       .eq('status', 'fechada')
       .gte('data_fechamento', hoje.toISOString())
       .lt('data_fechamento', amanha.toISOString()),
+    isAdmin
+      ? supabase.from('bloqueios_agenda')
+          .select('profissional_id, profissional:profissionais(id, nome, cor_agenda)')
+          .eq('unidade_id', unidadeId!)
+          .gte('data', inicioMesStr)
+          .lt('data', fimMesStr)
+      : Promise.resolve({ data: [] }),
   ])
 
   const agendamentos = (rawAgendamentos as unknown as Agendamento[]) || []
   const faturamentoTotal = (faturamentoHoje || []).reduce((s: number, c: { valor_final: number }) => s + (c.valor_final || 0), 0)
+
+  type BloqueioRow = { profissional_id: string; profissional: { id: string; nome: string; cor_agenda: string } | null }
+  const bloqueiosPorProf = ((rawBloqueiosMes || []) as unknown as BloqueioRow[]).reduce(
+    (acc, b) => {
+      if (!b.profissional) return acc
+      const k = b.profissional_id
+      if (!acc[k]) acc[k] = { nome: b.profissional.nome, cor: b.profissional.cor_agenda, total: 0 }
+      acc[k].total++
+      return acc
+    },
+    {} as Record<string, { nome: string; cor: string; total: number }>
+  )
+  const listaBloqueios = Object.values(bloqueiosPorProf).sort((a, b) => b.total - a.total)
+  const nomeMes = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(hoje)
 
   const cards = [
     {
@@ -206,6 +241,44 @@ export default async function DashboardPage() {
           </div>
         )}
       </div>
+
+      {isAdmin && (
+        <div className="mt-6 bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Ban className="w-4 h-4 text-red-400" />
+              <h2 className="font-semibold text-gray-900">Bloqueios de agenda este mês</h2>
+            </div>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full capitalize">{nomeMes}</span>
+          </div>
+
+          {listaBloqueios.length === 0 ? (
+            <div className="flex items-center justify-center py-10">
+              <p className="text-sm text-gray-400">Nenhum bloqueio registrado este mês</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {listaBloqueios.map((item) => (
+                <div key={item.nome} className="px-5 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                      style={{ backgroundColor: item.cor || '#6366f1' }}
+                    >
+                      {item.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-sm text-gray-800">{item.nome}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-red-600">{item.total}</span>
+                    <span className="text-xs text-gray-400">{item.total === 1 ? 'bloqueio' : 'bloqueios'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
