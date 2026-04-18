@@ -89,6 +89,38 @@ export default function AgendamentoModal({
 
     setLoading(true); setErro('')
 
+    // Verificar bloqueios de agenda antes de salvar
+    const profIds = [...new Set(itens.map(i => i.profissional_id).filter(Boolean))]
+    const { data: bloqueios } = await supabase
+      .from('bloqueios_agenda')
+      .select('*')
+      .in('profissional_id', profIds)
+      .eq('data', form.data)
+
+    if (bloqueios && bloqueios.length > 0) {
+      const apInicio = new Date(`${form.data}T${form.hora_inicio}:00`)
+      const apFim = new Date(`${form.data}T${form.hora_fim}:00`)
+
+      for (const b of bloqueios) {
+        const prof = profissionais.find(p => p.id === b.profissional_id)
+        const nome = prof?.nome || 'Profissional'
+
+        if (!b.hora_inicio && !b.hora_fim) {
+          setErro(`${nome} não está disponível neste dia.`)
+          setLoading(false)
+          return
+        }
+
+        const blqInicio = new Date(`${form.data}T${b.hora_inicio}:00`)
+        const blqFim = new Date(`${form.data}T${b.hora_fim}:00`)
+        if (apInicio < blqFim && apFim > blqInicio) {
+          setErro(`${nome} não está disponível das ${b.hora_inicio} às ${b.hora_fim}.`)
+          setLoading(false)
+          return
+        }
+      }
+    }
+
     const inicio = new Date(`${form.data}T${form.hora_inicio}:00`)
     const fim = new Date(`${form.data}T${form.hora_fim}:00`)
 
