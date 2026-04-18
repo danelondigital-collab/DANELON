@@ -222,10 +222,45 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
     const newStart = new Date(novaDia)
     newStart.setHours(newHour, newMinute, 0, 0)
 
+    const duracao = ag.data_hora_fim
+      ? parseISO(ag.data_hora_fim).getTime() - parseISO(ag.data_hora_inicio).getTime()
+      : (ag.itens?.[0]?.servico?.duracao_minutos || 60) * 60000
+    const newEnd = new Date(newStart.getTime() + duracao)
+    const dataStr = format(novaDia, 'yyyy-MM-dd')
+
+    // Validar bloqueios antes de mover
+    const profIds = [...new Set((ag.itens || []).map(i => i.profissional_id).filter(Boolean))]
+    if (profIds.length > 0) {
+      const { data: blqs } = await supabase
+        .from('bloqueios_agenda')
+        .select('*, profissional:profissionais(nome)')
+        .in('profissional_id', profIds)
+        .eq('data', dataStr)
+
+      if (blqs && blqs.length > 0) {
+        for (const b of blqs) {
+          const nomePro = (b.profissional as { nome?: string })?.nome || 'Profissional'
+          const dataFmt = format(novaDia, "dd/MM/yyyy", { locale: ptBR })
+
+          if (!b.hora_inicio && !b.hora_fim) {
+            mostrarErroSlot(`${nomePro} não está disponível em ${dataFmt} (dia inteiro bloqueado).`)
+            return
+          }
+          const blqInicio = new Date(`${dataStr}T${b.hora_inicio}`)
+          const blqFim = new Date(`${dataStr}T${b.hora_fim}`)
+          if (newStart < blqFim && newEnd > blqInicio) {
+            const hIni = b.hora_inicio.slice(0, 5)
+            const hFim = b.hora_fim.slice(0, 5)
+            mostrarErroSlot(`${nomePro} não está disponível em ${dataFmt} das ${hIni} às ${hFim}.`)
+            return
+          }
+        }
+      }
+    }
+
     const updates: Record<string, string> = { data_hora_inicio: newStart.toISOString() }
     if (ag.data_hora_fim) {
-      const duracao = parseISO(ag.data_hora_fim).getTime() - parseISO(ag.data_hora_inicio).getTime()
-      updates.data_hora_fim = new Date(newStart.getTime() + duracao).toISOString()
+      updates.data_hora_fim = newEnd.toISOString()
     }
 
     await supabase.from('agendamentos').update(updates).eq('id', agId)

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { X, Plus, Trash2 } from 'lucide-react'
 import { format, addMinutes } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
 import type { Agendamento, Profissional, Servico, Cliente } from '@/types'
 
@@ -101,12 +102,13 @@ export default function AgendamentoModal({
       const apInicio = new Date(`${form.data}T${form.hora_inicio}:00`)
       const apFim = new Date(`${form.data}T${form.hora_fim}:00`)
 
+      const dataFmt = format(new Date(`${form.data}T12:00:00`), "dd/MM/yyyy (EEEE)", { locale: ptBR })
       for (const b of bloqueios) {
         const prof = profissionais.find(p => p.id === b.profissional_id)
         const nome = prof?.nome || 'Profissional'
 
         if (!b.hora_inicio && !b.hora_fim) {
-          setErro(`${nome} não está disponível neste dia.`)
+          setErro(`${nome} não está disponível em ${dataFmt} — agenda bloqueada o dia inteiro.`)
           setLoading(false)
           return
         }
@@ -114,7 +116,9 @@ export default function AgendamentoModal({
         const blqInicio = new Date(`${form.data}T${b.hora_inicio}`)
         const blqFim = new Date(`${form.data}T${b.hora_fim}`)
         if (apInicio < blqFim && apFim > blqInicio) {
-          setErro(`${nome} não está disponível das ${b.hora_inicio} às ${b.hora_fim}.`)
+          const hIni = b.hora_inicio.slice(0, 5)
+          const hFim = b.hora_fim.slice(0, 5)
+          setErro(`${nome} não está disponível em ${dataFmt} das ${hIni} às ${hFim}.`)
           setLoading(false)
           return
         }
