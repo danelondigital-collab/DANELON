@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Trash2 } from 'lucide-react'
+import { format, parseISO } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
-import type { Profissional } from '@/types'
+import type { Profissional, BloqueioAgenda } from '@/types'
 
 interface Props {
   profissional: Profissional | null
@@ -12,7 +14,7 @@ interface Props {
   onSalvo: (p: Profissional) => void
 }
 
-type Aba = 'cadastro' | 'comissao' | 'configuracoes'
+type Aba = 'cadastro' | 'comissao' | 'configuracoes' | 'fechamento'
 
 const CORES = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4']
 
@@ -30,6 +32,59 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     cor_agenda: profissional?.cor_agenda || '#6366f1',
     ativo: profissional?.ativo ?? true,
   })
+
+  // Fechamento de agenda
+  const [bloqueios, setBloqueios] = useState<BloqueioAgenda[]>([])
+  const [loadingBloqueios, setLoadingBloqueios] = useState(false)
+  const [savingBloqueio, setSavingBloqueio] = useState(false)
+  const [bloqueioForm, setBloqueioForm] = useState({
+    data: '',
+    hora_inicio: '',
+    hora_fim: '',
+    motivo: '',
+  })
+
+  useEffect(() => {
+    if (aba === 'fechamento' && profissional) {
+      fetchBloqueios()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, profissional?.id])
+
+  async function fetchBloqueios() {
+    if (!profissional) return
+    setLoadingBloqueios(true)
+    const hoje = format(new Date(), 'yyyy-MM-dd')
+    const { data } = await supabase
+      .from('bloqueios_agenda')
+      .select('*')
+      .eq('profissional_id', profissional.id)
+      .gte('data', hoje)
+      .order('data')
+    setBloqueios((data as BloqueioAgenda[]) || [])
+    setLoadingBloqueios(false)
+  }
+
+  async function adicionarBloqueio() {
+    if (!profissional || !bloqueioForm.data) return
+    setSavingBloqueio(true)
+    await supabase.from('bloqueios_agenda').insert({
+      profissional_id: profissional.id,
+      unidade_id: unidadeId,
+      data: bloqueioForm.data,
+      hora_inicio: bloqueioForm.hora_inicio || null,
+      hora_fim: bloqueioForm.hora_fim || null,
+      motivo: bloqueioForm.motivo || null,
+    })
+    setBloqueioForm({ data: '', hora_inicio: '', hora_fim: '', motivo: '' })
+    await fetchBloqueios()
+    setSavingBloqueio(false)
+  }
+
+  async function removerBloqueio(id: string) {
+    await supabase.from('bloqueios_agenda').delete().eq('id', id)
+    setBloqueios(prev => prev.filter(b => b.id !== id))
+  }
 
   function set(field: string, value: string | boolean) {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -62,7 +117,12 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     setLoading(false)
   }
 
-  const abas: [Aba, string][] = [['cadastro', 'Cadastro'], ['comissao', 'Comissão'], ['configuracoes', 'Configurações']]
+  const abas: [Aba, string][] = [
+    ['cadastro', 'Cadastro'],
+    ['comissao', 'Comissão'],
+    ['configuracoes', 'Configurações'],
+    ['fechamento', 'Fechamento'],
+  ]
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -87,7 +147,6 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
           <div className="flex-1 overflow-y-auto p-6">
             {aba === 'cadastro' && (
               <div className="space-y-4">
-                {/* Avatar com cor */}
                 <div className="flex justify-center mb-2">
                   <div className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold"
                     style={{ backgroundColor: form.cor_agenda }}>
@@ -169,6 +228,101 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
                 ))}
               </div>
             )}
+
+            {aba === 'fechamento' && (
+              <div className="space-y-5">
+                {!profissional ? (
+                  <p className="text-sm text-gray-500">Salve a profissional primeiro para configurar o fechamento de agenda.</p>
+                ) : (
+                  <>
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-medium text-gray-900">Adicionar bloqueio</h3>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Data <span className="text-red-500">*</span></label>
+                        <input
+                          type="date"
+                          value={bloqueioForm.data}
+                          onChange={e => setBloqueioForm(p => ({ ...p, data: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Hora início <span className="text-gray-400">(opcional)</span></label>
+                          <input
+                            type="time"
+                            value={bloqueioForm.hora_inicio}
+                            onChange={e => setBloqueioForm(p => ({ ...p, hora_inicio: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Hora fim <span className="text-gray-400">(opcional)</span></label>
+                          <input
+                            type="time"
+                            value={bloqueioForm.hora_fim}
+                            onChange={e => setBloqueioForm(p => ({ ...p, hora_fim: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-400">Deixe os horários em branco para bloquear o dia inteiro.</p>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Motivo <span className="text-gray-400">(opcional)</span></label>
+                        <input
+                          type="text"
+                          value={bloqueioForm.motivo}
+                          onChange={e => setBloqueioForm(p => ({ ...p, motivo: e.target.value }))}
+                          placeholder="Ex: Folga, Consulta médica, Feriado..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                        />
+                      </div>
+                      <button
+                        onClick={adicionarBloqueio}
+                        disabled={!bloqueioForm.data || savingBloqueio}
+                        className="w-full px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        {savingBloqueio ? 'Adicionando...' : 'Adicionar bloqueio'}
+                      </button>
+                    </div>
+
+                    <div className="border-t border-gray-100 pt-4">
+                      <h3 className="text-sm font-medium text-gray-900 mb-3">Bloqueios cadastrados</h3>
+                      {loadingBloqueios ? (
+                        <p className="text-sm text-gray-400">Carregando...</p>
+                      ) : bloqueios.length === 0 ? (
+                        <p className="text-sm text-gray-400">Nenhum bloqueio futuro cadastrado.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {bloqueios.map(b => (
+                            <div key={b.id} className="flex items-center justify-between py-2.5 px-3 bg-gray-50 rounded-lg">
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">
+                                  {format(parseISO(b.data), "dd/MM/yyyy (EEE)", { locale: ptBR })}
+                                  {b.hora_inicio && (
+                                    <span className="text-gray-500 font-normal ml-1.5">
+                                      · {b.hora_inicio}{b.hora_fim ? ` – ${b.hora_fim}` : ''}
+                                    </span>
+                                  )}
+                                  {!b.hora_inicio && <span className="text-gray-400 font-normal text-xs ml-1.5">dia inteiro</span>}
+                                </p>
+                                {b.motivo && <p className="text-xs text-gray-500 mt-0.5">{b.motivo}</p>}
+                              </div>
+                              <button
+                                onClick={() => removerBloqueio(b.id)}
+                                className="ml-3 text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -176,10 +330,12 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
           {erro && <p className="text-sm text-red-600">{erro}</p>}
           <div className="flex gap-3 ml-auto">
             <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
-            <button onClick={handleSalvar} disabled={loading}
-              className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors">
-              {loading ? 'Salvando...' : 'Salvar'}
-            </button>
+            {aba !== 'fechamento' && (
+              <button onClick={handleSalvar} disabled={loading}
+                className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors">
+                {loading ? 'Salvando...' : 'Salvar'}
+              </button>
+            )}
           </div>
         </div>
       </div>

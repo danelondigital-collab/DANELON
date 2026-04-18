@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Plus, Calendar } from 'lucide-react'
 import { format, startOfWeek, addDays, addWeeks, subWeeks, isSameDay, parseISO, startOfDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
-import type { Profissional, Servico, Cliente, Agendamento } from '@/types'
+import type { Profissional, Servico, Cliente, Agendamento, BloqueioAgenda } from '@/types'
 import AgendamentoModal from './agendamento-modal'
 
 interface Props {
@@ -16,7 +16,7 @@ interface Props {
 }
 
 const HORAS = Array.from({ length: 13 }, (_, i) => i + 7) // 7h às 19h
-const SLOT_HEIGHT = 80 // px por hora na visão profissional
+const SLOT_HEIGHT = 80 // px por hora
 
 const statusCor: Record<string, string> = {
   agendado: 'bg-blue-100 border-blue-300 text-blue-800',
@@ -43,10 +43,23 @@ function calcAltura(ag: Agendamento): number {
   return Math.max((dur / 60) * SLOT_HEIGHT, 32)
 }
 
+function calcTopFromTime(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return (h - HORAS[0]) * SLOT_HEIGHT + (m / 60) * SLOT_HEIGHT
+}
+
+function calcAlturaFromTimes(inicio: string, fim: string): number {
+  const [h1, m1] = inicio.split(':').map(Number)
+  const [h2, m2] = fim.split(':').map(Number)
+  const mins = (h2 * 60 + m2) - (h1 * 60 + m1)
+  return Math.max((mins / 60) * SLOT_HEIGHT, 20)
+}
+
 export default function AgendaClient({ unidadeId, profissionais, servicos, clientes }: Props) {
   const supabase = createClient()
   const [semanaAtual, setSemanaAtual] = useState(() => new Date())
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
+  const [bloqueios, setBloqueios] = useState<BloqueioAgenda[]>([])
   const [modalAberto, setModalAberto] = useState(false)
   const [selecionado, setSelecionado] = useState<Agendamento | null>(null)
   const [horarioInicial, setHorarioInicial] = useState<{ data: Date; profissional_id?: string } | null>(null)
@@ -60,6 +73,8 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   const diasSemana = Array.from({ length: 7 }, (_, i) => addDays(inicioSemana, i))
 
   const fetchingRef = useRef(false)
+  const dragRef = useRef<{ agId: string; offsetY: number } | null>(null)
+  const wasDraggingRef = useRef(false)
 
   async function buscarAgendamentos(inicio: Date, dias = 7) {
     if (fetchingRef.current) return
@@ -67,23 +82,32 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
     setLoading(true)
 
     const fim = addDays(inicio, dias)
-    const { data } = await supabase
-      .from('agendamentos')
-      .select(`
-        *,
-        cliente:clientes(id, nome, telefone),
-        itens:agendamento_itens(
-          id, profissional_id, servico_id,
-          profissional:profissionais(id, nome, cor_agenda),
-          servico:servicos(id, nome, duracao_minutos)
-        )
-      `)
-      .eq('unidade_id', unidadeId)
-      .gte('data_hora_inicio', inicio.toISOString())
-      .lt('data_hora_inicio', fim.toISOString())
-      .order('data_hora_inicio')
+    const [{ data: ags }, { data: blqs }] = await Promise.all([
+      supabase
+        .from('agendamentos')
+        .select(`
+          *,
+          cliente:clientes(id, nome, telefone),
+          itens:agendamento_itens(
+            id, profissional_id, servico_id,
+            profissional:profissionais(id, nome, cor_agenda),
+            servico:servicos(id, nome, duracao_minutos)
+          )
+        `)
+        .eq('unidade_id', unidadeId)
+        .gte('data_hora_inicio', inicio.toISOString())
+        .lt('data_hora_inicio', fim.toISOString())
+        .order('data_hora_inicio'),
+      supabase
+        .from('bloqueios_agenda')
+        .select('*')
+        .eq('unidade_id', unidadeId)
+        .gte('data', format(inicio, 'yyyy-MM-dd'))
+        .lte('data', format(fim, 'yyyy-MM-dd')),
+    ])
 
-    setAgendamentos((data as unknown as Agendamento[]) || [])
+    setAgendamentos((ags as unknown as Agendamento[]) || [])
+    setBloqueios((blqs as BloqueioAgenda[]) || [])
     setLoading(false)
     fetchingRef.current = false
   }
@@ -132,6 +156,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   }
 
   function abrirEdicao(ag: Agendamento) {
+    if (wasDraggingRef.current) { wasDraggingRef.current = false; return }
     setSelecionado(ag)
     setHorarioInicial(null)
     setModalAberto(true)
@@ -146,14 +171,67 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
     }
   }
 
-  const diasVisiveis = visualizacao === 'semana' ? diasSemana : [diaAtual]
-
-  function getAgendamentosHora(dia: Date, hora: number) {
-    return agendamentos.filter(ag => {
-      const inicio = parseISO(ag.data_hora_inicio)
-      return isSameDay(inicio, dia) && inicio.getHours() === hora
-    })
+  function getBloqueiosDia(profId: string, dia: Date): BloqueioAgenda[] {
+    return bloqueios.filter(b => b.profissional_id === profId && b.data === format(dia, 'yyyy-MM-dd'))
   }
+
+  function isProfDiaTodoBloqueado(profId: string, dia: Date): boolean {
+    return getBloqueiosDia(profId, dia).some(b => !b.hora_inicio && !b.hora_fim)
+  }
+
+  // ===== DRAG AND DROP =====
+
+  function handleDragStart(e: React.DragEvent, ag: Agendamento) {
+    dragRef.current = { agId: ag.id, offsetY: e.nativeEvent.offsetY }
+    wasDraggingRef.current = false
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  async function moverAgendamento(agId: string, novaDia: Date, hora: number, dropOffsetY: number) {
+    if (!dragRef.current) return
+    wasDraggingRef.current = true
+    const { offsetY } = dragRef.current
+    dragRef.current = null
+
+    const effectiveY = (hora - HORAS[0]) * SLOT_HEIGHT + Math.max(0, dropOffsetY - offsetY)
+    const totalMinutes = Math.round(((effectiveY / SLOT_HEIGHT) * 60) / 15) * 15
+    const clampedMinutes = Math.max(0, Math.min(totalMinutes, (HORAS.length - 1) * 60 + 45))
+    const newHour = HORAS[0] + Math.floor(clampedMinutes / 60)
+    const newMinute = clampedMinutes % 60
+
+    const ag = agendamentos.find(a => a.id === agId)
+    if (!ag) return
+
+    const newStart = new Date(novaDia)
+    newStart.setHours(newHour, newMinute, 0, 0)
+
+    const updates: Record<string, string> = { data_hora_inicio: newStart.toISOString() }
+    if (ag.data_hora_fim) {
+      const duracao = parseISO(ag.data_hora_fim).getTime() - parseISO(ag.data_hora_inicio).getTime()
+      updates.data_hora_fim = new Date(newStart.getTime() + duracao).toISOString()
+    }
+
+    await supabase.from('agendamentos').update(updates).eq('id', agId)
+    onSalvo()
+  }
+
+  function handleDropProf(e: React.DragEvent, hora: number, profId: string) {
+    e.preventDefault()
+    if (!dragRef.current) return
+    if (isProfDiaTodoBloqueado(profId, diaAtual)) return
+    const agId = dragRef.current.agId
+    moverAgendamento(agId, diaAtual, hora, e.nativeEvent.offsetY)
+  }
+
+  function handleDropDia(e: React.DragEvent, dia: Date, hora: number) {
+    e.preventDefault()
+    if (!dragRef.current) return
+    const agId = dragRef.current.agId
+    moverAgendamento(agId, dia, hora, e.nativeEvent.offsetY)
+  }
+
+  const diasVisiveis = visualizacao === 'semana' ? diasSemana : [diaAtual]
+  const totalAltura = HORAS.length * SLOT_HEIGHT
 
   function getAgendamentosProfDia(profId: string, dia: Date) {
     return agendamentos.filter(ag => {
@@ -161,8 +239,6 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
       return isSameDay(inicio, dia) && ag.itens?.some(i => i.profissional_id === profId)
     })
   }
-
-  const totalAltura = HORAS.length * SLOT_HEIGHT
 
   return (
     <div className="flex flex-col" style={{ height: '100%' }}>
@@ -227,17 +303,21 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
             {/* Cabeçalho das profissionais */}
             <div className="flex border-b border-gray-200 sticky top-0 bg-white z-20 shadow-sm">
               <div className="w-16 flex-shrink-0" />
-              {profissionais.map(prof => (
-                <div key={prof.id} className="w-44 flex-shrink-0 text-center py-3 border-l border-gray-100">
-                  <div
-                    className="w-9 h-9 rounded-full mx-auto mb-1 flex items-center justify-center text-white text-sm font-bold"
-                    style={{ backgroundColor: prof.cor_agenda || '#6366f1' }}
-                  >
-                    {prof.nome.charAt(0).toUpperCase()}
+              {profissionais.map(prof => {
+                const bloqueadaHoje = isProfDiaTodoBloqueado(prof.id, diaAtual)
+                return (
+                  <div key={prof.id} className={`w-44 flex-shrink-0 text-center py-3 border-l border-gray-100 ${bloqueadaHoje ? 'opacity-40' : ''}`}>
+                    <div
+                      className="w-9 h-9 rounded-full mx-auto mb-1 flex items-center justify-center text-white text-sm font-bold"
+                      style={{ backgroundColor: bloqueadaHoje ? '#9ca3af' : (prof.cor_agenda || '#6366f1') }}
+                    >
+                      {prof.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <p className="text-xs font-semibold text-gray-800 truncate px-2">{prof.nome}</p>
+                    {bloqueadaHoje && <p className="text-xs text-gray-400">Indisponível</p>}
                   </div>
-                  <p className="text-xs font-semibold text-gray-800 truncate px-2">{prof.nome}</p>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Corpo: horas + colunas das profissionais */}
@@ -258,27 +338,57 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
               {/* Colunas das profissionais */}
               {profissionais.map(prof => {
                 const agsProf = getAgendamentosProfDia(prof.id, diaAtual)
+                const bloqueadaHoje = isProfDiaTodoBloqueado(prof.id, diaAtual)
+                const bloqueiosParciais = getBloqueiosDia(prof.id, diaAtual).filter(b => b.hora_inicio && b.hora_fim)
+
                 return (
                   <div
                     key={prof.id}
-                    className="w-44 flex-shrink-0 border-l border-gray-200 relative"
+                    className={`w-44 flex-shrink-0 border-l border-gray-200 relative ${bloqueadaHoje ? 'bg-gray-100' : ''}`}
                     style={{ height: totalAltura }}
                   >
-                    {/* Linhas de hora (clicáveis para novo agendamento) */}
+                    {/* Linhas de hora */}
                     {HORAS.map(hora => (
                       <div
                         key={hora}
-                        className="absolute left-0 right-0 border-t border-gray-100 cursor-pointer hover:bg-amber-50/50 transition-colors"
+                        className={`absolute left-0 right-0 border-t border-gray-100 transition-colors ${
+                          bloqueadaHoje ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-amber-50/50'
+                        }`}
                         style={{ top: (hora - HORAS[0]) * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                        onClick={() => {
+                        onClick={bloqueadaHoje ? undefined : () => {
                           const d = new Date(diaAtual)
                           d.setHours(hora, 0, 0, 0)
                           abrirNovo(d, prof.id)
                         }}
+                        onDragOver={bloqueadaHoje ? undefined : (e) => e.preventDefault()}
+                        onDrop={bloqueadaHoje ? undefined : (e) => handleDropProf(e, hora, prof.id)}
                       />
                     ))}
 
-                    {/* Agendamentos posicionados */}
+                    {/* Bloqueios de horário parcial */}
+                    {bloqueiosParciais.map(b => (
+                      <div
+                        key={b.id}
+                        className="absolute left-0 right-0 z-[5] bg-gray-300/60 border-l-2 border-gray-400 flex items-center px-2 pointer-events-none"
+                        style={{
+                          top: calcTopFromTime(b.hora_inicio!),
+                          height: calcAlturaFromTimes(b.hora_inicio!, b.hora_fim!),
+                        }}
+                      >
+                        <span className="text-xs text-gray-500 truncate">{b.motivo || 'Bloqueado'}</span>
+                      </div>
+                    ))}
+
+                    {/* Overlay dia inteiro bloqueado */}
+                    {bloqueadaHoje && (
+                      <div className="absolute inset-0 z-[6] flex items-center justify-center pointer-events-none">
+                        <p className="text-xs text-gray-400 font-medium rotate-[-90deg] whitespace-nowrap tracking-wide uppercase">
+                          Indisponível
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Agendamentos */}
                     {agsProf.map(ag => {
                       const top = calcTop(ag.data_hora_inicio)
                       const height = calcAltura(ag)
@@ -290,8 +400,10 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                       return (
                         <div
                           key={ag.id}
-                          onClick={e => { e.stopPropagation(); abrirEdicao(ag) }}
-                          className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${statusClass}`}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, ag)}
+                          onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
+                          className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
                           style={{
                             top: top + 1,
                             height: height - 2,
@@ -376,10 +488,12 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                           data.setHours(hora, 0, 0, 0)
                           abrirNovo(data)
                         }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => handleDropDia(e, dia, hora)}
                       />
                     ))}
 
-                    {/* Agendamentos posicionados */}
+                    {/* Agendamentos */}
                     {agsNoDia.map(ag => {
                       const top = calcTop(ag.data_hora_inicio)
                       const height = calcAltura(ag)
@@ -390,8 +504,10 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                       return (
                         <div
                           key={ag.id}
-                          onClick={e => { e.stopPropagation(); abrirEdicao(ag) }}
-                          className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-pointer hover:opacity-80 transition-opacity overflow-hidden ${statusClass}`}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, ag)}
+                          onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
+                          className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
                           style={{
                             top: top + 1,
                             height: height - 2,

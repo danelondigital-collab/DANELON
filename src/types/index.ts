@@ -173,6 +173,18 @@ export interface UsuarioUnidade {
   created_at: string
 }
 
+export interface BloqueioAgenda {
+  id: string
+  profissional_id: string
+  profissional?: Profissional
+  unidade_id: string
+  data: string // YYYY-MM-DD
+  hora_inicio?: string | null // HH:MM
+  hora_fim?: string | null // HH:MM
+  motivo?: string | null
+  created_at: string
+}
+
 // Relatório de comissionamento
 export interface RelatorioComissao {
   profissional_id: string
