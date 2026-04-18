@@ -111,8 +111,8 @@ export default function AgendamentoModal({
           return
         }
 
-        const blqInicio = new Date(`${form.data}T${b.hora_inicio}:00`)
-        const blqFim = new Date(`${form.data}T${b.hora_fim}:00`)
+        const blqInicio = new Date(`${form.data}T${b.hora_inicio}`)
+        const blqFim = new Date(`${form.data}T${b.hora_fim}`)
         if (apInicio < blqFim && apFim > blqInicio) {
           setErro(`${nome} não está disponível das ${b.hora_inicio} às ${b.hora_fim}.`)
           setLoading(false)
