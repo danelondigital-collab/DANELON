@@ -328,7 +328,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${visualizacao === 'dia' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}>
               Dia
             </button>
-            <button onClick={() => setVisualizacao('profissional')}
+            <button onClick={() => { setVisualizacao('profissional'); setDiaAtual(new Date()) }}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${visualizacao === 'profissional' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}>
               <span className="hidden sm:inline">Profissionais</span>
               <span className="sm:hidden">Profs</span>
