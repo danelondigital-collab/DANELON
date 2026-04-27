@@ -8,6 +8,9 @@ export interface Unidade {
   id: string
   nome: string
   cidade: string
+  razao_social?: string
+  cnpj?: string
+  email?: string
   telefone?: string
   endereco?: string
   ativo: boolean
@@ -47,6 +50,10 @@ export interface Profissional {
   nome: string
   telefone?: string
   email?: string
+  cpf?: string
+  cnpj?: string
+  data_nascimento?: string
+  endereco?: string
   foto_url?: string
   comissao_padrao: number
   cor_agenda: string

@@ -25,7 +25,7 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
 
   const { data: unidade } = await supabase
     .from('unidades')
-    .select('nome, cidade')
+    .select('nome, cidade, razao_social, cnpj, email')
     .eq('id', unidadeId)
     .single()
 
@@ -97,6 +97,43 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
 
   const grandTotalBase = resumoPorProfissional.reduce((s, r) => s + r.totalBase, 0)
   const grandTotalComissao = resumoPorProfissional.reduce((s, r) => s + r.totalComissao, 0)
+
+  function valorPorExtenso(valor: number): string {
+    const inteiro = Math.floor(valor)
+    const centavos = Math.round((valor - inteiro) * 100)
+    const unidades = ['', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove',
+      'dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove']
+    const dezenas = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa']
+    const centenas = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos']
+    function grupo(n: number): string {
+      if (n === 0) return ''
+      if (n === 100) return 'cem'
+      const c = Math.floor(n / 100)
+      const d = Math.floor((n % 100) / 10)
+      const u = n % 10
+      const partes: string[] = []
+      if (c) partes.push(centenas[c])
+      if (n % 100 < 20 && n % 100 > 0) partes.push(unidades[n % 100])
+      else { if (d) partes.push(dezenas[d]); if (u) partes.push(unidades[u]) }
+      return partes.join(' e ')
+    }
+    function partes(n: number): string {
+      if (n === 0) return 'zero'
+      const mil = Math.floor(n / 1000)
+      const resto = n % 1000
+      const partes: string[] = []
+      if (mil === 1) partes.push('mil')
+      else if (mil > 1) partes.push(grupo(mil) + ' mil')
+      if (resto) partes.push(grupo(resto))
+      return partes.join(' e ')
+    }
+    const reais = partes(inteiro)
+    const sufixoReais = inteiro === 1 ? 'real' : 'reais'
+    if (centavos === 0) return `${reais} ${sufixoReais}`
+    const centavosExtenso = partes(centavos)
+    const sufixoCentavos = centavos === 1 ? 'centavo' : 'centavos'
+    return `${reais} ${sufixoReais} e ${centavosExtenso} ${sufixoCentavos}`
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -414,6 +451,32 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
                     </tr>
                   </tfoot>
                 </table>
+                {/* Declaração de recebimento */}
+                {resumoProf && (
+                  <div className="mt-10 pt-6 border-t border-gray-200 space-y-8">
+                    <p className="text-sm text-gray-800 text-center leading-relaxed">
+                      Declaro que recebi da empresa{' '}
+                      <strong>{unidade?.razao_social || unidade?.nome}</strong>
+                      {unidade?.cnpj && (
+                        <>, Inscrita sob CNPJ nº {unidade.cnpj}</>
+                      )}
+                      , o valor de{' '}
+                      <strong>{formatCurrency(resumoProf.totalComissao)}</strong>
+                      {' '}({valorPorExtenso(resumoProf.totalComissao).charAt(0).toUpperCase() + valorPorExtenso(resumoProf.totalComissao).slice(1)}),{' '}
+                      referente ao comissionamento dos serviços prestados por mim descritos acima.
+                    </p>
+
+                    <div className="flex flex-col items-center gap-1 mt-10">
+                      <div className="w-72 border-b border-gray-400 mb-1" />
+                      <p className="font-semibold text-sm text-gray-900">{resumoProf.profissional.nome}</p>
+                      {(resumoProf.profissional.cpf || resumoProf.profissional.cnpj) && (
+                        <p className="text-xs text-gray-600">
+                          CPF / CNPJ: {[resumoProf.profissional.cpf, resumoProf.profissional.cnpj].filter(Boolean).join(' / ')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             )
           })()

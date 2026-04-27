@@ -28,6 +28,10 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     nome: profissional?.nome || '',
     telefone: profissional?.telefone || '',
     email: profissional?.email || '',
+    cpf: profissional?.cpf || '',
+    cnpj: profissional?.cnpj || '',
+    data_nascimento: profissional?.data_nascimento || '',
+    endereco: profissional?.endereco || '',
     comissao_padrao: profissional?.comissao_padrao?.toString() || '0',
     cor_agenda: profissional?.cor_agenda || '#6366f1',
     ativo: profissional?.ativo ?? true,
@@ -121,6 +125,10 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
       nome: form.nome.trim(),
       telefone: form.telefone || null,
       email: form.email || null,
+      cpf: form.cpf || null,
+      cnpj: form.cnpj || null,
+      data_nascimento: form.data_nascimento || null,
+      endereco: form.endereco || null,
       comissao_padrao: parseFloat(form.comissao_padrao) || 0,
       cor_agenda: form.cor_agenda,
       ativo: form.ativo,
@@ -195,6 +203,35 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
                     <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
                       placeholder="email@exemplo.com" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
+                    <input type="text" value={form.cpf} onChange={e => set('cpf', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      placeholder="000.000.000-00" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ</label>
+                    <input type="text" value={form.cnpj} onChange={e => set('cnpj', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      placeholder="00.000.000/0000-00" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Data de Nascimento</label>
+                    <input type="date" value={form.data_nascimento} onChange={e => set('data_nascimento', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Endereço</label>
+                    <input type="text" value={form.endereco} onChange={e => set('endereco', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      placeholder="Rua, número, bairro, cidade" />
                   </div>
                 </div>
 
