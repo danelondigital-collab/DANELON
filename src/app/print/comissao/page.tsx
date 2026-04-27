@@ -41,7 +41,7 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
   const { data: rawComandas } = await supabase
     .from('comandas')
     .select(`
-      id, numero, data_abertura, data_fechamento, valor_total, desconto, valor_final, forma_pagamento, status,
+      id, data_abertura, data_fechamento, valor_total, desconto, valor_final, forma_pagamento, status,
       cliente:clientes(id, nome),
       itens:comanda_itens(
         id, tipo, quantidade, preco_unitario, subtotal,
@@ -59,7 +59,7 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
     .lte('data_fechamento', fim + 'T23:59:59')
     .order('data_fechamento', { ascending: true })
 
-  const comandas = (rawComandas as unknown as (Comanda & { numero?: number | null })[]) || []
+  const comandas = (rawComandas as unknown as Comanda[]) || []
 
   const periodoFormatado = `${format(new Date(inicio + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })} a ${format(new Date(fim + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`
 
@@ -97,14 +97,6 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
 
   const grandTotalBase = resumoPorProfissional.reduce((s, r) => s + r.totalBase, 0)
   const grandTotalComissao = resumoPorProfissional.reduce((s, r) => s + r.totalComissao, 0)
-
-  // Cabeçalho de colunas reutilizável
-  const ColHeader = ({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' | 'center' }) => (
-    <th className={`text-${align} text-xs font-semibold text-white px-3 py-2.5`}>{children}</th>
-  )
-  const ColHeaderDark = ({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' | 'center' }) => (
-    <th className={`text-${align} text-xs font-semibold text-gray-700 px-3 py-2`}>{children}</th>
-  )
 
   return (
     <div className="min-h-screen bg-white">
@@ -153,11 +145,11 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
             <table className="w-full border-collapse mb-8">
               <thead>
                 <tr style={{ backgroundColor: '#1F2937' }}>
-                  <ColHeader>Profissional</ColHeader>
-                  <ColHeader align="right">Comandas</ColHeader>
-                  <ColHeader align="right">Itens</ColHeader>
-                  <ColHeader align="right">Cálculo Base</ColHeader>
-                  <ColHeader align="right">Comissão</ColHeader>
+                  <th className="text-left text-xs font-semibold text-white px-3 py-2.5">Profissional</th>
+                  <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Comandas</th>
+                  <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Itens</th>
+                  <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Cálculo Base</th>
+                  <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Comissão</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,16 +211,15 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
                   <table className="w-full border-collapse border border-gray-300 rounded-b-lg overflow-hidden">
                     <thead>
                       <tr style={{ backgroundColor: '#E5E7EB' }}>
-                        <ColHeaderDark>Data</ColHeaderDark>
-                        <ColHeaderDark>Cliente</ColHeaderDark>
-                        <ColHeaderDark align="center">N. Comanda</ColHeaderDark>
-                        <ColHeaderDark>Item</ColHeaderDark>
-                        <ColHeaderDark align="right">Subtotal</ColHeaderDark>
-                        <ColHeaderDark align="center">Comissão%</ColHeaderDark>
-                        <ColHeaderDark align="right">Cálculo Base</ColHeaderDark>
-                        <ColHeaderDark align="center">Rateio Profissionais</ColHeaderDark>
-                        <ColHeaderDark align="center">Participação%</ColHeaderDark>
-                        <ColHeaderDark align="right">Comissão</ColHeaderDark>
+                        <th className="text-left text-xs font-semibold text-gray-700 px-3 py-2">Data</th>
+                        <th className="text-left text-xs font-semibold text-gray-700 px-3 py-2">Cliente</th>
+                        <th className="text-left text-xs font-semibold text-gray-700 px-3 py-2">Item</th>
+                        <th className="text-right text-xs font-semibold text-gray-700 px-3 py-2">Subtotal</th>
+                        <th className="text-center text-xs font-semibold text-gray-700 px-3 py-2">Comissão%</th>
+                        <th className="text-right text-xs font-semibold text-gray-700 px-3 py-2">Cálculo Base</th>
+                        <th className="text-center text-xs font-semibold text-gray-700 px-3 py-2">Rateio Profissionais</th>
+                        <th className="text-center text-xs font-semibold text-gray-700 px-3 py-2">Participação%</th>
+                        <th className="text-right text-xs font-semibold text-gray-700 px-3 py-2">Comissão</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -258,9 +249,6 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
                               <td className={`px-3 py-2 text-xs font-medium text-gray-900 align-top ${borderClass}`}>
                                 {iIdx === 0 ? (c.cliente?.nome || '—') : ''}
                               </td>
-                              <td className={`px-3 py-2 text-xs text-gray-600 text-center align-top ${borderClass}`}>
-                                {iIdx === 0 && c.numero ? `#${c.numero}` : ''}
-                              </td>
                               <td className={`px-3 py-2 text-xs text-gray-700 ${borderClass}`}>{nomeItem}</td>
                               <td className={`px-3 py-2 text-xs text-gray-600 text-right ${borderClass}`}>{formatCurrency(item.subtotal)}</td>
                               <td className={`px-3 py-2 text-xs text-gray-600 text-center ${borderClass}`}>{cp.percentual_comissao}%</td>
@@ -285,7 +273,7 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
                     </tbody>
                     <tfoot>
                       <tr style={{ backgroundColor: '#FFF8F0' }}>
-                        <td colSpan={6} className="px-3 py-2 text-xs font-bold text-gray-800 border-t border-gray-300">
+                        <td colSpan={5} className="px-3 py-2 text-xs font-bold text-gray-800 border-t border-gray-300">
                           SUBTOTAL {r.profissional.nome.toUpperCase()}
                         </td>
                         <td className="px-3 py-2 text-xs font-bold text-gray-900 text-right border-t border-gray-300">
@@ -355,16 +343,15 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
                 <table className="w-full border-collapse">
                   <thead>
                     <tr style={{ backgroundColor: '#1F2937' }}>
-                      <ColHeader>Data</ColHeader>
-                      <ColHeader>Cliente</ColHeader>
-                      <ColHeader align="center">N. Comanda</ColHeader>
-                      <ColHeader>Item</ColHeader>
-                      <ColHeader align="right">Subtotal</ColHeader>
-                      <ColHeader align="center">Comissão%</ColHeader>
-                      <ColHeader align="right">Cálculo Base</ColHeader>
-                      <ColHeader align="center">Rateio Profissionais</ColHeader>
-                      <ColHeader align="center">Participação%</ColHeader>
-                      <ColHeader align="right">Comissão</ColHeader>
+                      <th className="text-left text-xs font-semibold text-white px-3 py-2.5">Data</th>
+                      <th className="text-left text-xs font-semibold text-white px-3 py-2.5">Cliente</th>
+                      <th className="text-left text-xs font-semibold text-white px-3 py-2.5">Item</th>
+                      <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Subtotal</th>
+                      <th className="text-center text-xs font-semibold text-white px-3 py-2.5">Comissão%</th>
+                      <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Cálculo Base</th>
+                      <th className="text-center text-xs font-semibold text-white px-3 py-2.5">Rateio Profissionais</th>
+                      <th className="text-center text-xs font-semibold text-white px-3 py-2.5">Participação%</th>
+                      <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Comissão</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -390,9 +377,6 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
                             <td className={`px-3 py-2.5 text-sm font-medium text-gray-900 align-top ${borderClass}`}>
                               {iIdx === 0 ? (c.cliente?.nome || '—') : ''}
                             </td>
-                            <td className={`px-3 py-2.5 text-xs text-gray-600 text-center align-top ${borderClass}`}>
-                              {iIdx === 0 && c.numero ? `#${c.numero}` : ''}
-                            </td>
                             <td className={`px-3 py-2.5 text-xs text-gray-700 ${borderClass}`}>{nomeItem}</td>
                             <td className={`px-3 py-2.5 text-xs text-gray-600 text-right ${borderClass}`}>{formatCurrency(item.subtotal)}</td>
                             <td className={`px-3 py-2.5 text-xs text-gray-600 text-center ${borderClass}`}>{cp.percentual_comissao}%</td>
@@ -417,7 +401,7 @@ export default async function PrintComissaoPage({ searchParams }: PageProps) {
                   </tbody>
                   <tfoot>
                     <tr style={{ backgroundColor: '#FFF8F0' }}>
-                      <td colSpan={6} className="px-3 py-3 text-sm font-bold text-gray-800 border-t-2 border-gray-300">
+                      <td colSpan={5} className="px-3 py-3 text-sm font-bold text-gray-800 border-t-2 border-gray-300">
                         TOTAL DO PERÍODO
                       </td>
                       <td className="px-3 py-3 text-sm font-bold text-gray-900 text-right border-t-2 border-gray-300">

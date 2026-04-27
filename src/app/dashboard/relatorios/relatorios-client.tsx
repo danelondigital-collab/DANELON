@@ -39,7 +39,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
     const { data } = await supabase
       .from('comandas')
       .select(`
-        id, numero, data_abertura, data_fechamento, valor_total, desconto, valor_final, forma_pagamento, status,
+        id, data_abertura, data_fechamento, valor_total, desconto, valor_final, forma_pagamento, status,
         cliente:clientes(id, nome, telefone),
         itens:comanda_itens(
           id, tipo, quantidade, preco_unitario, subtotal,
@@ -488,12 +488,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                         {/* Cabeçalho da comanda */}
                         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
                           <div>
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-semibold text-gray-900">{c.cliente?.nome || '—'}</p>
-                              {(c as any).numero && (
-                                <span className="text-xs font-medium text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded">#{(c as any).numero}</span>
-                              )}
-                            </div>
+                            <p className="text-sm font-semibold text-gray-900">{c.cliente?.nome || '—'}</p>
                             <p className="text-xs text-gray-500">
                               {c.data_fechamento ? format(parseISO(c.data_fechamento), "dd/MM/yyyy 'às' HH:mm") : '—'}
                             </p>
