@@ -39,7 +39,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
     const { data } = await supabase
       .from('comandas')
       .select(`
-        id, data_abertura, data_fechamento, valor_total, desconto, valor_final, forma_pagamento, status,
+        id, numero, data_abertura, data_fechamento, valor_total, desconto, valor_final, forma_pagamento, status,
         cliente:clientes(id, nome, telefone),
         itens:comanda_itens(
           id, tipo, quantidade, preco_unitario, subtotal,
@@ -79,7 +79,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
       c.itens?.forEach(item => {
         item.profissionais?.forEach(cp => {
           if (cp.profissional_id === prof.id) {
-            totalBase += cp.valor_base || 0
+            totalBase += (item.subtotal || 0) * (cp.percentual_comissao || 0) / 100
             totalComissao += cp.valor_comissao || 0
             comandasIds.add(c.id)
             totalItens++
@@ -347,7 +347,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                   <div className="bg-white rounded-xl border border-gray-200 p-4">
-                    <p className="text-xs text-gray-500 mb-1">Base total</p>
+                    <p className="text-xs text-gray-500 mb-1">Cálculo Base total</p>
                     <p className="text-2xl font-bold text-gray-900">
                       {formatCurrency(resumoPorProfissional.reduce((s, r) => s + r.totalBase, 0))}
                     </p>
@@ -372,7 +372,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                         <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Profissional</th>
                         <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Comandas</th>
                         <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Itens</th>
-                        <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Base</th>
+                        <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Cálculo Base</th>
                         <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Comissão</th>
                         <th className="px-4 py-3" />
                       </tr>
@@ -391,7 +391,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600 text-right">{r.comandasCount}</td>
                           <td className="px-4 py-3 text-sm text-gray-600 text-right">{r.totalItens}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatCurrency(r.totalBase)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 text-right" title="Subtotal × Comissão%">{formatCurrency(r.totalBase)}</td>
                           <td className="px-4 py-3 text-sm font-semibold text-amber-700 text-right">{formatCurrency(r.totalComissao)}</td>
                           <td className="px-4 py-3 text-right">
                             <button onClick={() => setProfissionalId(r.profissional.id)}
@@ -456,9 +456,10 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-xs text-gray-500">Comissão total</p>
+                    <p className="text-xs text-gray-500">Cálculo Base</p>
+                    <p className="text-sm font-semibold text-gray-900">{formatCurrency(resumoProf.totalBase)}</p>
+                    <p className="text-xs text-gray-500 mt-1">Comissão total</p>
                     <p className="text-xl font-bold text-amber-700">{formatCurrency(resumoProf.totalComissao)}</p>
-                    <p className="text-xs text-gray-500">Base: {formatCurrency(resumoProf.totalBase)}</p>
                   </div>
                 </div>
               )}
@@ -475,7 +476,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                     )
                     const subtotalBase = itensProf.reduce((s, item) => {
                       const cp = item.profissionais?.find(p => p.profissional_id === profissionalId)
-                      return s + (cp?.valor_base || 0)
+                      return s + (item.subtotal || 0) * (cp?.percentual_comissao || 0) / 100
                     }, 0)
                     const subtotalComissao = itensProf.reduce((s, item) => {
                       const cp = item.profissionais?.find(p => p.profissional_id === profissionalId)
@@ -487,7 +488,12 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                         {/* Cabeçalho da comanda */}
                         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
                           <div>
-                            <p className="text-sm font-semibold text-gray-900">{c.cliente?.nome || '—'}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-gray-900">{c.cliente?.nome || '—'}</p>
+                              {(c as any).numero && (
+                                <span className="text-xs font-medium text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded">#{(c as any).numero}</span>
+                              )}
+                            </div>
                             <p className="text-xs text-gray-500">
                               {c.data_fechamento ? format(parseISO(c.data_fechamento), "dd/MM/yyyy 'às' HH:mm") : '—'}
                             </p>
@@ -515,16 +521,16 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                                       Subtotal: <strong className="text-gray-900">{formatCurrency(item.subtotal)}</strong>
                                     </span>
                                     <span>
-                                      Participação: <strong className="text-gray-900">{cp.percentual_participacao}%</strong>
+                                      Comissão%: <strong className="text-gray-900">{cp.percentual_comissao}%</strong>
+                                    </span>
+                                    <span>
+                                      Cálculo Base: <strong className="text-gray-900">{formatCurrency((item.subtotal || 0) * (cp.percentual_comissao || 0) / 100)}</strong>
                                     </span>
                                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${nProfs > 1 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                                      {nProfs === 1 ? '1 profissional' : `${nProfs} profissionais (rateio)`}
+                                      {nProfs === 1 ? '1 profissional' : `${nProfs} profs. (rateio)`}
                                     </span>
                                     <span>
-                                      Base: <strong className="text-gray-900">{formatCurrency(cp.valor_base)}</strong>
-                                    </span>
-                                    <span>
-                                      Comissão: <strong className="text-gray-900">{cp.percentual_comissao}%</strong>
+                                      Participação: <strong className="text-gray-900">{cp.percentual_participacao}%</strong>
                                     </span>
                                   </div>
                                   <p className="font-semibold text-amber-700 flex-shrink-0">{formatCurrency(cp.valor_comissao)}</p>
@@ -538,12 +544,12 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                                   </div>
                                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
                                     <span>Subtotal: {formatCurrency(item.subtotal)}</span>
-                                    <span>{cp.percentual_participacao}% participação</span>
+                                    <span>{cp.percentual_comissao}% comissão</span>
+                                    <span>Cálculo Base: {formatCurrency((item.subtotal || 0) * (cp.percentual_comissao || 0) / 100)}</span>
                                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full font-medium ${nProfs > 1 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
                                       {nProfs === 1 ? '1 prof.' : `${nProfs} profs. (rateio)`}
                                     </span>
-                                    <span>Base: {formatCurrency(cp.valor_base)}</span>
-                                    <span>{cp.percentual_comissao}% comissão</span>
+                                    <span>{cp.percentual_participacao}% participação</span>
                                   </div>
                                 </div>
                               </div>
@@ -554,7 +560,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                         {/* Rodapé da comanda */}
                         <div className="flex justify-end gap-6 px-4 py-2 bg-amber-50 border-t border-amber-100 text-xs">
                           <span className="text-gray-600">
-                            Base nesta comanda: <strong className="text-gray-900">{formatCurrency(subtotalBase)}</strong>
+                            Cálculo Base: <strong className="text-gray-900">{formatCurrency(subtotalBase)}</strong>
                           </span>
                           <span className="text-gray-600">
                             Comissão: <strong className="text-amber-700">{formatCurrency(subtotalComissao)}</strong>
@@ -569,7 +575,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
                     <div className="p-4 bg-amber-50 rounded-xl border-2 border-amber-200 flex flex-wrap justify-between items-center gap-3">
                       <p className="font-semibold text-gray-900 text-sm">TOTAL DO PERÍODO</p>
                       <div className="flex gap-6 text-sm">
-                        <span className="text-gray-600">Base: <strong className="text-gray-900">{formatCurrency(resumoProf.totalBase)}</strong></span>
+                        <span className="text-gray-600">Cálculo Base: <strong className="text-gray-900">{formatCurrency(resumoProf.totalBase)}</strong></span>
                         <span className="text-gray-600">Comissão: <strong className="text-amber-700 text-base">{formatCurrency(resumoProf.totalComissao)}</strong></span>
                       </div>
                     </div>
