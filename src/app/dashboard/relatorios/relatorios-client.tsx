@@ -36,7 +36,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
 
   async function buscarDados() {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('comandas')
       .select(`
         id, data_abertura, data_fechamento, valor_total, desconto, valor_final, forma_pagamento, status,
@@ -57,6 +57,8 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
       .lte('data_fechamento', dataFim + 'T23:59:59')
       .order('data_fechamento', { ascending: false })
 
+    if (error) console.error('[relatorios] erro na query:', error)
+    console.log('[relatorios] unidadeId:', unidadeId, '| inicio:', dataInicio, '| fim:', dataFim, '| registros:', data?.length ?? 0)
     setComandas((data as unknown as Comanda[]) || [])
     setLoading(false)
   }
