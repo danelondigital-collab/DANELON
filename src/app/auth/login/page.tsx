@@ -19,7 +19,7 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error, data } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       setError('Email ou senha incorretos.')
@@ -27,7 +27,14 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/selecionar-unidade')
+    const { data: usuario } = await supabase
+      .from('usuarios')
+      .select('perfil')
+      .eq('id', data.user.id)
+      .single()
+
+    const dest = usuario?.perfil === 'admin' ? '/escolher-modulo' : '/selecionar-unidade'
+    router.push(dest)
     router.refresh()
   }
 

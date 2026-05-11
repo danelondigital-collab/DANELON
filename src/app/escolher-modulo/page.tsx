@@ -37,7 +37,7 @@ export default function EscolherModuloPage() {
         {/* Botões */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/selecionar-unidade')}
             className="group flex flex-col items-center gap-4 p-8 bg-white/5 hover:bg-amber-600 border border-white/10 hover:border-amber-500 rounded-2xl transition-all duration-200 text-left"
           >
             <div className="w-14 h-14 rounded-2xl bg-amber-600/20 group-hover:bg-white/20 flex items-center justify-center transition-colors">
