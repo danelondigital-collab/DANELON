@@ -7,7 +7,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Users, BarChart3, TrendingUp, Settings,
   LogOut, ChevronDown, Building2, LayoutGrid, Menu, X,
-  Target, Truck, UserCog
+  Target, Truck, UserCog, Globe
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -44,6 +44,8 @@ export default function CrmShell({ children, userName, unidadeAtual, unidades }:
     router.refresh()
   }
 
+  const todasUnidades = !unidadeAtual
+
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/auth/login')
@@ -64,15 +66,27 @@ export default function CrmShell({ children, userName, unidadeAtual, unidades }:
             onClick={() => setUnidadeOpen(o => !o)}
             className="w-full flex items-center gap-2 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors text-left"
           >
-            <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            {todasUnidades
+              ? <Globe className="w-4 h-4 text-violet-400 flex-shrink-0" />
+              : <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            }
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{unidadeAtual?.nome || 'Selecionar unidade'}</p>
-              {unidadeAtual?.cidade && <p className="text-xs text-slate-400">{unidadeAtual.cidade}</p>}
+              <p className={`text-xs font-semibold truncate ${todasUnidades ? 'text-violet-300' : 'text-white'}`}>
+                {todasUnidades ? 'Todas as Unidades' : unidadeAtual?.nome}
+              </p>
+              {!todasUnidades && unidadeAtual?.cidade && (
+                <p className="text-xs text-slate-400">{unidadeAtual.cidade}</p>
+              )}
             </div>
             <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${unidadeOpen ? 'rotate-180' : ''}`} />
           </button>
           {unidadeOpen && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+              <button onClick={() => trocarUnidade('all')}
+                className={`w-full text-left px-3 py-2.5 text-sm hover:bg-slate-700 transition-colors flex items-center gap-2 ${todasUnidades ? 'text-violet-400 font-semibold' : 'text-slate-300'}`}>
+                <Globe className="w-3.5 h-3.5 flex-shrink-0" /> Todas as Unidades
+              </button>
+              <div className="border-t border-slate-700/50" />
               {unidades.map(u => (
                 <button key={u.id} onClick={() => trocarUnidade(u.id)}
                   className={`w-full text-left px-3 py-2.5 text-sm hover:bg-slate-700 transition-colors ${u.id === unidadeAtual?.id ? 'text-violet-400 font-semibold' : 'text-slate-300'}`}>

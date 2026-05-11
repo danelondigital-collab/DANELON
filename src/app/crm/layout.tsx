@@ -12,6 +12,7 @@ export default async function CrmLayout({ children }: { children: React.ReactNod
 
   const unidadeId = cookieStore.get('unidade_id')?.value
   if (!unidadeId) redirect('/selecionar-unidade')
+  // 'all' is a valid value meaning "Todas as Unidades"
 
   const { data: usuario } = await supabase
     .from('usuarios')
