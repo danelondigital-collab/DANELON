@@ -24,6 +24,7 @@ export default async function EstoquePage() {
 
   // Datas de referência
   const agora = new Date()
+  const hoje = agora.toISOString().split('T')[0]
   const inicioDia = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate()).toISOString()
   const inicioSemana = new Date(agora.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString()
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString()
@@ -75,6 +76,49 @@ export default async function EstoquePage() {
     vendido_mes: mesMap[p.id] || 0,
   }))
 
+  // Upsert snapshot diário silencioso (roda em background, não bloqueia a página)
+  if (produtos.length > 0) {
+    const registros = produtos
+      .filter(p => p.unidade_id)
+      .map(p => ({
+        produto_id: p.id,
+        unidade_id: p.unidade_id,
+        data: hoje,
+        quantidade_vendida: p.vendido_hoje,
+        estoque_atual: p.estoque,
+        meta_diaria: p.quantidade_meta,
+        updated_at: new Date().toISOString(),
+      }))
+
+    await supabase
+      .from('estoque_registros_diarios')
+      .upsert(registros, { onConflict: 'produto_id,data' })
+  }
+
+  // Histórico dos últimos 60 dias para a aba de relatório
+  const inicio60 = new Date(agora.getTime() - 59 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  const historicoQuery = supabase
+    .from('estoque_registros_diarios')
+    .select('data, quantidade_vendida, estoque_atual, meta_diaria, unidade_id, produto_id, produtos(nome, marca), unidades(nome)')
+    .gte('data', inicio60)
+    .order('data', { ascending: false })
+
+  if (!todasUnidades) historicoQuery.eq('unidade_id', crmUnidadeId)
+
+  const { data: historicoRaw } = await historicoQuery
+
+  const historico = (historicoRaw || []).map(r => ({
+    data: r.data as string,
+    produto_nome: (r.produtos as unknown as { nome: string; marca: string | null } | null)?.nome || '',
+    produto_marca: (r.produtos as unknown as { nome: string; marca: string | null } | null)?.marca || null,
+    unidade_nome: (r.unidades as unknown as { nome: string } | null)?.nome || '',
+    unidade_id: r.unidade_id,
+    produto_id: r.produto_id,
+    quantidade_vendida: r.quantidade_vendida,
+    estoque_atual: r.estoque_atual,
+    meta_diaria: r.meta_diaria,
+  }))
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
@@ -89,7 +133,7 @@ export default async function EstoquePage() {
         </div>
       </div>
 
-      <EstoqueClient produtos={produtos} todasUnidades={todasUnidades} />
+      <EstoqueClient produtos={produtos} todasUnidades={todasUnidades} historico={historico} />
     </div>
   )
 }
