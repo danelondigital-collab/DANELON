@@ -34,7 +34,8 @@ export default async function SelecionarUnidadePage() {
   }
 
   if (acessos.length === 1) {
-    redirect(`/dashboard?unidade=${acessos[0].unidade_id}`)
+    const dest = usuario?.perfil === 'admin' ? '/crm' : '/dashboard'
+    redirect(`${dest}?unidade=${acessos[0].unidade_id}`)
   }
 
   return <SelecionarUnidadeClient acessos={acessos} usuario={usuario} />

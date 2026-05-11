@@ -33,7 +33,8 @@ export default function SelecionarUnidadeClient({ acessos, usuario }: Props) {
 
   function selecionar(unidadeId: string) {
     document.cookie = `unidade_id=${unidadeId}; path=/; max-age=86400`
-    router.push('/dashboard')
+    const dest = usuario?.perfil === 'admin' ? '/crm' : '/dashboard'
+    router.push(dest)
     router.refresh()
   }
 

@@ -146,6 +146,7 @@ export interface ComandaItem {
   produto?: Produto
   quantidade: number
   preco_unitario: number
+  desconto_percentual: number
   subtotal: number
   profissionais?: ComandaItemProfissional[]
   created_at: string
@@ -163,12 +164,23 @@ export interface Comanda {
   data_fechamento?: string
   valor_total: number
   desconto: number
+  credito_utilizado: number
   valor_final: number
   forma_pagamento?: FormaPagamento
   observacoes?: string
   itens?: ComandaItem[]
   created_at: string
   updated_at: string
+}
+
+export interface CreditoCliente {
+  id: string
+  cliente_id: string
+  comanda_id?: string
+  tipo: 'entrada' | 'saida'
+  valor: number
+  descricao?: string
+  created_at: string
 }
 
 export interface UsuarioUnidade {

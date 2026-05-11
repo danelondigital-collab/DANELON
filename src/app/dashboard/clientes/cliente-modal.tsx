@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Upload, Trash2, FileImage, Loader2, ImageIcon } from 'lucide-react'
+import { X, Upload, Trash2, FileImage, Loader2, ImageIcon, Wallet, ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { Cliente } from '@/types'
+import type { Cliente, CreditoCliente } from '@/types'
+import { formatCurrency } from '@/lib/utils'
 
 interface Props {
   cliente: Cliente | null
@@ -20,7 +21,7 @@ interface Documento {
   created_at: string
 }
 
-type Aba = 'cadastro' | 'documentos' | 'configuracoes'
+type Aba = 'cadastro' | 'documentos' | 'credito' | 'configuracoes'
 
 export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: Props) {
   const supabase = createClient()
@@ -41,6 +42,11 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
   // Documentos
   const [documentos, setDocumentos] = useState<Documento[]>([])
   const [carregandoDocs, setCarregandoDocs] = useState(false)
+
+  // Crédito
+  const [creditos, setCreditos] = useState<CreditoCliente[]>([])
+  const [carregandoCreditos, setCarregandoCreditos] = useState(false)
+  const saldoCredito = creditos.reduce((s, c) => c.tipo === 'entrada' ? s + c.valor : s - c.valor, 0)
   const [uploadando, setUploadando] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [deletando, setDeletando] = useState<string | null>(null)
@@ -76,10 +82,21 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
   }
 
   useEffect(() => {
-    if (aba === 'documentos' && cliente) {
-      carregarDocumentos()
-    }
+    if (aba === 'documentos' && cliente) carregarDocumentos()
+    if (aba === 'credito' && cliente) carregarCreditos()
   }, [aba, cliente])
+
+  async function carregarCreditos() {
+    if (!cliente) return
+    setCarregandoCreditos(true)
+    const { data } = await supabase
+      .from('creditos_clientes')
+      .select('*')
+      .eq('cliente_id', cliente.id)
+      .order('created_at', { ascending: false })
+    setCreditos((data as CreditoCliente[]) || [])
+    setCarregandoCreditos(false)
+  }
 
   async function handleUpload(files: FileList | null) {
     if (!files || files.length === 0) return
@@ -196,6 +213,7 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
   const abas: [Aba, string][] = [
     ['cadastro', 'Cadastro'],
     ['documentos', 'Documentos'],
+    ['credito', 'Crédito'],
     ['configuracoes', 'Configurações'],
   ]
 
@@ -418,6 +436,64 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
               </div>
             )}
 
+            {aba === 'credito' && (
+              <div className="space-y-4">
+                {!cliente ? (
+                  <p className="text-sm text-gray-400 text-center py-8">Salve o cliente primeiro para ver o crédito.</p>
+                ) : carregandoCreditos ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 text-amber-600 animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Saldo */}
+                    <div className={`rounded-xl px-4 py-3 flex items-center justify-between ${saldoCredito > 0 ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
+                      <div className="flex items-center gap-2">
+                        <Wallet className={`w-5 h-5 ${saldoCredito > 0 ? 'text-green-600' : 'text-gray-400'}`} />
+                        <span className="text-sm font-medium text-gray-700">Saldo disponível</span>
+                      </div>
+                      <span className={`text-lg font-bold ${saldoCredito > 0 ? 'text-green-700' : 'text-gray-500'}`}>
+                        {formatCurrency(Math.max(0, saldoCredito))}
+                      </span>
+                    </div>
+
+                    {/* Histórico */}
+                    {creditos.length === 0 ? (
+                      <div className="text-center py-6 text-gray-400">
+                        <Wallet className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">Nenhuma movimentação de crédito.</p>
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                          <p className="text-xs font-medium text-gray-500">Histórico de movimentações</p>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {creditos.map(c => (
+                            <div key={c.id} className="flex items-center justify-between px-4 py-3">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                {c.tipo === 'entrada'
+                                  ? <ArrowDownCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                  : <ArrowUpCircle className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                                }
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-700 truncate">{c.descricao || (c.tipo === 'entrada' ? 'Crédito adicionado' : 'Crédito utilizado')}</p>
+                                  <p className="text-xs text-gray-400">{new Date(c.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                                </div>
+                              </div>
+                              <span className={`text-sm font-semibold flex-shrink-0 ml-3 ${c.tipo === 'entrada' ? 'text-green-600' : 'text-orange-600'}`}>
+                                {c.tipo === 'entrada' ? '+' : '-'}{formatCurrency(c.valor)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {aba === 'configuracoes' && (
               <div className="space-y-4">
                 <div className="flex items-start justify-between py-3 border-b border-gray-100">
@@ -451,7 +527,7 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
             >
               Cancelar
             </button>
-            {aba !== 'documentos' && (
+            {aba !== 'documentos' && aba !== 'credito' && (
               <button
                 onClick={handleSalvar}
                 disabled={loading}

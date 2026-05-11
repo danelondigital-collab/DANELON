@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, Plus, Trash2, Search, Scissors, ShoppingBag, Pencil } from 'lucide-react'
+import { X, Plus, Trash2, Search, Scissors, ShoppingBag, Pencil, Wallet } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Comanda, ComandaItem, Cliente, Profissional, Servico, Produto } from '@/types'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
@@ -42,6 +42,9 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [salvando, setSalvando] = useState(false)
   const [clientesFiltrados, setClientesFiltrados] = useState<Cliente[]>([])
   const [buscandoCliente, setBuscandoCliente] = useState(false)
+  const [saldoCredito, setSaldoCredito] = useState(0)
+  const [creditoAplicado, setCreditoAplicado] = useState(comandaInicial?.credito_utilizado || 0)
+  const [valorRecebido, setValorRecebido] = useState('')
 
   useEffect(() => {
     if (!clienteBusca.trim() || comanda?.id) { setClientesFiltrados([]); return }
@@ -81,10 +84,27 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     if (comanda?.id) buscarItens(comanda.id)
   }, [comanda?.id, buscarItens])
 
+  useEffect(() => {
+    const cId = comanda?.cliente_id || clienteId
+    if (cId) buscarSaldoCredito(cId)
+  }, [comanda?.cliente_id, clienteId])
+
   const totalBruto = itens.reduce((s, i) => s + i.subtotal, 0)
   const descontoNum = parseFloat(desconto) || 0
-  const totalFinal = Math.max(0, totalBruto - descontoNum)
+  const totalFinal = Math.max(0, totalBruto - descontoNum - creditoAplicado)
+  const valorRecebidoNum = parseFloat(valorRecebido) || 0
+  const creditoGerado = valorRecebidoNum > totalFinal ? parseFloat((valorRecebidoNum - totalFinal).toFixed(2)) : 0
   const isFechada = comanda?.status !== 'aberta' && comanda?.status !== undefined
+
+  async function buscarSaldoCredito(cId: string) {
+    const { data } = await supabase
+      .from('creditos_clientes')
+      .select('tipo, valor')
+      .eq('cliente_id', cId)
+    if (!data) return
+    const saldo = data.reduce((s, r) => r.tipo === 'entrada' ? s + r.valor : s - r.valor, 0)
+    setSaldoCredito(Math.max(0, parseFloat(saldo.toFixed(2))))
+  }
 
   async function garantirComanda(): Promise<string | null> {
     if (comanda?.id) return comanda.id
@@ -113,13 +133,15 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     const preco = item.tipo === 'servico'
       ? servicos.find(s => s.id === item.item_id)?.preco || 0
       : produtos.find(p => p.id === item.item_id)?.preco_venda || 0
+    const subtotalComDesconto = preco * qtd * (1 - item.desconto_percentual / 100)
 
     const payload: Record<string, unknown> = {
       comanda_id: comandaId,
       tipo: item.tipo,
       quantidade: qtd,
       preco_unitario: preco,
-      subtotal: preco * qtd,
+      desconto_percentual: item.desconto_percentual,
+      subtotal: subtotalComDesconto,
     }
     if (item.tipo === 'servico') payload.servico_id = item.item_id
     else payload.produto_id = item.item_id
@@ -132,7 +154,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
       const comissaoServico = servico?.comissao_servico || 0
       const rateios = item.profissionais.filter(p => p.profissional_id).map(p => {
         const prof = profissionais.find(x => x.id === p.profissional_id)
-        const valorBase = preco * qtd * (p.participacao / 100)
+        const valorBase = subtotalComDesconto * (p.participacao / 100)
         const pctComissao = comissaoServico > 0 ? comissaoServico : (prof?.comissao_padrao || 0)
         return {
           comanda_item_id: novoItem.id,
@@ -157,9 +179,10 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     const preco = item.tipo === 'servico'
       ? servicos.find(s => s.id === item.item_id)?.preco || 0
       : produtos.find(p => p.id === item.item_id)?.preco_venda || 0
+    const subtotalComDesconto = preco * qtd * (1 - item.desconto_percentual / 100)
 
     await supabase.from('comanda_itens').update({
-      quantidade: qtd, preco_unitario: preco, subtotal: preco * qtd,
+      quantidade: qtd, preco_unitario: preco, desconto_percentual: item.desconto_percentual, subtotal: subtotalComDesconto,
     }).eq('id', item.editandoId)
 
     await supabase.from('comanda_item_profissionais').delete().eq('comanda_item_id', item.editandoId)
@@ -169,7 +192,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
       const comissaoServico = servico?.comissao_servico || 0
       const rateios = item.profissionais.filter(p => p.profissional_id).map(p => {
         const prof = profissionais.find(x => x.id === p.profissional_id)
-        const valorBase = preco * qtd * (p.participacao / 100)
+        const valorBase = subtotalComDesconto * (p.participacao / 100)
         const pctComissao = comissaoServico > 0 ? comissaoServico : (prof?.comissao_padrao || 0)
         return {
           comanda_item_id: item.editandoId!,
@@ -200,19 +223,50 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     const total = (data || []).reduce((s: number, i: { subtotal: number }) => s + i.subtotal, 0)
     const desc = parseFloat(desconto) || 0
     await supabase.from('comandas').update({
-      valor_total: total, desconto: desc, valor_final: Math.max(0, total - desc),
+      valor_total: total, desconto: desc, credito_utilizado: creditoAplicado,
+      valor_final: Math.max(0, total - desc - creditoAplicado),
     }).eq('id', comandaId)
   }
 
   async function handleFechar() {
     if (!comanda?.id) { alert('Adicione pelo menos um item antes de fechar.'); return }
     if (!formaPagamento) { alert('Selecione a forma de pagamento.'); return }
+    if (creditoAplicado > saldoCredito + 0.01) { alert('Crédito aplicado maior que o saldo disponível.'); return }
     setFechando(true)
     const desc = parseFloat(desconto) || 0
     const { data } = await supabase.from('comandas')
-      .update({ status: 'fechada', data_fechamento: new Date().toISOString(), desconto: desc, valor_total: totalBruto, valor_final: totalFinal, forma_pagamento: formaPagamento })
+      .update({
+        status: 'fechada',
+        data_fechamento: new Date().toISOString(),
+        desconto: desc,
+        credito_utilizado: creditoAplicado,
+        valor_total: totalBruto,
+        valor_final: totalFinal,
+        forma_pagamento: formaPagamento,
+      })
       .eq('id', comanda.id)
       .select('*, cliente:clientes(id, nome, telefone)').single()
+
+    if (creditoAplicado > 0) {
+      await supabase.from('creditos_clientes').insert({
+        cliente_id: comanda.cliente_id,
+        comanda_id: comanda.id,
+        tipo: 'saida',
+        valor: creditoAplicado,
+        descricao: `Crédito utilizado na comanda`,
+      })
+    }
+
+    if (creditoGerado > 0) {
+      await supabase.from('creditos_clientes').insert({
+        cliente_id: comanda.cliente_id,
+        comanda_id: comanda.id,
+        tipo: 'entrada',
+        valor: creditoGerado,
+        descricao: `Crédito gerado por excesso de pagamento`,
+      })
+    }
+
     setFechando(false)
     if (data) { onSalva(data as unknown as Comanda); onClose() }
   }
@@ -322,6 +376,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                         <th className="text-left text-xs font-medium text-gray-500 px-3 py-2.5">Profissional</th>
                         <th className="text-right text-xs font-medium text-gray-500 px-3 py-2.5">Qtd</th>
                         <th className="text-right text-xs font-medium text-gray-500 px-3 py-2.5">Valor unit.</th>
+                        <th className="text-right text-xs font-medium text-gray-500 px-3 py-2.5">Desc.</th>
                         <th className="text-right text-xs font-medium text-gray-500 px-3 py-2.5">Total</th>
                         {!isFechada && <th className="w-8" />}
                       </tr>
@@ -354,6 +409,11 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                             </td>
                             <td className="px-3 py-3 text-sm text-gray-600 text-right">{item.quantidade}</td>
                             <td className="px-3 py-3 text-sm text-gray-600 text-right">{formatCurrency(item.preco_unitario)}</td>
+                            <td className="px-3 py-3 text-sm text-right">
+                              {item.desconto_percentual > 0
+                                ? <span className="text-orange-600 font-medium">{item.desconto_percentual}%</span>
+                                : <span className="text-gray-400">—</span>}
+                            </td>
                             <td className="px-3 py-3 text-sm font-medium text-gray-900 text-right">{formatCurrency(item.subtotal)}</td>
                             {!isFechada && (
                               <td className="px-2 py-3">
@@ -401,20 +461,77 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                 )}
               </div>
 
+              {/* Crédito */}
+              {!isFechada && saldoCredito > 0 && (
+                <div className="border border-green-200 rounded-lg p-2.5 bg-green-50 space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Wallet className="w-3.5 h-3.5 text-green-600" />
+                    <span className="text-xs font-medium text-green-700">Crédito disponível: {formatCurrency(saldoCredito)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500">Usar:</span>
+                    <div className="relative flex-1">
+                      <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">R$</span>
+                      <input type="number" min="0" max={Math.min(saldoCredito, Math.max(0, totalBruto - descontoNum))} step="0.01"
+                        value={creditoAplicado || ''}
+                        onChange={e => setCreditoAplicado(Math.min(saldoCredito, Math.max(0, parseFloat(e.target.value) || 0)))}
+                        placeholder="0,00"
+                        className="w-full pl-6 pr-2 py-1 border border-green-200 rounded text-xs text-right bg-white focus:outline-none focus:ring-1 focus:ring-green-500" />
+                    </div>
+                    <button onClick={() => setCreditoAplicado(Math.min(saldoCredito, Math.max(0, totalBruto - descontoNum)))}
+                      className="text-xs text-green-700 font-medium hover:underline whitespace-nowrap">
+                      Tudo
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isFechada && (comanda?.credito_utilizado || 0) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 flex items-center gap-1"><Wallet className="w-3 h-3" /> Crédito usado</span>
+                  <span className="text-green-600 font-medium">- {formatCurrency(comanda?.credito_utilizado || 0)}</span>
+                </div>
+              )}
+
+              {!isFechada && creditoAplicado > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Crédito usado</span>
+                  <span className="text-green-600 font-medium">- {formatCurrency(creditoAplicado)}</span>
+                </div>
+              )}
+
               <div className="flex justify-between text-sm font-bold border-t border-gray-100 pt-3">
                 <span>Total</span>
                 <span className="text-amber-700 text-base">{formatCurrency(isFechada ? (comanda?.valor_final || 0) : totalFinal)}</span>
               </div>
 
               {!isFechada && (
-                <div className="pt-1">
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Forma de pagamento</label>
-                  <select value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600">
-                    <option value="">Selecionar...</option>
-                    {FORMAS_PAGAMENTO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                  </select>
-                </div>
+                <>
+                  <div className="pt-1">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Forma de pagamento</label>
+                    <select value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}
+                      className="w-full px-2 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600">
+                      <option value="">Selecionar...</option>
+                      {FORMAS_PAGAMENTO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Valor recebido</label>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">R$</span>
+                      <input type="number" min="0" step="0.01" value={valorRecebido}
+                        onChange={e => setValorRecebido(e.target.value)}
+                        placeholder={totalFinal.toFixed(2)}
+                        className="w-full pl-7 pr-2 py-1.5 border border-gray-200 rounded text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-600" />
+                    </div>
+                    {creditoGerado > 0 && (
+                      <p className="text-xs text-green-600 font-medium mt-1 flex items-center gap-1">
+                        <Wallet className="w-3 h-3" /> Gera {formatCurrency(creditoGerado)} de crédito
+                      </p>
+                    )}
+                  </div>
+                </>
               )}
 
               {isFechada && comanda?.forma_pagamento && (
@@ -463,6 +580,7 @@ interface NovoItem {
   tipo: 'servico' | 'produto'
   item_id: string
   quantidade: number
+  desconto_percentual: number
   profissionais: { profissional_id: string; participacao: number }[]
   editandoId?: string
 }
@@ -484,6 +602,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, 
   const [tipo, setTipo] = useState<'servico' | 'produto'>(tipoInicial)
   const [itemId, setItemId] = useState(itemIdInicial)
   const [quantidade, setQuantidade] = useState(itemExistente?.quantidade ?? 1)
+  const [descontoPercentual, setDescontoPercentual] = useState(itemExistente?.desconto_percentual ?? 0)
   const [profs, setProfs] = useState(profsIniciais)
   const [salvando, setSalvando] = useState(false)
   const [ultimoAdicionado, setUltimoAdicionado] = useState<string | null>(null)
@@ -492,7 +611,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, 
   const item = lista.find(i => i.id === itemId)
   const servicoSel = tipo === 'servico' ? servicos.find(s => s.id === itemId) : null
   const preco = item ? (tipo === 'servico' ? (item as Servico).preco : (item as Produto).preco_venda) : 0
-  const subtotal = preco * quantidade
+  const subtotal = preco * quantidade * (1 - descontoPercentual / 100)
   const totalPart = profs.reduce((s, p) => s + p.participacao, 0)
   // Prioridade: comissão do serviço (se > 0) > comissão do profissional
   const comissaoServico = servicoSel?.comissao_servico || 0
@@ -545,6 +664,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, 
   function resetForm() {
     setItemId('')
     setQuantidade(1)
+    setDescontoPercentual(0)
     setProfs([{ profissional_id: profissionais[0]?.id || '', participacao: 100 }])
   }
 
@@ -555,7 +675,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, 
     }
     setSalvando(true)
     const nomeItem = lista.find(i => i.id === itemId)?.nome || ''
-    await onSalvo({ tipo, item_id: itemId, quantidade, profissionais: tipo === 'servico' ? profs : [], editandoId: itemExistente?.id }, continuar)
+    await onSalvo({ tipo, item_id: itemId, quantidade, desconto_percentual: descontoPercentual, profissionais: tipo === 'servico' ? profs : [], editandoId: itemExistente?.id }, continuar)
     setSalvando(false)
     if (continuar) {
       setUltimoAdicionado(nomeItem)
@@ -609,8 +729,8 @@ function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, 
             </p>
           </div>
 
-          {/* Quantidade + preço */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Quantidade + preço + desconto */}
+          <div className="grid grid-cols-4 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Quantidade</label>
               <input type="number" min="1" value={quantidade} onChange={e => setQuantidade(parseInt(e.target.value) || 1)}
@@ -620,6 +740,15 @@ function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, 
               <label className="block text-sm font-medium text-gray-700 mb-1">Preço unit.</label>
               <div className="px-3 py-2 border border-gray-100 rounded-lg text-sm bg-gray-50 text-gray-600">
                 {preco > 0 ? formatCurrency(preco) : '—'}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Desconto (%)</label>
+              <div className="relative">
+                <input type="number" min="0" max="100" step="1" value={descontoPercentual}
+                  onChange={e => setDescontoPercentual(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                  className="w-full pr-6 pl-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">%</span>
               </div>
             </div>
             <div>
@@ -713,9 +842,17 @@ function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, 
           )}
 
           {itemId && (
-            <div className="flex justify-between text-sm font-semibold pt-2 border-t border-gray-100">
+            <div className="flex justify-between items-center text-sm font-semibold pt-2 border-t border-gray-100">
               <span className="text-gray-600">Subtotal</span>
-              <span className="text-amber-700">{formatCurrency(subtotal)}</span>
+              <div className="text-right">
+                {descontoPercentual > 0 && (
+                  <span className="text-xs text-gray-400 line-through mr-2">{formatCurrency(preco * quantidade)}</span>
+                )}
+                <span className="text-amber-700">{formatCurrency(subtotal)}</span>
+                {descontoPercentual > 0 && (
+                  <span className="ml-1.5 text-xs font-medium text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">-{descontoPercentual}%</span>
+                )}
+              </div>
             </div>
           )}
         </div>
