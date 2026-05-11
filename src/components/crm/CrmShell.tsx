@@ -39,7 +39,7 @@ export default function CrmShell({ children, userName, unidadeAtual, unidades }:
   const [mobileOpen, setMobileOpen] = useState(false)
 
   function trocarUnidade(id: string) {
-    document.cookie = `unidade_id=${id}; path=/; max-age=86400`
+    document.cookie = `crm_unidade_id=${id}; path=/; max-age=86400`
     setUnidadeOpen(false)
     router.refresh()
   }
