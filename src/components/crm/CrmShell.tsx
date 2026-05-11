@@ -6,7 +6,8 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Users, BarChart3, TrendingUp, Settings,
-  LogOut, ChevronDown, Building2, LayoutGrid, Menu, X
+  LogOut, ChevronDown, Building2, LayoutGrid, Menu, X,
+  Target, Truck, UserCog
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -20,11 +21,14 @@ interface Props {
 }
 
 const NAV = [
-  { href: '/crm',            label: 'Visão Geral',   icon: LayoutDashboard },
-  { href: '/crm/clientes',   label: 'Clientes',      icon: Users },
-  { href: '/crm/desempenho', label: 'Desempenho',    icon: TrendingUp },
-  { href: '/crm/relatorios', label: 'Relatórios',    icon: BarChart3 },
-  { href: '/crm/configuracoes', label: 'Configurações', icon: Settings },
+  { href: '/crm',               label: 'Visão Geral',    icon: LayoutDashboard },
+  { href: '/crm/clientes',      label: 'Clientes',       icon: Users },
+  { href: '/crm/metas',         label: 'Metas',          icon: Target },
+  { href: '/crm/fornecedores',  label: 'Fornecedores',   icon: Truck },
+  { href: '/crm/rh',            label: 'RH',             icon: UserCog },
+  { href: '/crm/desempenho',    label: 'Desempenho',     icon: TrendingUp },
+  { href: '/crm/relatorios',    label: 'Relatórios',     icon: BarChart3 },
+  { href: '/crm/configuracoes', label: 'Configurações',  icon: Settings },
 ]
 
 export default function CrmShell({ children, userName, unidadeAtual, unidades }: Props) {
