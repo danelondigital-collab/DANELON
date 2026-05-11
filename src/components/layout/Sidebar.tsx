@@ -18,6 +18,7 @@ import {
   Building2,
   Check,
   ShieldCheck,
+  Layers,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -162,6 +163,16 @@ export default function Sidebar({ unidade, unidades, userName, perfil, onClose }
             {isAdmin ? 'Administrador' : 'Operador'}
           </span>
         </div>
+        {isAdmin && (
+          <Link
+            href="/escolher-modulo"
+            onClick={onClose}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-violet-400 hover:text-violet-300 hover:bg-violet-500/10 transition-colors mb-1"
+          >
+            <Layers className="w-4 h-4" />
+            CRM Admin
+          </Link>
+        )}
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-white/50 hover:text-white/80 hover:bg-white/8 transition-colors"

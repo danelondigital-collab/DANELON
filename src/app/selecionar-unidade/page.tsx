@@ -34,7 +34,7 @@ export default async function SelecionarUnidadePage() {
   }
 
   if (acessos.length === 1) {
-    const dest = usuario?.perfil === 'admin' ? '/crm' : '/dashboard'
+    const dest = usuario?.perfil === 'admin' ? '/escolher-modulo' : '/dashboard'
     redirect(`${dest}?unidade=${acessos[0].unidade_id}`)
   }
 

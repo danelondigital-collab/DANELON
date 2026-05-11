@@ -76,9 +76,9 @@ export default function CrmShell({ children, userName, unidadeAtual, unidades }:
                 </button>
               ))}
               <div className="border-t border-slate-700">
-                <button onClick={() => { setUnidadeOpen(false); router.push('/dashboard') }}
+                <button onClick={() => { setUnidadeOpen(false); router.push('/escolher-modulo') }}
                   className="w-full text-left px-3 py-2.5 text-xs text-slate-400 hover:text-white hover:bg-slate-700 transition-colors flex items-center gap-2">
-                  <LayoutGrid className="w-3.5 h-3.5" /> Ir para operação
+                  <LayoutGrid className="w-3.5 h-3.5" /> Escolher módulo
                 </button>
               </div>
             </div>
