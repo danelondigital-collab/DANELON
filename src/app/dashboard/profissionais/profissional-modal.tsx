@@ -5,7 +5,7 @@ import { X, Trash2, Pencil } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
-import type { Profissional, BloqueioAgenda } from '@/types'
+import type { Profissional, BloqueioAgenda, ComissaoProfissionalItem } from '@/types'
 
 interface Props {
   profissional: Profissional | null
@@ -69,6 +69,17 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     }
   }
 
+  // Comissões específicas por serviço/produto
+  const [comissoes, setComissoes] = useState<ComissaoProfissionalItem[]>([])
+  const [loadingComissoes, setLoadingComissoes] = useState(false)
+  const [servicos, setServicos] = useState<{ id: string; nome: string }[]>([])
+  const [produtos, setProdutos] = useState<{ id: string; nome: string }[]>([])
+  const [novaComTipo, setNovaComTipo] = useState<'servico' | 'produto'>('servico')
+  const [novaComItemId, setNovaComItemId] = useState('')
+  const [novaComPercentual, setNovaComPercentual] = useState('0')
+  const [salvandoComissao, setSalvandoComissao] = useState(false)
+  const [erroComissao, setErroComissao] = useState('')
+
   // Fechamento de agenda
   const [bloqueios, setBloqueios] = useState<BloqueioAgenda[]>([])
   const [loadingBloqueios, setLoadingBloqueios] = useState(false)
@@ -82,11 +93,68 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
   })
 
   useEffect(() => {
+    if (aba === 'comissao') {
+      fetchServicosEProdutos()
+      if (profissional) fetchComissoes()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, profissional?.id])
+
+  useEffect(() => {
     if (aba === 'fechamento' && profissional) {
       fetchBloqueios()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, profissional?.id])
+
+  async function fetchServicosEProdutos() {
+    const [{ data: svcs }, { data: prods }] = await Promise.all([
+      supabase.from('servicos').select('id, nome').eq('ativo', true).order('nome'),
+      supabase.from('produtos').select('id, nome').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
+    ])
+    setServicos(svcs || [])
+    setProdutos(prods || [])
+  }
+
+  async function fetchComissoes() {
+    if (!profissional) return
+    setLoadingComissoes(true)
+    const { data } = await supabase
+      .from('comissoes_profissional_item')
+      .select('*, servico:servicos(id, nome), produto:produtos(id, nome)')
+      .eq('profissional_id', profissional.id)
+      .order('created_at')
+    setComissoes((data as ComissaoProfissionalItem[]) || [])
+    setLoadingComissoes(false)
+  }
+
+  async function adicionarComissao() {
+    if (!profissional || !novaComItemId) return
+    setErroComissao('')
+    const jaExiste = comissoes.some(c =>
+      (novaComTipo === 'servico' && c.servico_id === novaComItemId) ||
+      (novaComTipo === 'produto' && c.produto_id === novaComItemId)
+    )
+    if (jaExiste) { setErroComissao('Comissão já cadastrada para este item.'); return }
+    setSalvandoComissao(true)
+    const payload: Record<string, unknown> = {
+      profissional_id: profissional.id,
+      tipo: novaComTipo,
+      percentual: parseFloat(novaComPercentual) || 0,
+    }
+    if (novaComTipo === 'servico') payload.servico_id = novaComItemId
+    else payload.produto_id = novaComItemId
+    await supabase.from('comissoes_profissional_item').insert(payload)
+    setNovaComItemId('')
+    setNovaComPercentual('0')
+    await fetchComissoes()
+    setSalvandoComissao(false)
+  }
+
+  async function removerComissao(id: string) {
+    await supabase.from('comissoes_profissional_item').delete().eq('id', id)
+    setComissoes(prev => prev.filter(c => c.id !== id))
+  }
 
   async function fetchBloqueios() {
     if (!profissional) return
@@ -347,7 +415,7 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
             )}
 
             {aba === 'comissao' && (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Comissão padrão (%)</label>
                   <div className="relative">
@@ -357,8 +425,90 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Este percentual será usado como padrão ao adicionar essa profissional em itens da comanda.
+                    Percentual padrão usado quando não há comissão específica cadastrada para o serviço/produto.
                   </p>
+                </div>
+
+                <div className="border-t border-gray-100 pt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Comissões específicas</h3>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Substituem a comissão padrão para o serviço ou produto selecionado na comanda.
+                  </p>
+
+                  {!profissional ? (
+                    <p className="text-sm text-gray-400 italic">Salve o profissional primeiro para configurar comissões específicas.</p>
+                  ) : (
+                    <>
+                      {/* Formulário de adição */}
+                      <div className="flex gap-2 mb-3">
+                        <select
+                          value={novaComTipo}
+                          onChange={e => { setNovaComTipo(e.target.value as 'servico' | 'produto'); setNovaComItemId('') }}
+                          className="w-28 px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600 flex-shrink-0"
+                        >
+                          <option value="servico">Serviço</option>
+                          <option value="produto">Produto</option>
+                        </select>
+                        <select
+                          value={novaComItemId}
+                          onChange={e => setNovaComItemId(e.target.value)}
+                          className="flex-1 min-w-0 px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600"
+                        >
+                          <option value="">Selecionar {novaComTipo === 'servico' ? 'serviço' : 'produto'}...</option>
+                          {(novaComTipo === 'servico' ? servicos : produtos).map(i => (
+                            <option key={i.id} value={i.id}>{i.nome}</option>
+                          ))}
+                        </select>
+                        <div className="relative flex-shrink-0 w-20">
+                          <input
+                            type="number" min="0" max="100" step="0.5"
+                            value={novaComPercentual}
+                            onChange={e => setNovaComPercentual(e.target.value)}
+                            className="w-full px-2 py-2 pr-5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600 text-center"
+                            placeholder="0"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">%</span>
+                        </div>
+                        <button
+                          onClick={adicionarComissao}
+                          disabled={!novaComItemId || salvandoComissao}
+                          className="flex-shrink-0 px-3 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-xs font-medium rounded-lg transition-colors"
+                        >
+                          {salvandoComissao ? '...' : 'Adicionar'}
+                        </button>
+                      </div>
+                      {erroComissao && <p className="text-xs text-red-500 mb-2">{erroComissao}</p>}
+
+                      {/* Lista de comissões */}
+                      {loadingComissoes ? (
+                        <p className="text-xs text-gray-400">Carregando...</p>
+                      ) : comissoes.length === 0 ? (
+                        <p className="text-xs text-gray-400 italic">Nenhuma comissão específica cadastrada.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {comissoes.map(c => {
+                            const nomeItem = c.tipo === 'servico' ? c.servico?.nome : c.produto?.nome
+                            return (
+                              <div key={c.id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${c.tipo === 'servico' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-700'}`}>
+                                    {c.tipo === 'servico' ? 'S' : 'P'}
+                                  </span>
+                                  <span className="text-sm text-gray-800 truncate">{nomeItem ?? '—'}</span>
+                                </div>
+                                <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+                                  <span className="text-sm font-semibold text-amber-700">{c.percentual}%</span>
+                                  <button onClick={() => removerComissao(c.id)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             )}

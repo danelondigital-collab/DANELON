@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { X, Plus, Trash2, Search, Scissors, ShoppingBag, Pencil, Wallet } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { Comanda, ComandaItem, Cliente, Profissional, Servico, Produto } from '@/types'
+import type { Comanda, ComandaItem, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem } from '@/types'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   profissionais: Profissional[]
   servicos: Servico[]
   produtos: Produto[]
+  comissoesProfissional: ComissaoProfissionalItem[]
   unidadeId: string
   onClose: () => void
   onSalva: (c: Comanda) => void
@@ -25,7 +26,7 @@ const FORMAS_PAGAMENTO = [
   { value: 'misto', label: 'Misto' },
 ]
 
-export default function ComandaModal({ comanda: comandaInicial, profissionais, servicos, produtos, unidadeId, onClose, onSalva }: Props) {
+export default function ComandaModal({ comanda: comandaInicial, profissionais, servicos, produtos, comissoesProfissional, unidadeId, onClose, onSalva }: Props) {
   const supabase = createClient()
   const isNova = !comandaInicial
 
@@ -155,7 +156,10 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
       const rateios = item.profissionais.filter(p => p.profissional_id).map(p => {
         const prof = profissionais.find(x => x.id === p.profissional_id)
         const valorBase = subtotalComDesconto * (p.participacao / 100)
-        const pctComissao = comissaoServico > 0 ? comissaoServico : (prof?.comissao_padrao || 0)
+        const especifica = comissoesProfissional.find(c =>
+          c.profissional_id === p.profissional_id && c.tipo === 'servico' && c.servico_id === item.item_id
+        )
+        const pctComissao = especifica ? especifica.percentual : (comissaoServico > 0 ? comissaoServico : (prof?.comissao_padrao || 0))
         return {
           comanda_item_id: novoItem.id,
           profissional_id: p.profissional_id,
@@ -193,7 +197,10 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
       const rateios = item.profissionais.filter(p => p.profissional_id).map(p => {
         const prof = profissionais.find(x => x.id === p.profissional_id)
         const valorBase = subtotalComDesconto * (p.participacao / 100)
-        const pctComissao = comissaoServico > 0 ? comissaoServico : (prof?.comissao_padrao || 0)
+        const especifica = comissoesProfissional.find(c =>
+          c.profissional_id === p.profissional_id && c.tipo === 'servico' && c.servico_id === item.item_id
+        )
+        const pctComissao = especifica ? especifica.percentual : (comissaoServico > 0 ? comissaoServico : (prof?.comissao_padrao || 0))
         return {
           comanda_item_id: item.editandoId!,
           profissional_id: p.profissional_id,
@@ -563,6 +570,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
           servicos={servicos}
           produtos={produtos}
           profissionais={profissionais}
+          comissoesProfissional={comissoesProfissional}
           itemExistente={itemEditando}
           onClose={() => { setAdicionandoItem(false); setItemEditando(null) }}
           onSalvo={itemEditando ? handleEditarItem : handleAdicionarItem}
@@ -585,10 +593,11 @@ interface NovoItem {
   editandoId?: string
 }
 
-function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, onClose, onSalvo }: {
+function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfissional, itemExistente, onClose, onSalvo }: {
   servicos: Servico[]
   produtos: Produto[]
   profissionais: Profissional[]
+  comissoesProfissional: ComissaoProfissionalItem[]
   itemExistente?: ComandaItem | null
   onClose: () => void
   onSalvo: (item: NovoItem, continuar: boolean) => Promise<void> | void
@@ -613,12 +622,20 @@ function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, 
   const preco = item ? (tipo === 'servico' ? (item as Servico).preco : (item as Produto).preco_venda) : 0
   const subtotal = preco * quantidade * (1 - descontoPercentual / 100)
   const totalPart = profs.reduce((s, p) => s + p.participacao, 0)
-  // Prioridade: comissão do serviço (se > 0) > comissão do profissional
+  // Prioridade: comissão específica do profissional > comissão do serviço > comissão padrão
   const comissaoServico = servicoSel?.comissao_servico || 0
 
-  function getComissaoProf(profId: string): number {
-    if (comissaoServico > 0) return comissaoServico
-    return profissionais.find(x => x.id === profId)?.comissao_padrao || 0
+  function getComissaoProf(profId: string): { pct: number; origem: 'especifica' | 'servico' | 'padrao' } {
+    if (profId && itemId) {
+      const especifica = comissoesProfissional.find(c =>
+        c.profissional_id === profId &&
+        c.tipo === tipo &&
+        (tipo === 'servico' ? c.servico_id === itemId : c.produto_id === itemId)
+      )
+      if (especifica) return { pct: especifica.percentual, origem: 'especifica' }
+    }
+    if (comissaoServico > 0) return { pct: comissaoServico, origem: 'servico' }
+    return { pct: profissionais.find(x => x.id === profId)?.comissao_padrao || 0, origem: 'padrao' }
   }
 
   function distribuirIgual(n: number): number[] {
@@ -785,7 +802,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, 
                 {profs.map((p, idx) => {
                   const profSel = profissionais.find(x => x.id === p.profissional_id)
                   const valorBase = subtotal * (p.participacao / 100)
-                  const pctComissao = getComissaoProf(p.profissional_id)
+                  const { pct: pctComissao, origem } = getComissaoProf(p.profissional_id)
                   const valorComissao = valorBase * (pctComissao / 100)
                   return (
                     <div key={idx} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-gray-50">
@@ -816,7 +833,10 @@ function AdicionarItemModal({ servicos, produtos, profissionais, itemExistente, 
                       <div className="col-span-3 text-center">
                         <p className="text-xs font-medium text-gray-700">
                           {p.profissional_id ? `${pctComissao}%` : '—'}
-                          {comissaoServico > 0 && p.profissional_id && (
+                          {p.profissional_id && origem === 'especifica' && (
+                            <span className="ml-1 text-blue-600 text-xs">(específica)</span>
+                          )}
+                          {p.profissional_id && origem === 'servico' && (
                             <span className="ml-1 text-amber-600 text-xs">(serviço)</span>
                           )}
                         </p>

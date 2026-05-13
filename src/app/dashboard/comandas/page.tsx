@@ -9,7 +9,7 @@ export default async function ComandasPage() {
   const cookieStore = await cookies()
   const unidadeId = cookieStore.get('unidade_id')?.value!
 
-  const [{ data: comandas }, { data: clientes }, { data: profissionais }, { data: servicos }, { data: produtos }] = await Promise.all([
+  const [{ data: comandas }, { data: clientes }, { data: profissionais }, { data: servicos }, { data: produtos }, { data: comissoesProfissional }] = await Promise.all([
     supabase.from('comandas')
       .select('*, cliente:clientes(id, nome, telefone)')
       .eq('unidade_id', unidadeId)
@@ -19,6 +19,7 @@ export default async function ComandasPage() {
     supabase.from('profissionais').select('*').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
     supabase.from('servicos').select('*').eq('ativo', true).order('nome'),
     supabase.from('produtos').select('*').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
+    supabase.from('comissoes_profissional_item').select('id, profissional_id, tipo, servico_id, produto_id, percentual'),
   ])
 
   return (
@@ -28,6 +29,7 @@ export default async function ComandasPage() {
       profissionais={profissionais || []}
       servicos={servicos || []}
       produtos={produtos || []}
+      comissoesProfissional={(comissoesProfissional as unknown as import('@/types').ComissaoProfissionalItem[]) || []}
       unidadeId={unidadeId}
     />
   )

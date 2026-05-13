@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, Search, ClipboardList } from 'lucide-react'
-import type { Comanda, Cliente, Profissional, Servico, Produto } from '@/types'
+import type { Comanda, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem } from '@/types'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 import ComandaModal from './comanda-modal'
 
@@ -12,6 +12,7 @@ interface Props {
   profissionais: Profissional[]
   servicos: Servico[]
   produtos: Produto[]
+  comissoesProfissional: ComissaoProfissionalItem[]
   unidadeId: string
 }
 
@@ -22,7 +23,7 @@ const statusCor: Record<string, string> = {
   cancelada: 'bg-red-100 text-red-600',
 }
 
-export default function ComandasClient({ comandas: initial, clientes, profissionais, servicos, produtos, unidadeId }: Props) {
+export default function ComandasClient({ comandas: initial, clientes, profissionais, servicos, produtos, comissoesProfissional, unidadeId }: Props) {
   const [comandas, setComandas] = useState(initial)
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<string>('todos')
@@ -165,6 +166,7 @@ export default function ComandasClient({ comandas: initial, clientes, profission
           profissionais={profissionais}
           servicos={servicos}
           produtos={produtos}
+          comissoesProfissional={comissoesProfissional}
           unidadeId={unidadeId}
           onClose={onFechada}
           onSalva={onSalva}

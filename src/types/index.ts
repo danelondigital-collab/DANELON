@@ -211,6 +211,18 @@ export interface BloqueioAgenda {
   created_at: string
 }
 
+export interface ComissaoProfissionalItem {
+  id: string
+  profissional_id: string
+  tipo: 'servico' | 'produto'
+  servico_id?: string
+  servico?: { id: string; nome: string }
+  produto_id?: string
+  produto?: { id: string; nome: string }
+  percentual: number
+  created_at: string
+}
+
 // Relatório de comissionamento
 export interface RelatorioComissao {
   profissional_id: string
