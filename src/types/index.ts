@@ -51,9 +51,16 @@ export interface Profissional {
   telefone?: string
   email?: string
   cpf?: string
+  rg?: string
   cnpj?: string
   data_nascimento?: string
-  endereco?: string
+  cep?: string
+  logradouro?: string
+  numero?: string
+  complemento?: string
+  bairro?: string
+  estado?: string
+  cidade?: string
   foto_url?: string
   comissao_padrao: number
   cor_agenda: string

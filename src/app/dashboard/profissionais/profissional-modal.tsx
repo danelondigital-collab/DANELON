@@ -14,7 +14,7 @@ interface Props {
   onSalvo: (p: Profissional) => void
 }
 
-type Aba = 'cadastro' | 'comissao' | 'configuracoes' | 'fechamento'
+type Aba = 'cadastro' | 'endereco' | 'comissao' | 'configuracoes' | 'fechamento'
 
 const CORES = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4']
 
@@ -29,13 +29,45 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     telefone: profissional?.telefone || '',
     email: profissional?.email || '',
     cpf: profissional?.cpf || '',
+    rg: profissional?.rg || '',
     cnpj: profissional?.cnpj || '',
     data_nascimento: profissional?.data_nascimento || '',
-    endereco: profissional?.endereco || '',
+    cep: profissional?.cep || '',
+    logradouro: profissional?.logradouro || '',
+    numero: profissional?.numero || '',
+    complemento: profissional?.complemento || '',
+    bairro: profissional?.bairro || '',
+    estado: profissional?.estado || '',
+    cidade: profissional?.cidade || '',
     comissao_padrao: profissional?.comissao_padrao?.toString() || '0',
     cor_agenda: profissional?.cor_agenda || '#6366f1',
     ativo: profissional?.ativo ?? true,
   })
+
+  const [buscandoCep, setBuscandoCep] = useState(false)
+
+  async function buscarCep(valor: string) {
+    const cep = valor.replace(/\D/g, '')
+    if (cep.length !== 8) return
+    setBuscandoCep(true)
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const dados = await res.json()
+      if (!dados.erro) {
+        setForm(prev => ({
+          ...prev,
+          logradouro: dados.logradouro || prev.logradouro,
+          bairro: dados.bairro || prev.bairro,
+          estado: dados.uf || prev.estado,
+          cidade: dados.localidade || prev.cidade,
+        }))
+      }
+    } catch {
+      // ignora erro de rede
+    } finally {
+      setBuscandoCep(false)
+    }
+  }
 
   // Fechamento de agenda
   const [bloqueios, setBloqueios] = useState<BloqueioAgenda[]>([])
@@ -126,9 +158,16 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
       telefone: form.telefone || null,
       email: form.email || null,
       cpf: form.cpf || null,
+      rg: form.rg || null,
       cnpj: form.cnpj || null,
       data_nascimento: form.data_nascimento || null,
-      endereco: form.endereco || null,
+      cep: form.cep || null,
+      logradouro: form.logradouro || null,
+      numero: form.numero || null,
+      complemento: form.complemento || null,
+      bairro: form.bairro || null,
+      estado: form.estado || null,
+      cidade: form.cidade || null,
       comissao_padrao: parseFloat(form.comissao_padrao) || 0,
       cor_agenda: form.cor_agenda,
       ativo: form.ativo,
@@ -149,6 +188,7 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
 
   const abas: [Aba, string][] = [
     ['cadastro', 'Cadastro'],
+    ['endereco', 'Endereço'],
     ['comissao', 'Comissão'],
     ['configuracoes', 'Configurações'],
     ['fechamento', 'Fechamento'],
@@ -206,12 +246,18 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
                     <input type="text" value={form.cpf} onChange={e => set('cpf', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
                       placeholder="000.000.000-00" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">RG</label>
+                    <input type="text" value={form.rg} onChange={e => set('rg', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      placeholder="00.000.000-0" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ</label>
@@ -221,18 +267,10 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Data de Nascimento</label>
-                    <input type="date" value={form.data_nascimento} onChange={e => set('data_nascimento', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Endereço</label>
-                    <input type="text" value={form.endereco} onChange={e => set('endereco', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
-                      placeholder="Rua, número, bairro, cidade" />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Data de Nascimento</label>
+                  <input type="date" value={form.data_nascimento} onChange={e => set('data_nascimento', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
                 </div>
 
                 <div>
@@ -243,6 +281,66 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
                         className={`w-8 h-8 rounded-full transition-transform hover:scale-110 ${form.cor_agenda === cor ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : ''}`}
                         style={{ backgroundColor: cor }} />
                     ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {aba === 'endereco' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
+                  <div className="relative">
+                    <input type="text" value={form.cep}
+                      onChange={e => { set('cep', e.target.value); buscarCep(e.target.value) }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 pr-24"
+                      placeholder="00000-000" maxLength={9} />
+                    {buscandoCep && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">buscando...</span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Logradouro</label>
+                  <input type="text" value={form.logradouro} onChange={e => set('logradouro', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                    placeholder="Rua, Avenida, Travessa..." />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+                    <input type="text" value={form.numero} onChange={e => set('numero', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      placeholder="123" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Complemento</label>
+                    <input type="text" value={form.complemento} onChange={e => set('complemento', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      placeholder="Apto, Sala, Bloco..." />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+                    <input type="text" value={form.bairro} onChange={e => set('bairro', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      placeholder="Bairro" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+                    <input type="text" value={form.estado} onChange={e => set('estado', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      placeholder="SP" maxLength={2} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
+                    <input type="text" value={form.cidade} onChange={e => set('cidade', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      placeholder="São Paulo" />
                   </div>
                 </div>
               </div>
