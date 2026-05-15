@@ -22,12 +22,13 @@ interface Props {
 
 export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
   const supabase = createClient()
-  const [aba, setAba] = useState<'comandas' | 'comissao'>('comandas')
+  const [aba, setAba] = useState<'comandas' | 'comissao' | 'vendas'>('comandas')
   const [dataInicio, setDataInicio] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [dataFim, setDataFim] = useState(() => format(endOfMonth(new Date()), 'yyyy-MM-dd'))
   const [profissionalId, setProfissionalId] = useState<string>('todos')
   const [comandas, setComandas] = useState<Comanda[]>([])
   const [loading, setLoading] = useState(false)
+  const [tipoVendas, setTipoVendas] = useState<'todos' | 'servico' | 'produto'>('todos')
 
   useEffect(() => {
     buscarDados()
@@ -43,7 +44,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
         cliente:clientes(id, nome, telefone),
         itens:comanda_itens(
           id, tipo, quantidade, preco_unitario, subtotal,
-          servico:servicos(id, nome),
+          servico:servicos(id, nome, categoria:categorias_servico(nome)),
           produto:produtos(id, nome),
           profissionais:comanda_item_profissionais(
             id, profissional_id, percentual_participacao, percentual_comissao, valor_base, valor_comissao,
@@ -99,6 +100,59 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
 
   const resumoProf = resumoPorProfissional.find(r => r.profissional.id === profissionalId)
 
+  // ── Vendas: lista flat de todos os itens ──
+  interface ItemVenda {
+    key: string
+    comanda_id: string
+    data_fechamento: string
+    cliente_nome: string
+    cliente_telefone: string
+    tipo: string
+    item_nome: string
+    categoria_nome: string
+    quantidade: number
+    subtotal: number
+    profissional_nome: string
+    profissional_ids: string[]
+  }
+
+  const itensVendas: ItemVenda[] = []
+  for (const c of comandas) {
+    for (const item of c.itens || []) {
+      const profs = item.profissionais || []
+      const profNome = profs.length > 0
+        ? profs.map((cp: any) => cp.profissional?.nome || '').filter(Boolean).join(', ')
+        : '—'
+      const profIds = profs.map((cp: any) => cp.profissional_id).filter(Boolean)
+      const itemNome = item.tipo === 'servico' ? (item.servico?.nome || '—') : (item.produto?.nome || '—')
+      const categoriaNome = item.tipo === 'servico'
+        ? ((item.servico as any)?.categoria?.nome || 'Serviço')
+        : 'Produto'
+      itensVendas.push({
+        key: item.id,
+        comanda_id: c.id,
+        data_fechamento: c.data_fechamento || '',
+        cliente_nome: c.cliente?.nome || '—',
+        cliente_telefone: c.cliente?.telefone || '—',
+        tipo: item.tipo,
+        item_nome: itemNome,
+        categoria_nome: categoriaNome,
+        quantidade: item.quantidade,
+        subtotal: item.subtotal,
+        profissional_nome: profNome,
+        profissional_ids: profIds,
+      })
+    }
+  }
+
+  const itensVendasFiltrados = itensVendas
+    .filter(i => tipoVendas === 'todos' || i.tipo === tipoVendas)
+    .filter(i => profissionalId === 'todos' || i.profissional_ids.includes(profissionalId))
+
+  const totalVendas = itensVendasFiltrados.reduce((s, i) => s + i.subtotal, 0)
+  const qtdServicos = itensVendasFiltrados.filter(i => i.tipo === 'servico').reduce((s, i) => s + i.quantidade, 0)
+  const qtdProdutos = itensVendasFiltrados.filter(i => i.tipo === 'produto').reduce((s, i) => s + i.quantidade, 0)
+
   function irParaMesAnterior() {
     const m = new Date(dataInicio)
     m.setMonth(m.getMonth() - 1)
@@ -113,9 +167,11 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
 
   const tituloPrint = aba === 'comandas'
     ? 'Relatório de Comandas Fechadas'
-    : profissionalId === 'todos'
-      ? 'Relatório de Comissão — Todos os Profissionais'
-      : `Relatório de Comissão — ${resumoProf?.profissional.nome || ''}`
+    : aba === 'vendas'
+      ? 'Relatório de Vendas — Completo'
+      : profissionalId === 'todos'
+        ? 'Relatório de Comissão — Todos os Profissionais'
+        : `Relatório de Comissão — ${resumoProf?.profissional.nome || ''}`
 
   const periodoFormatado = `${format(new Date(dataInicio + 'T12:00:00'), 'dd/MM/yyyy')} a ${format(new Date(dataFim + 'T12:00:00'), 'dd/MM/yyyy')}`
 
@@ -189,12 +245,172 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
           className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${aba === 'comissao' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}>
           Comissão
         </button>
+        <button onClick={() => setAba('vendas')}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${aba === 'vendas' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}>
+          Vendas
+        </button>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <div className="w-6 h-6 border-2 border-amber-700 border-t-transparent rounded-full animate-spin" />
         </div>
+      ) : aba === 'vendas' ? (
+
+        /* ===== RELATÓRIO 3: VENDAS — COMPLETO ===== */
+        <div>
+          {/* Filtros */}
+          <div className="print:hidden flex flex-wrap items-center gap-3 mb-5">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 whitespace-nowrap">Tipo:</label>
+              <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                {(['todos', 'servico', 'produto'] as const).map(t => (
+                  <button key={t} onClick={() => setTipoVendas(t)}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${tipoVendas === t ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600'}`}>
+                    {t === 'todos' ? 'Todos' : t === 'servico' ? 'Serviços' : 'Produtos'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 whitespace-nowrap">Profissional:</label>
+              <select value={profissionalId} onChange={e => setProfissionalId(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600">
+                <option value="todos">Todos</option>
+                {profissionais.map(p => (
+                  <option key={p.id} value={p.id}>{p.nome}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Cards de totais */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-1">Total de itens</p>
+              <p className="text-2xl font-bold text-gray-900">{itensVendasFiltrados.length}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-1">Serviços (qtd)</p>
+              <p className="text-2xl font-bold text-blue-600">{qtdServicos}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-1">Produtos (qtd)</p>
+              <p className="text-2xl font-bold text-purple-600">{qtdProdutos}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-amber-200 p-4">
+              <p className="text-xs text-gray-500 mb-1">Total vendido</p>
+              <p className="text-2xl font-bold" style={{ color: '#B8924A' }}>{formatCurrency(totalVendas)}</p>
+            </div>
+          </div>
+
+          {itensVendasFiltrados.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+              <FileText className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">Nenhuma venda no período</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {/* Desktop */}
+              <table className="w-full hidden md:table print:table text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="text-left text-xs font-medium text-gray-500 px-3 py-3">Cliente</th>
+                    <th className="text-left text-xs font-medium text-gray-500 px-3 py-3">Celular</th>
+                    <th className="text-left text-xs font-medium text-gray-500 px-3 py-3">Comanda</th>
+                    <th className="text-left text-xs font-medium text-gray-500 px-3 py-3">Data da venda</th>
+                    <th className="text-left text-xs font-medium text-gray-500 px-3 py-3">Profissional/Vendedor</th>
+                    <th className="text-left text-xs font-medium text-gray-500 px-3 py-3">Produto/Serviço</th>
+                    <th className="text-left text-xs font-medium text-gray-500 px-3 py-3">Categoria</th>
+                    <th className="text-right text-xs font-medium text-gray-500 px-3 py-3">Qtd</th>
+                    <th className="text-right text-xs font-medium text-gray-500 px-3 py-3">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {itensVendasFiltrados.map(i => (
+                    <tr key={i.key} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                      <td className="px-3 py-2.5 font-medium text-gray-900 max-w-[140px]">
+                        <p className="truncate">{i.cliente_nome}</p>
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{i.cliente_telefone || '—'}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <span className="text-xs font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                          #{i.comanda_id.slice(0, 6).toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">
+                        {i.data_fechamento ? format(parseISO(i.data_fechamento), 'dd/MM/yyyy') : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-700 max-w-[160px]">
+                        <p className="truncate">{i.profissional_nome}</p>
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-900 max-w-[200px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full ${i.tipo === 'servico' ? 'bg-blue-400' : 'bg-purple-400'}`} />
+                          <p className="truncate">{i.item_nome}</p>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-500">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
+                          i.tipo === 'servico' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
+                        }`}>
+                          {i.categoria_nome}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-700 text-right">{i.quantidade}</td>
+                      <td className="px-3 py-2.5 font-semibold text-gray-900 text-right whitespace-nowrap">
+                        {formatCurrency(i.subtotal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-amber-50 border-t-2 border-amber-200">
+                    <td colSpan={7} className="px-3 py-3 text-sm font-semibold text-gray-700">
+                      TOTAL — {itensVendasFiltrados.length} item{itensVendasFiltrados.length !== 1 ? 's' : ''}
+                      {tipoVendas === 'todos' ? ` (${qtdServicos} serviços · ${qtdProdutos} produtos)` : ''}
+                    </td>
+                    <td className="px-3 py-3 text-sm font-semibold text-gray-700 text-right">
+                      {itensVendasFiltrados.reduce((s, i) => s + i.quantidade, 0)}
+                    </td>
+                    <td className="px-3 py-3 text-sm font-bold text-right" style={{ color: '#B8924A' }}>
+                      {formatCurrency(totalVendas)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* Mobile */}
+              <div className="md:hidden print:hidden divide-y divide-gray-50">
+                {itensVendasFiltrados.map(i => (
+                  <div key={i.key} className="px-4 py-3">
+                    <div className="flex justify-between items-start mb-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full ${i.tipo === 'servico' ? 'bg-blue-400' : 'bg-purple-400'}`} />
+                          <p className="text-sm font-medium text-gray-900 truncate">{i.item_nome}</p>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {i.cliente_nome} · {i.data_fechamento ? format(parseISO(i.data_fechamento), 'dd/MM/yyyy') : '—'}
+                        </p>
+                        <p className="text-xs text-gray-400">{i.profissional_nome} · {i.categoria_nome}</p>
+                      </div>
+                      <div className="text-right ml-2 flex-shrink-0">
+                        <p className="text-sm font-bold text-gray-900">{formatCurrency(i.subtotal)}</p>
+                        <p className="text-xs text-gray-500">Qtd: {i.quantidade}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="px-4 py-3 bg-amber-50 flex justify-between">
+                  <p className="text-sm font-semibold text-gray-700">{itensVendasFiltrados.length} itens</p>
+                  <p className="text-sm font-bold" style={{ color: '#B8924A' }}>{formatCurrency(totalVendas)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
       ) : aba === 'comandas' ? (
 
         /* ===== RELATÓRIO 1: COMANDAS FECHADAS ===== */
@@ -315,7 +531,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
           )}
         </div>
 
-      ) : (
+      ) : aba === 'comissao' ? (
 
         /* ===== RELATÓRIO 2: COMISSÃO POR PROFISSIONAL ===== */
         <div>
@@ -580,7 +796,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
             </div>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
