@@ -9,6 +9,12 @@ export default async function ComandasPage() {
   const cookieStore = await cookies()
   const unidadeId = cookieStore.get('unidade_id')?.value!
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: usuario } = user
+    ? await supabase.from('usuarios').select('perfil').eq('id', user.id).single()
+    : { data: null }
+  const perfil = usuario?.perfil || 'operador'
+
   const [{ data: comandas }, { data: clientes }, { data: profissionais }, { data: servicos }, { data: produtos }, { data: comissoesProfissional }] = await Promise.all([
     supabase.from('comandas')
       .select('*, cliente:clientes(id, nome, telefone)')
@@ -31,6 +37,7 @@ export default async function ComandasPage() {
       produtos={produtos || []}
       comissoesProfissional={(comissoesProfissional as unknown as import('@/types').ComissaoProfissionalItem[]) || []}
       unidadeId={unidadeId}
+      perfil={perfil}
     />
   )
 }

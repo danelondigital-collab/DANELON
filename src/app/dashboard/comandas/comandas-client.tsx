@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Search, ClipboardList } from 'lucide-react'
+import { Plus, Search, ClipboardList, Layers } from 'lucide-react'
 import type { Comanda, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem } from '@/types'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 import ComandaModal from './comanda-modal'
+import ComandaGenericaModal from './comanda-generica-modal'
 
 interface Props {
   comandas: Comanda[]
@@ -14,6 +15,7 @@ interface Props {
   produtos: Produto[]
   comissoesProfissional: ComissaoProfissionalItem[]
   unidadeId: string
+  perfil: string
 }
 
 const statusLabel: Record<string, string> = { aberta: 'Aberta', fechada: 'Fechada', cancelada: 'Cancelada' }
@@ -23,11 +25,12 @@ const statusCor: Record<string, string> = {
   cancelada: 'bg-red-100 text-red-600',
 }
 
-export default function ComandasClient({ comandas: initial, clientes, profissionais, servicos, produtos, comissoesProfissional, unidadeId }: Props) {
+export default function ComandasClient({ comandas: initial, clientes, profissionais, servicos, produtos, comissoesProfissional, unidadeId, perfil }: Props) {
   const [comandas, setComandas] = useState(initial)
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<string>('todos')
   const [modalAberto, setModalAberto] = useState(false)
+  const [modalGenericaAberto, setModalGenericaAberto] = useState(false)
   const [comandaSelecionada, setComandaSelecionada] = useState<Comanda | null>(null)
 
   const filtradas = comandas.filter(c => {
@@ -67,12 +70,24 @@ export default function ComandasClient({ comandas: initial, clientes, profission
             {comandas.filter(c => c.status === 'aberta').length} aberta{comandas.filter(c => c.status === 'aberta').length !== 1 ? 's' : ''}
           </p>
         </div>
-        <button onClick={abrirNova}
-          className="flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Nova comanda</span>
-          <span className="sm:hidden">Nova</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {perfil === 'admin' && (
+            <button
+              onClick={() => setModalGenericaAberto(true)}
+              className="flex items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <Layers className="w-4 h-4" />
+              <span className="hidden sm:inline">Comandas Genéricas</span>
+              <span className="sm:hidden">Genérica</span>
+            </button>
+          )}
+          <button onClick={abrirNova}
+            className="flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Nova comanda</span>
+            <span className="sm:hidden">Nova</span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200">
@@ -170,6 +185,21 @@ export default function ComandasClient({ comandas: initial, clientes, profission
           unidadeId={unidadeId}
           onClose={onFechada}
           onSalva={onSalva}
+        />
+      )}
+
+      {modalGenericaAberto && (
+        <ComandaGenericaModal
+          unidadeId={unidadeId}
+          clientes={clientes}
+          profissionais={profissionais}
+          servicos={servicos}
+          comissoesProfissional={comissoesProfissional}
+          onClose={() => setModalGenericaAberto(false)}
+          onCriadas={(count) => {
+            // Recarrega a página para buscar as novas comandas
+            setTimeout(() => window.location.reload(), 1500)
+          }}
         />
       )}
     </div>
