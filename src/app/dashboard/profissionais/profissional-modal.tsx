@@ -144,7 +144,8 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     }
     if (novaComTipo === 'servico') payload.servico_id = novaComItemId
     else payload.produto_id = novaComItemId
-    await supabase.from('comissoes_profissional_item').insert(payload)
+    const { error } = await supabase.from('comissoes_profissional_item').insert(payload)
+    if (error) { setErroComissao(error.message); setSalvandoComissao(false); return }
     setNovaComItemId('')
     setNovaComPercentual('0')
     await fetchComissoes()
