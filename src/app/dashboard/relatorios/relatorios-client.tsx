@@ -44,7 +44,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
         cliente:clientes(id, nome, telefone),
         itens:comanda_itens(
           id, tipo, quantidade, preco_unitario, subtotal,
-          servico:servicos(id, nome, categoria:categorias_servico(nome)),
+          servico:servicos(id, nome, aparece_relatorio_vendas, categoria:categorias_servico(nome)),
           produto:produtos(id, nome),
           profissionais:comanda_item_profissionais(
             id, profissional_id, percentual_participacao, percentual_comissao, valor_base, valor_comissao,
@@ -119,6 +119,7 @@ export default function RelatoriosClient({ profissionais, unidadeId }: Props) {
   const itensVendas: ItemVenda[] = []
   for (const c of comandas) {
     for (const item of c.itens || []) {
+      if (item.tipo === 'servico' && (item.servico as any)?.aparece_relatorio_vendas === false) continue
       const profs = item.profissionais || []
       const profNome = profs.length > 0
         ? profs.map((cp: any) => cp.profissional?.nome || '').filter(Boolean).join(', ')

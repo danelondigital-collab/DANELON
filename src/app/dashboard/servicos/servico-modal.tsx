@@ -28,6 +28,7 @@ export default function ServicoModal({ servico, categorias, onClose, onSalvo }: 
     preco: servico?.preco?.toString() || '0',
     comissao_servico: servico?.comissao_servico?.toString() || '0',
     ativo: servico?.ativo ?? true,
+    aparece_relatorio_vendas: servico?.aparece_relatorio_vendas ?? true,
   })
 
   function set(field: string, value: string | boolean) {
@@ -47,6 +48,7 @@ export default function ServicoModal({ servico, categorias, onClose, onSalvo }: 
       preco: parseFloat(form.preco) || 0,
       comissao_servico: parseFloat(form.comissao_servico) || 0,
       ativo: form.ativo,
+      aparece_relatorio_vendas: form.aparece_relatorio_vendas,
     }
 
     if (servico) {
@@ -149,6 +151,16 @@ export default function ServicoModal({ servico, categorias, onClose, onSalvo }: 
                   <button onClick={() => set('ativo', !form.ativo)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.ativo ? 'bg-amber-700' : 'bg-gray-200'}`}>
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.ativo ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                <div className="flex items-start justify-between py-3 border-b border-gray-100">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Aparece no Relatório de Vendas</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Desative para excluir este serviço do relatório de produtos e serviços</p>
+                  </div>
+                  <button onClick={() => set('aparece_relatorio_vendas', !form.aparece_relatorio_vendas)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.aparece_relatorio_vendas ? 'bg-amber-700' : 'bg-gray-200'}`}>
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.aparece_relatorio_vendas ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
               </div>

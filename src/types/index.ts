@@ -89,6 +89,7 @@ export interface Servico {
   preco: number
   comissao_servico: number
   ativo: boolean
+  aparece_relatorio_vendas: boolean
   created_at: string
   updated_at: string
 }
