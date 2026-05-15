@@ -85,7 +85,7 @@ export default function ProfissionaisClient({ profissionais: initial, unidadeId 
                 <tr className="border-b border-gray-100">
                   <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Nome</th>
                   <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Telefone</th>
-                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Comissão</th>
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Cargo</th>
                   <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
                 </tr>
               </thead>
@@ -110,7 +110,7 @@ export default function ProfissionaisClient({ profissionais: initial, unidadeId 
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {p.telefone ? formatPhone(p.telefone) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{p.comissao_padrao}%</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{p.cargo || '—'}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                         p.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
@@ -139,7 +139,7 @@ export default function ProfissionaisClient({ profissionais: initial, unidadeId 
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{p.nome}</p>
-                    <p className="text-xs text-gray-500">{p.comissao_padrao}% comissão</p>
+                    <p className="text-xs text-gray-500">{p.cargo || '—'}</p>
                   </div>
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
                     p.ativo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'

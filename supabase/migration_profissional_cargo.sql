@@ -1,0 +1,1 @@
+ALTER TABLE profissionais ADD COLUMN IF NOT EXISTS cargo TEXT;

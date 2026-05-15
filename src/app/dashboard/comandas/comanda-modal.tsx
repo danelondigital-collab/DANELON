@@ -159,7 +159,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
         const especifica = comissoesProfissional.find(c =>
           c.profissional_id === p.profissional_id && c.tipo === 'servico' && c.servico_id === item.item_id
         )
-        const pctComissao = especifica ? especifica.percentual : (comissaoServico > 0 ? comissaoServico : (prof?.comissao_padrao || 0))
+        const pctComissao = especifica ? especifica.percentual : (comissaoServico > 0 ? comissaoServico : 0)
         return {
           comanda_item_id: novoItem.id,
           profissional_id: p.profissional_id,
@@ -200,7 +200,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
         const especifica = comissoesProfissional.find(c =>
           c.profissional_id === p.profissional_id && c.tipo === 'servico' && c.servico_id === item.item_id
         )
-        const pctComissao = especifica ? especifica.percentual : (comissaoServico > 0 ? comissaoServico : (prof?.comissao_padrao || 0))
+        const pctComissao = especifica ? especifica.percentual : (comissaoServico > 0 ? comissaoServico : 0)
         return {
           comanda_item_id: item.editandoId!,
           profissional_id: p.profissional_id,
@@ -625,7 +625,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
   // Prioridade: comissão específica do profissional > comissão do serviço > comissão padrão
   const comissaoServico = servicoSel?.comissao_servico || 0
 
-  function getComissaoProf(profId: string): { pct: number; origem: 'especifica' | 'servico' | 'padrao' } {
+  function getComissaoProf(profId: string): { pct: number; origem: 'especifica' | 'servico' | 'nenhuma' } {
     if (profId && itemId) {
       const especifica = comissoesProfissional.find(c =>
         c.profissional_id === profId &&
@@ -635,7 +635,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
       if (especifica) return { pct: especifica.percentual, origem: 'especifica' }
     }
     if (comissaoServico > 0) return { pct: comissaoServico, origem: 'servico' }
-    return { pct: profissionais.find(x => x.id === profId)?.comissao_padrao || 0, origem: 'padrao' }
+    return { pct: 0, origem: 'nenhuma' }
   }
 
   function distribuirIgual(n: number): number[] {
@@ -834,7 +834,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
                         <p className="text-xs font-medium text-gray-700">
                           {p.profissional_id ? `${pctComissao}%` : '—'}
                           {p.profissional_id && origem === 'especifica' && (
-                            <span className="ml-1 text-blue-600 text-xs">(específica)</span>
+                            <span className="ml-1 text-blue-600 text-xs">(profissional)</span>
                           )}
                           {p.profissional_id && origem === 'servico' && (
                             <span className="ml-1 text-amber-600 text-xs">(serviço)</span>

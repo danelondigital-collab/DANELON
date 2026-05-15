@@ -39,6 +39,7 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     bairro: profissional?.bairro || '',
     estado: profissional?.estado || '',
     cidade: profissional?.cidade || '',
+    cargo: profissional?.cargo || '',
     comissao_padrao: profissional?.comissao_padrao?.toString() || '0',
     cor_agenda: profissional?.cor_agenda || '#6366f1',
     ativo: profissional?.ativo ?? true,
@@ -237,6 +238,7 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
       bairro: form.bairro || null,
       estado: form.estado || null,
       cidade: form.cidade || null,
+      cargo: form.cargo || null,
       comissao_padrao: parseFloat(form.comissao_padrao) || 0,
       cor_agenda: form.cor_agenda,
       ativo: form.ativo,
@@ -298,6 +300,17 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
                   <input type="text" value={form.nome} onChange={e => set('nome', e.target.value)} autoFocus
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
                     placeholder="Nome completo" />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
+                  <select value={form.cargo} onChange={e => set('cargo', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 bg-white">
+                    <option value="">Selecionar cargo...</option>
+                    <option value="Lider">Líder</option>
+                    <option value="Profissional">Profissional</option>
+                    <option value="Colaboradora">Colaboradora</option>
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -418,22 +431,9 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
             {aba === 'comissao' && (
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Comissão padrão (%)</label>
-                  <div className="relative">
-                    <input type="number" min="0" max="100" step="0.5" value={form.comissao_padrao}
-                      onChange={e => set('comissao_padrao', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 pr-8" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Percentual padrão usado quando não há comissão específica cadastrada para o serviço/produto.
-                  </p>
-                </div>
-
-                <div className="border-t border-gray-100 pt-4">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Comissões específicas</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Comissões por serviço/produto</h3>
                   <p className="text-xs text-gray-500 mb-3">
-                    Substituem a comissão padrão para o serviço ou produto selecionado na comanda.
+                    Percentual de comissão deste profissional para cada serviço ou produto específico.
                   </p>
 
                   {!profissional ? (

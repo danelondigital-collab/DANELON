@@ -61,6 +61,7 @@ export interface Profissional {
   bairro?: string
   estado?: string
   cidade?: string
+  cargo?: string
   foto_url?: string
   comissao_padrao: number
   cor_agenda: string
