@@ -7,10 +7,19 @@ import { formatCurrency } from '@/lib/utils'
 import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import {
   Users, Wallet, CheckCircle2, Clock, X, ChevronLeft, ChevronRight,
-  ArrowLeft, Receipt, Eye,
+  ArrowLeft, Receipt, Eye, GitMerge,
 } from 'lucide-react'
 
 type Aba = 'resumidas' | 'detalhadas' | 'pagas'
+
+interface ProfissionalRateio {
+  profissional_id: string
+  profissional_nome: string
+  profissional_cor: string
+  percentual_participacao: number
+  percentual_comissao: number
+  valor_comissao: number
+}
 
 interface ItemComissao {
   id: string
@@ -23,8 +32,10 @@ interface ItemComissao {
   item_nome: string
   item_tipo: string
   subtotal: number
+  percentual_participacao: number
   percentual_comissao: number
   valor_comissao: number
+  rateio: ProfissionalRateio[]  // todos os profissionais do item (incluindo self)
 }
 
 interface ComandaGrupo {
@@ -40,6 +51,7 @@ interface ResumoProfissional {
   total_itens: number
   valor_base: number
   valor_comissao: number
+  tem_rateio: boolean
 }
 
 type HistoricoComRegistro = ComissaoHistorico & {
@@ -67,6 +79,7 @@ interface ComandaDetalhe {
     produto?: { nome: string }
     profissionais?: Array<{
       profissional_id: string
+      percentual_participacao: number
       percentual_comissao: number
       valor_comissao: number
       profissional?: { nome: string; cor_agenda: string }
@@ -87,10 +100,10 @@ const PAGAS_POR_PAG = 25
 
 export default function ComissoesClient({ profissionais, unidadeId }: Props) {
   const supabase = createClient()
-  const [aba, setAba] = useState<Aba>('resumidas')
+  const [aba, setAba] = useState<Aba>('detalhadas')
   const [dataInicio, setDataInicio] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [dataFim, setDataFim] = useState(() => format(endOfMonth(new Date()), 'yyyy-MM-dd'))
-  const [profissionalSelecionado, setProfissionalSelecionado] = useState<string>('todos')
+  const [profissionalSelecionado, setProfissionalSelecionado] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadingPagas, setLoadingPagas] = useState(false)
 
@@ -135,7 +148,7 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
           servico:servicos(nome),
           produto:produtos(nome),
           profissionais:comanda_item_profissionais(
-            id, profissional_id, percentual_comissao, valor_comissao,
+            id, profissional_id, percentual_participacao, percentual_comissao, valor_comissao,
             profissional:profissionais(id, nome, cor_agenda)
           )
         )
@@ -149,7 +162,16 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
     const rows: ItemComissao[] = []
     for (const c of (data as unknown as any[]) || []) {
       for (const item of c.itens || []) {
-        for (const cp of item.profissionais || []) {
+        const todosProfs: ProfissionalRateio[] = (item.profissionais || []).map((cp: any) => ({
+          profissional_id: cp.profissional_id,
+          profissional_nome: cp.profissional?.nome || '—',
+          profissional_cor: cp.profissional?.cor_agenda || '#888888',
+          percentual_participacao: cp.percentual_participacao || 0,
+          percentual_comissao: cp.percentual_comissao || 0,
+          valor_comissao: cp.valor_comissao || 0,
+        }))
+
+        for (const cp of (item.profissionais || []) as any[]) {
           if (!cp.valor_comissao) continue
           rows.push({
             id: cp.id,
@@ -162,8 +184,10 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
             item_nome: item.tipo === 'servico' ? (item.servico?.nome || '—') : (item.produto?.nome || '—'),
             item_tipo: item.tipo,
             subtotal: item.subtotal || 0,
+            percentual_participacao: cp.percentual_participacao || 0,
             percentual_comissao: cp.percentual_comissao || 0,
             valor_comissao: cp.valor_comissao || 0,
+            rateio: todosProfs,
           })
         }
       }
@@ -199,7 +223,7 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
           servico:servicos(nome),
           produto:produtos(nome),
           profissionais:comanda_item_profissionais(
-            profissional_id, percentual_comissao, valor_comissao,
+            profissional_id, percentual_participacao, percentual_comissao, valor_comissao,
             profissional:profissionais(nome, cor_agenda)
           )
         )
@@ -215,27 +239,32 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
     setComandaDetalhe(null)
   }
 
+  // Resumo por profissional
   const resumo: ResumoProfissional[] = profissionais
     .map(prof => {
       const seus = itens.filter(i => i.profissional_id === prof.id)
+      const tem_rateio = seus.some(i => i.rateio.length > 1)
       return {
         profissional: prof,
         total_itens: seus.length,
         valor_base: seus.reduce((s, i) => s + i.subtotal * i.percentual_comissao / 100, 0),
         valor_comissao: seus.reduce((s, i) => s + i.valor_comissao, 0),
+        tem_rateio,
       }
     })
     .filter(r => r.valor_comissao > 0)
     .sort((a, b) => b.valor_comissao - a.valor_comissao)
 
-  // Agrupa itens do profissional selecionado por comanda
-  const itensProf = profissionalSelecionado === 'todos'
-    ? itens
-    : itens.filter(i => i.profissional_id === profissionalSelecionado)
+  const profSelecionadoObj = profissionais.find(p => p.id === profissionalSelecionado)
+  const resumoProf = resumo.find(r => r.profissional.id === profissionalSelecionado)
+  const itensProfSelecionado = profissionalSelecionado
+    ? itens.filter(i => i.profissional_id === profissionalSelecionado)
+    : []
 
+  // Agrupa itens do profissional por comanda
   const comandasAgrupadas: ComandaGrupo[] = (() => {
     const map = new Map<string, ComandaGrupo>()
-    for (const item of itensProf) {
+    for (const item of itensProfSelecionado) {
       if (!map.has(item.comanda_id)) {
         map.set(item.comanda_id, {
           comanda_id: item.comanda_id,
@@ -254,14 +283,11 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
     )
   })()
 
-  const totalFiltrado = itensProf.reduce((s, i) => s + i.valor_comissao, 0)
+  const totalProfSelecionado = itensProfSelecionado.reduce((s, i) => s + i.valor_comissao, 0)
   const totalGeral = resumo.reduce((s, r) => s + r.valor_comissao, 0)
   const totalHistorico = historico.reduce((s, h) => s + h.valor, 0)
   const pagasTotais = Math.ceil(historico.length / PAGAS_POR_PAG)
   const historicoPaginado = historico.slice((paginaPagas - 1) * PAGAS_POR_PAG, paginaPagas * PAGAS_POR_PAG)
-
-  const profSelecionadoObj = profissionais.find(p => p.id === profissionalSelecionado)
-  const resumoProf = resumo.find(r => r.profissional.id === profissionalSelecionado)
 
   function abrirFechamento(r: ResumoProfissional) {
     const mesAno = format(new Date(dataInicio + 'T12:00:00'), 'MM/yyyy')
@@ -270,11 +296,6 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
     setFechHistorico('')
     setErroFech('')
     setModalFechamento(r)
-  }
-
-  function irParaDetalhadas(profId: string) {
-    setProfissionalSelecionado(profId)
-    setAba('detalhadas')
   }
 
   async function confirmarFechamento() {
@@ -356,13 +377,244 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
-        {(['resumidas', 'detalhadas', 'pagas'] as Aba[]).map(t => (
-          <button key={t} onClick={() => setAba(t)}
+        {(['detalhadas', 'resumidas', 'pagas'] as Aba[]).map(t => (
+          <button key={t} onClick={() => { setAba(t); if (t !== 'detalhadas') setProfissionalSelecionado(null) }}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${aba === t ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-800'}`}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
+
+      {/* ===== DETALHADAS ===== */}
+      {aba === 'detalhadas' && (
+        loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-amber-700 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : !profissionalSelecionado ? (
+
+          /* ── Lista de profissionais para selecionar ── */
+          <div>
+            <p className="text-sm text-gray-500 mb-4">
+              Selecione uma profissional para ver as comissões detalhadas do período
+            </p>
+            {resumo.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+                <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">Nenhuma comissão registrada no período</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {resumo.map(r => (
+                  <button
+                    key={r.profissional.id}
+                    onClick={() => setProfissionalSelecionado(r.profissional.id)}
+                    className="w-full flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-amber-300 hover:shadow-sm transition-all text-left group"
+                  >
+                    <div
+                      className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
+                      style={{ backgroundColor: r.profissional.cor_agenda }}
+                    >
+                      {r.profissional.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{r.profissional.nome}</p>
+                        {r.tem_rateio && (
+                          <span className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
+                            <GitMerge className="w-3 h-3" /> Rateio
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {r.profissional.cargo || 'Profissional'} · {r.total_itens} item{r.total_itens !== 1 ? 's' : ''} trabalhados
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-base font-bold" style={{ color: '#B8924A' }}>
+                        {formatCurrency(r.valor_comissao)}
+                      </p>
+                      <p className="text-xs text-gray-400">em comissão</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-amber-600 flex-shrink-0 transition-colors" />
+                  </button>
+                ))}
+
+                {/* Totalizador */}
+                <div className="flex items-center justify-between px-4 py-3 bg-amber-50 rounded-xl border border-amber-200 mt-4">
+                  <p className="text-sm font-semibold text-gray-700">
+                    {resumo.length} profissional{resumo.length !== 1 ? 'is' : ''} · {itens.length} item{itens.length !== 1 ? 's' : ''}
+                  </p>
+                  <p className="text-base font-bold" style={{ color: '#B8924A' }}>
+                    {formatCurrency(totalGeral)} total
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+        ) : (
+
+          /* ── Detalhe por profissional ── */
+          <div>
+            {/* Header do profissional */}
+            <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 mb-5">
+              <button
+                onClick={() => setProfissionalSelecionado(null)}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4 text-gray-600" />
+              </button>
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-semibold flex-shrink-0"
+                style={{ backgroundColor: profSelecionadoObj?.cor_agenda || '#888' }}
+              >
+                {profSelecionadoObj?.nome.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-900">{profSelecionadoObj?.nome}</p>
+                <p className="text-sm text-gray-500">
+                  {profSelecionadoObj?.cargo || 'Profissional'} · {periodoLabel}
+                </p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-xs text-gray-500">Total comissão</p>
+                <p className="text-2xl font-bold" style={{ color: '#B8924A' }}>
+                  {formatCurrency(totalProfSelecionado)}
+                </p>
+              </div>
+            </div>
+
+            {comandasAgrupadas.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+                <Wallet className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">Nenhuma comissão no período</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {comandasAgrupadas.map(grupo => (
+                  <div key={grupo.comanda_id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    {/* Header da comanda */}
+                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{grupo.cliente_nome}</p>
+                        <p className="text-xs text-gray-500">
+                          {grupo.data_fechamento
+                            ? format(parseISO(grupo.data_fechamento), "dd/MM/yyyy 'às' HH:mm")
+                            : '—'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-xs text-gray-400">Comissão</p>
+                          <p className="text-sm font-bold" style={{ color: '#B8924A' }}>
+                            {formatCurrency(grupo.total_comissao)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setComandaAbertaId(grupo.comanda_id)}
+                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 border border-gray-200 hover:bg-white rounded-lg transition-colors text-gray-700 whitespace-nowrap flex-shrink-0"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          Ver comanda
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Itens */}
+                    <div className="divide-y divide-gray-50">
+                      {grupo.itens.map(item => {
+                        const ehRateio = item.rateio.length > 1
+                        const outrosProfissionais = item.rateio.filter(r => r.profissional_id !== item.profissional_id)
+
+                        return (
+                          <div key={item.id} className="px-4 py-3">
+                            {/* Linha principal do item */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm font-medium text-gray-900 truncate">{item.item_nome}</p>
+                                  <span className="text-xs text-gray-400">
+                                    {item.item_tipo === 'servico' ? 'Serviço' : 'Produto'}
+                                  </span>
+                                  {ehRateio && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full font-medium">
+                                      <GitMerge className="w-3 h-3" /> Rateio
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-500">
+                                  <span>Subtotal: <strong className="text-gray-700">{formatCurrency(item.subtotal)}</strong></span>
+                                  {ehRateio && (
+                                    <span>Participação: <strong className="text-gray-700">{item.percentual_participacao}%</strong></span>
+                                  )}
+                                  <span>Comissão: <strong className="text-gray-700">{item.percentual_comissao}%</strong></span>
+                                </div>
+                              </div>
+                              <p className="text-sm font-bold flex-shrink-0 pt-0.5" style={{ color: '#B8924A' }}>
+                                {formatCurrency(item.valor_comissao)}
+                              </p>
+                            </div>
+
+                            {/* Rateio: outros profissionais do mesmo item */}
+                            {ehRateio && outrosProfissionais.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-dashed border-gray-100">
+                                <p className="text-xs text-gray-400 mb-1.5">Também atendeu neste serviço:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {outrosProfissionais.map(outro => (
+                                    <div key={outro.profissional_id}
+                                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg">
+                                      <div
+                                        className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0"
+                                        style={{ backgroundColor: outro.profissional_cor }}
+                                      >
+                                        {outro.profissional_nome.charAt(0).toUpperCase()}
+                                      </div>
+                                      <span className="text-xs text-gray-700 font-medium">{outro.profissional_nome}</span>
+                                      <span className="text-xs text-gray-400">·</span>
+                                      <span className="text-xs text-gray-500">{outro.percentual_participacao}% participação</span>
+                                      <span className="text-xs text-gray-400">·</span>
+                                      <span className="text-xs font-semibold" style={{ color: '#B8924A' }}>
+                                        {formatCurrency(outro.valor_comissao)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Total + fechamento */}
+                <div className="p-4 bg-amber-50 rounded-xl border-2 border-amber-200 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">TOTAL DO PERÍODO</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {comandasAgrupadas.length} comanda{comandasAgrupadas.length !== 1 ? 's' : ''} · {itensProfSelecionado.length} item{itensProfSelecionado.length !== 1 ? 's' : ''}
+                      {resumoProf?.tem_rateio ? ' · inclui rateios' : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <p className="text-2xl font-bold" style={{ color: '#B8924A' }}>
+                      {formatCurrency(totalProfSelecionado)}
+                    </p>
+                    {resumoProf && (
+                      <button onClick={() => abrirFechamento(resumoProf)}
+                        className="px-4 py-2 text-sm font-medium bg-amber-700 hover:bg-amber-800 text-white rounded-lg transition-colors whitespace-nowrap">
+                        Fazer fechamento
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      )}
 
       {/* ===== RESUMIDAS ===== */}
       {aba === 'resumidas' && (
@@ -414,7 +666,14 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
                               style={{ backgroundColor: r.profissional.cor_agenda }}>
                               {r.profissional.nome.charAt(0).toUpperCase()}
                             </div>
-                            <span className="text-sm font-medium text-gray-900">{r.profissional.nome}</span>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{r.profissional.nome}</p>
+                              {r.tem_rateio && (
+                                <span className="inline-flex items-center gap-0.5 text-xs text-blue-600">
+                                  <GitMerge className="w-3 h-3" /> tem rateios
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">{r.profissional.cargo || '—'}</td>
@@ -425,7 +684,7 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 justify-end">
-                            <button onClick={() => irParaDetalhadas(r.profissional.id)}
+                            <button onClick={() => { setProfissionalSelecionado(r.profissional.id); setAba('detalhadas') }}
                               className="text-xs font-medium px-3 py-1.5 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg transition-colors whitespace-nowrap">
                               Ver detalhes
                             </button>
@@ -463,12 +722,12 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900">{r.profissional.nome}</p>
-                          <p className="text-xs text-gray-500">{r.total_itens} item{r.total_itens !== 1 ? 's' : ''} · Base: {formatCurrency(r.valor_base)}</p>
+                          <p className="text-xs text-gray-500">{r.total_itens} itens · {formatCurrency(r.valor_base)} base</p>
                         </div>
                         <p className="text-sm font-bold flex-shrink-0" style={{ color: '#B8924A' }}>{formatCurrency(r.valor_comissao)}</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => irParaDetalhadas(r.profissional.id)}
+                        <button onClick={() => { setProfissionalSelecionado(r.profissional.id); setAba('detalhadas') }}
                           className="flex-1 text-xs font-medium px-3 py-2 border border-gray-200 text-gray-700 rounded-lg">
                           Ver detalhes
                         </button>
@@ -484,249 +743,6 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
             )}
           </div>
         )
-      )}
-
-      {/* ===== DETALHADAS ===== */}
-      {aba === 'detalhadas' && (
-        <div>
-          {/* Seletor de profissional */}
-          <div className="flex flex-wrap items-center gap-3 mb-5">
-            {profissionalSelecionado !== 'todos' && (
-              <button onClick={() => setProfissionalSelecionado('todos')}
-                className="flex items-center gap-1 text-sm text-amber-700 hover:underline">
-                <ArrowLeft className="w-4 h-4" /> Todos
-              </button>
-            )}
-            <select value={profissionalSelecionado} onChange={e => setProfissionalSelecionado(e.target.value)}
-              className="flex-1 max-w-xs px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600">
-              <option value="todos">Todos os profissionais</option>
-              {profissionais.map(p => (
-                <option key={p.id} value={p.id}>{p.nome}</option>
-              ))}
-            </select>
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="w-6 h-6 border-2 border-amber-700 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : profissionalSelecionado !== 'todos' ? (
-            /* ── Visão por profissional: agrupado por comanda ── */
-            <div>
-              {/* Header do profissional */}
-              {profSelecionadoObj && (
-                <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 mb-5">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-medium flex-shrink-0"
-                    style={{ backgroundColor: profSelecionadoObj.cor_agenda }}>
-                    {profSelecionadoObj.nome.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900">{profSelecionadoObj.nome}</p>
-                    <p className="text-sm text-gray-500">
-                      {profSelecionadoObj.cargo || 'Profissional'} · {periodoLabel}
-                    </p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-xs text-gray-500">Total comissão</p>
-                    <p className="text-2xl font-bold" style={{ color: '#B8924A' }}>
-                      {formatCurrency(totalFiltrado)}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {comandasAgrupadas.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-                  <Wallet className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm">Nenhuma comissão no período para este profissional</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {comandasAgrupadas.map(grupo => (
-                    <div key={grupo.comanda_id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                      {/* Cabeçalho da comanda */}
-                      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{grupo.cliente_nome}</p>
-                          <p className="text-xs text-gray-500">
-                            {grupo.data_fechamento
-                              ? format(parseISO(grupo.data_fechamento), "dd/MM/yyyy 'às' HH:mm")
-                              : '—'}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className="text-xs text-gray-400">Comissão desta comanda</p>
-                            <p className="text-sm font-bold" style={{ color: '#B8924A' }}>
-                              {formatCurrency(grupo.total_comissao)}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => setComandaAbertaId(grupo.comanda_id)}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 border border-gray-200 hover:bg-white rounded-lg transition-colors text-gray-700 whitespace-nowrap flex-shrink-0">
-                            <Eye className="w-3.5 h-3.5" />
-                            Ver comanda
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Itens da comanda para este profissional */}
-                      <div className="divide-y divide-gray-50">
-                        {grupo.itens.map(item => (
-                          <div key={item.id} className="px-4 py-3">
-                            <div className="hidden md:flex items-center gap-3 text-sm">
-                              <p className="font-medium text-gray-900 w-52 flex-shrink-0 truncate">{item.item_nome}</p>
-                              <span className="text-xs text-gray-400 flex-shrink-0">
-                                {item.item_tipo === 'servico' ? 'Serviço' : 'Produto'}
-                              </span>
-                              <div className="flex-1 flex flex-wrap items-center gap-3 text-xs text-gray-600">
-                                <span>Subtotal: <strong className="text-gray-900">{formatCurrency(item.subtotal)}</strong></span>
-                                <span>Comissão: <strong className="text-gray-900">{item.percentual_comissao}%</strong></span>
-                              </div>
-                              <p className="font-semibold flex-shrink-0" style={{ color: '#B8924A' }}>
-                                {formatCurrency(item.valor_comissao)}
-                              </p>
-                            </div>
-                            <div className="md:hidden">
-                              <div className="flex justify-between items-start">
-                                <p className="text-sm font-medium text-gray-900">{item.item_nome}</p>
-                                <p className="text-sm font-semibold ml-2" style={{ color: '#B8924A' }}>
-                                  {formatCurrency(item.valor_comissao)}
-                                </p>
-                              </div>
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                {formatCurrency(item.subtotal)} × {item.percentual_comissao}%
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Total + botão de fechamento */}
-                  <div className="p-4 bg-amber-50 rounded-xl border-2 border-amber-200 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">TOTAL DO PERÍODO</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{comandasAgrupadas.length} comanda{comandasAgrupadas.length !== 1 ? 's' : ''} · {itensProf.length} item{itensProf.length !== 1 ? 's' : ''}</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <p className="text-2xl font-bold" style={{ color: '#B8924A' }}>
-                        {formatCurrency(totalFiltrado)}
-                      </p>
-                      {resumoProf && (
-                        <button onClick={() => abrirFechamento(resumoProf)}
-                          className="px-4 py-2 text-sm font-medium bg-amber-700 hover:bg-amber-800 text-white rounded-lg transition-colors whitespace-nowrap">
-                          Fazer fechamento
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* ── Visão de todos: lista flat ── */
-            itens.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-                <Wallet className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">Nenhuma comissão no período</p>
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full hidden md:table">
-                  <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Data</th>
-                      <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Profissional</th>
-                      <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Cliente</th>
-                      <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Serviço / Produto</th>
-                      <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Subtotal</th>
-                      <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">%</th>
-                      <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Comissão</th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {itens.map(i => (
-                      <tr key={i.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                          {i.data_fechamento ? format(parseISO(i.data_fechamento), 'dd/MM/yyyy') : '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0"
-                              style={{ backgroundColor: i.profissional_cor }}>
-                              {i.profissional_nome.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-sm text-gray-900">{i.profissional_nome}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{i.cliente_nome}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {i.item_nome}
-                          <span className="ml-1.5 text-xs text-gray-400">
-                            {i.item_tipo === 'servico' ? 'Serviço' : 'Produto'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 text-right">{formatCurrency(i.subtotal)}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 text-right">{i.percentual_comissao}%</td>
-                        <td className="px-4 py-3 text-sm font-semibold text-right" style={{ color: '#B8924A' }}>
-                          {formatCurrency(i.valor_comissao)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button onClick={() => setComandaAbertaId(i.comanda_id)}
-                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-amber-700 transition-colors whitespace-nowrap">
-                            <Eye className="w-3 h-3" /> Ver
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-amber-50 border-t-2 border-amber-200">
-                      <td colSpan={6} className="px-4 py-3 text-sm font-semibold text-gray-700">
-                        TOTAL — {itens.length} item{itens.length !== 1 ? 's' : ''}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-bold text-right" style={{ color: '#B8924A' }}>
-                        {formatCurrency(itens.reduce((s, i) => s + i.valor_comissao, 0))}
-                      </td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                </table>
-
-                {/* Mobile flat list */}
-                <div className="md:hidden divide-y divide-gray-50">
-                  {itens.map(i => (
-                    <div key={i.id} className="px-4 py-3">
-                      <div className="flex justify-between items-start mb-1">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{i.item_nome}</p>
-                          <p className="text-xs text-gray-500">{i.cliente_nome} · {i.data_fechamento ? format(parseISO(i.data_fechamento), 'dd/MM') : '—'}</p>
-                        </div>
-                        <div className="text-right ml-2">
-                          <p className="text-sm font-bold" style={{ color: '#B8924A' }}>{formatCurrency(i.valor_comissao)}</p>
-                          <button onClick={() => setComandaAbertaId(i.comanda_id)}
-                            className="text-xs text-gray-500 hover:text-amber-700 flex items-center gap-0.5 ml-auto">
-                            <Eye className="w-3 h-3" /> Ver
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs flex-shrink-0"
-                          style={{ backgroundColor: i.profissional_cor }}>
-                          {i.profissional_nome.charAt(0).toUpperCase()}
-                        </div>
-                        <p className="text-xs text-gray-500">{i.profissional_nome} · {i.percentual_comissao}% sobre {formatCurrency(i.subtotal)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          )}
-        </div>
       )}
 
       {/* ===== PAGAS ===== */}
@@ -752,7 +768,7 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
               <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
                 <CheckCircle2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500 text-sm">Nenhum fechamento registrado no período</p>
-                <p className="text-xs text-gray-400 mt-1">Use "Fazer fechamento" na aba Resumidas ou Detalhadas</p>
+                <p className="text-xs text-gray-400 mt-1">Use "Fazer fechamento" na aba Detalhadas ou Resumidas</p>
               </div>
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -873,12 +889,11 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={fecharPreviewComanda} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
               <div className="flex items-center gap-3">
                 <Receipt className="w-5 h-5 text-amber-700" />
                 <h2 className="text-base font-semibold text-gray-900">
-                  {loadingComanda ? 'Carregando comanda...' : comandaDetalhe ? `Comanda — ${comandaDetalhe.cliente?.nome || '—'}` : 'Comanda'}
+                  {loadingComanda ? 'Carregando...' : `Comanda — ${comandaDetalhe?.cliente?.nome || '—'}`}
                 </h2>
               </div>
               <button onClick={fecharPreviewComanda} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
@@ -886,7 +901,6 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
               </button>
             </div>
 
-            {/* Body */}
             <div className="overflow-y-auto flex-1 px-6 py-4">
               {loadingComanda ? (
                 <div className="flex items-center justify-center py-12">
@@ -896,7 +910,6 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
                 <p className="text-center text-gray-500 py-12">Erro ao carregar comanda</p>
               ) : (
                 <div className="space-y-4">
-                  {/* Info da comanda */}
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <p className="text-xs text-gray-500">Cliente</p>
@@ -920,34 +933,47 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
                     </div>
                   </div>
 
-                  {/* Itens */}
                   <div className="border border-gray-200 rounded-xl overflow-hidden">
                     <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100">
-                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Itens</p>
+                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Itens da comanda</p>
                     </div>
                     <div className="divide-y divide-gray-50">
                       {(comandaDetalhe.itens || []).map(item => {
                         const nome = item.tipo === 'servico' ? item.servico?.nome : item.produto?.nome
+                        const ehRateio = (item.profissionais || []).length > 1
                         return (
                           <div key={item.id} className="px-4 py-3">
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">{nome || '—'}</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm font-medium text-gray-900">{nome || '—'}</p>
+                                  {ehRateio && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs rounded-full">
+                                      <GitMerge className="w-3 h-3" /> Rateio
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-xs text-gray-500 mt-0.5">
                                   {item.quantidade}× {formatCurrency(item.preco_unitario)}
                                   {item.desconto_percentual > 0 && ` · desc. ${item.desconto_percentual}%`}
                                 </p>
-                                {/* Profissionais do item */}
                                 {(item.profissionais || []).length > 0 && (
-                                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                  <div className="mt-2 flex flex-col gap-1">
                                     {(item.profissionais || []).map((cp, idx) => (
-                                      <span key={idx}
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-full text-xs text-amber-800">
-                                        <span
-                                          className="w-3 h-3 rounded-full flex-shrink-0"
-                                          style={{ backgroundColor: cp.profissional?.cor_agenda || '#888' }} />
-                                        {cp.profissional?.nome} · {cp.percentual_comissao}% = {formatCurrency(cp.valor_comissao)}
-                                      </span>
+                                      <div key={idx} className="flex items-center gap-2">
+                                        <div
+                                          className="w-4 h-4 rounded-full flex-shrink-0"
+                                          style={{ backgroundColor: cp.profissional?.cor_agenda || '#888' }}
+                                        />
+                                        <span className="text-xs text-gray-700">{cp.profissional?.nome}</span>
+                                        {ehRateio && (
+                                          <span className="text-xs text-gray-400">{cp.percentual_participacao}% participação ·</span>
+                                        )}
+                                        <span className="text-xs text-gray-600">{cp.percentual_comissao}% comissão</span>
+                                        <span className="text-xs font-semibold ml-auto" style={{ color: '#B8924A' }}>
+                                          {formatCurrency(cp.valor_comissao)}
+                                        </span>
+                                      </div>
                                     ))}
                                   </div>
                                 )}
@@ -962,7 +988,6 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
                     </div>
                   </div>
 
-                  {/* Totais */}
                   <div className="space-y-1.5 text-sm">
                     {comandaDetalhe.desconto > 0 && (
                       <div className="flex justify-between text-gray-600">
@@ -971,7 +996,7 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
                       </div>
                     )}
                     <div className="flex justify-between font-bold text-gray-900 text-base pt-1 border-t border-gray-100">
-                      <span>Total</span>
+                      <span>Total pago</span>
                       <span>{formatCurrency(comandaDetalhe.valor_final)}</span>
                     </div>
                   </div>
@@ -1014,7 +1039,7 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
                   style={{ backgroundColor: modalFechamento.profissional.cor_agenda }}>
                   {modalFechamento.profissional.nome.charAt(0).toUpperCase()}
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900">{modalFechamento.profissional.nome}</p>
                   <p className="text-xs text-gray-500">{periodoLabel}</p>
                 </div>
