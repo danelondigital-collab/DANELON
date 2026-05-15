@@ -15,6 +15,17 @@ export default function ProdutoModal({ produto, unidadeId, onClose, onSalvo }: P
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
 
+  const CLASSIFICACOES = [
+    { value: 'revenda_alimenticia', label: 'Revenda Alimentícia' },
+    { value: 'revenda_cosmeticos', label: 'Revenda Cosméticos' },
+    { value: 'materiais_servicos', label: 'Materiais Serviços' },
+    { value: 'consumo_interno', label: 'Consumo Interno' },
+    { value: 'consumo_clientes', label: 'Consumo Clientes' },
+    { value: 'consumo_administrativo', label: 'Consumo Administrativo' },
+    { value: 'produtos_cabelos', label: 'Produtos Cabelos' },
+    { value: 'produtos_servicos', label: 'Produtos Serviços' },
+  ]
+
   const [form, setForm] = useState({
     nome: produto?.nome || '',
     marca: produto?.marca || '',
@@ -22,6 +33,7 @@ export default function ProdutoModal({ produto, unidadeId, onClose, onSalvo }: P
     preco_custo: produto?.preco_custo?.toString() || '0',
     preco_venda: produto?.preco_venda?.toString() || '0',
     estoque: produto?.estoque?.toString() || '0',
+    classificacao: produto?.classificacao || '',
     ativo: produto?.ativo ?? true,
   })
 
@@ -40,6 +52,7 @@ export default function ProdutoModal({ produto, unidadeId, onClose, onSalvo }: P
       preco_custo: parseFloat(form.preco_custo) || 0,
       preco_venda: parseFloat(form.preco_venda) || 0,
       estoque: parseInt(form.estoque) || 0,
+      classificacao: form.classificacao || null,
       ativo: form.ativo,
       unidade_id: unidadeId,
     }
@@ -82,10 +95,22 @@ export default function ProdutoModal({ produto, unidadeId, onClose, onSalvo }: P
                   <input type="text" value={form.nome} onChange={e => set('nome', e.target.value)} autoFocus
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" placeholder="Nome do produto" />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
-                  <input type="text" value={form.marca} onChange={e => set('marca', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" placeholder="Marca" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
+                    <input type="text" value={form.marca} onChange={e => set('marca', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" placeholder="Marca" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Classificação</label>
+                    <select value={form.classificacao} onChange={e => set('classificacao', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600">
+                      <option value="">Sem classificação</option>
+                      {CLASSIFICACOES.map(c => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>

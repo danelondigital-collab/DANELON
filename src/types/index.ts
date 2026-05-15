@@ -103,6 +103,7 @@ export interface Produto {
   preco_venda: number
   estoque: number
   unidade_id?: string
+  classificacao?: string | null
   ativo: boolean
   created_at: string
   updated_at: string

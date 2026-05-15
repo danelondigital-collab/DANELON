@@ -4,6 +4,17 @@ import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Search, TrendingUp, TrendingDown, Minus, CheckCircle2, AlertTriangle, LayoutList, History } from 'lucide-react'
 
+const CLASSIFICACAO_LABEL: Record<string, string> = {
+  revenda_alimenticia: 'Revenda Alimentícia',
+  revenda_cosmeticos: 'Revenda Cosméticos',
+  materiais_servicos: 'Materiais Serviços',
+  consumo_interno: 'Consumo Interno',
+  consumo_clientes: 'Consumo Clientes',
+  consumo_administrativo: 'Consumo Administrativo',
+  produtos_cabelos: 'Produtos Cabelos',
+  produtos_servicos: 'Produtos Serviços',
+}
+
 interface Produto {
   id: string
   nome: string
@@ -12,6 +23,7 @@ interface Produto {
   estoque: number
   unidade_id: string
   unidade_nome: string
+  classificacao: string | null
   quantidade_meta: number
   vendido_hoje: number
   vendido_semana: number
@@ -236,6 +248,7 @@ function AbaEstoque({ produtos: initial, todasUnidades }: { produtos: Produto[];
   const [produtos, setProdutos] = useState(initial)
   const [busca, setBusca] = useState('')
   const [unidadeFiltro, setUnidadeFiltro] = useState<string>('all')
+  const [classificacaoFiltro, setClassificacaoFiltro] = useState<string>('all')
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [editValor, setEditValor] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -244,11 +257,17 @@ function AbaEstoque({ produtos: initial, todasUnidades }: { produtos: Produto[];
     new Map(initial.map(p => [p.unidade_id, p.unidade_nome])).entries()
   ).sort((a, b) => a[1].localeCompare(b[1]))
 
+  const classificacoesPresentes = Array.from(
+    new Set(initial.map(p => p.classificacao).filter(Boolean))
+  ).sort() as string[]
+
   const filtrados = produtos.filter(p => {
     const buscaOk = p.nome.toLowerCase().includes(busca.toLowerCase()) ||
       (p.marca || '').toLowerCase().includes(busca.toLowerCase())
     const unidadeOk = !todasUnidades || unidadeFiltro === 'all' || p.unidade_id === unidadeFiltro
-    return buscaOk && unidadeOk
+    const classOk = classificacaoFiltro === 'all' ||
+      (classificacaoFiltro === 'sem' ? !p.classificacao : p.classificacao === classificacaoFiltro)
+    return buscaOk && unidadeOk && classOk
   })
 
   function iniciarEdicao(p: Produto) {
@@ -283,6 +302,25 @@ function AbaEstoque({ produtos: initial, todasUnidades }: { produtos: Produto[];
               {nome}
             </button>
           ))}
+        </div>
+      )}
+
+      {classificacoesPresentes.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          <button onClick={() => setClassificacaoFiltro('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${classificacaoFiltro === 'all' ? 'bg-violet-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:border-violet-300 hover:text-violet-600'}`}>
+            Todas
+          </button>
+          {classificacoesPresentes.map(c => (
+            <button key={c} onClick={() => setClassificacaoFiltro(c)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${classificacaoFiltro === c ? 'bg-violet-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:border-violet-300 hover:text-violet-600'}`}>
+              {CLASSIFICACAO_LABEL[c] || c}
+            </button>
+          ))}
+          <button onClick={() => setClassificacaoFiltro('sem')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${classificacaoFiltro === 'sem' ? 'bg-slate-500 text-white' : 'bg-white border border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-600'}`}>
+            Sem classificação
+          </button>
         </div>
       )}
 

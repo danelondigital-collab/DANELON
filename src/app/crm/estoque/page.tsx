@@ -14,7 +14,7 @@ export default async function EstoquePage() {
   // Produtos com unidade e meta diária
   const produtosQuery = supabase
     .from('produtos')
-    .select('id, nome, marca, preco_venda, estoque, unidade_id, unidades(nome), estoque_metas(quantidade_meta)')
+    .select('id, nome, marca, preco_venda, estoque, unidade_id, classificacao, unidades(nome), estoque_metas(quantidade_meta)')
     .eq('ativo', true)
     .order('nome')
 
@@ -70,6 +70,7 @@ export default async function EstoquePage() {
     estoque: p.estoque ?? 0,
     unidade_id: p.unidade_id || '',
     unidade_nome: (p.unidades as unknown as { nome: string } | null)?.nome || '',
+    classificacao: (p as any).classificacao as string | null ?? null,
     quantidade_meta: (p.estoque_metas as { quantidade_meta: number }[] | null)?.[0]?.quantidade_meta ?? 0,
     vendido_hoje: hojeMap[p.id] || 0,
     vendido_semana: semanaMap[p.id] || 0,
