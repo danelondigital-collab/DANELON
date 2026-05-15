@@ -5,7 +5,7 @@ import { X, Trash2, Pencil } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
-import type { Profissional, BloqueioAgenda, ComissaoProfissionalItem } from '@/types'
+import type { Profissional, BloqueioAgenda, ComissaoProfissionalItem, ComissaoHistorico } from '@/types'
 
 interface Props {
   profissional: Profissional | null
@@ -14,7 +14,7 @@ interface Props {
   onSalvo: (p: Profissional) => void
 }
 
-type Aba = 'cadastro' | 'endereco' | 'comissao' | 'configuracoes' | 'fechamento'
+type Aba = 'cadastro' | 'endereco' | 'comissao' | 'historico' | 'configuracoes' | 'fechamento'
 
 const CORES = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4']
 
@@ -81,6 +81,22 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
   const [salvandoComissao, setSalvandoComissao] = useState(false)
   const [erroComissao, setErroComissao] = useState('')
 
+  // Histórico de comissões pagas
+  const [historico, setHistorico] = useState<ComissaoHistorico[]>([])
+  const [loadingHistorico, setLoadingHistorico] = useState(false)
+  const [histPagina, setHistPagina] = useState(1)
+  const HIST_POR_PAG = 25
+  const [savingHist, setSavingHist] = useState(false)
+  const [histForm, setHistForm] = useState({
+    vencimento: '',
+    item: 'Comissão',
+    valor: '',
+    historico: 'Pagamento de comissão',
+    status: 'pendente' as 'pago' | 'pendente',
+  })
+  const [erroHist, setErroHist] = useState('')
+  const [editandoHistId, setEditandoHistId] = useState<string | null>(null)
+
   // Fechamento de agenda
   const [bloqueios, setBloqueios] = useState<BloqueioAgenda[]>([])
   const [loadingBloqueios, setLoadingBloqueios] = useState(false)
@@ -97,6 +113,13 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     if (aba === 'comissao') {
       fetchServicosEProdutos()
       if (profissional) fetchComissoes()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, profissional?.id])
+
+  useEffect(() => {
+    if (aba === 'historico' && profissional) {
+      fetchHistorico()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, profissional?.id])
@@ -156,6 +179,68 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
   async function removerComissao(id: string) {
     await supabase.from('comissoes_profissional_item').delete().eq('id', id)
     setComissoes(prev => prev.filter(c => c.id !== id))
+  }
+
+  async function fetchHistorico() {
+    if (!profissional) return
+    setLoadingHistorico(true)
+    const { data } = await supabase
+      .from('comissoes_historico')
+      .select('*')
+      .eq('profissional_id', profissional.id)
+      .order('vencimento', { ascending: false })
+    setHistorico((data as ComissaoHistorico[]) || [])
+    setHistPagina(1)
+    setLoadingHistorico(false)
+  }
+
+  async function salvarHistorico() {
+    if (!profissional || !histForm.vencimento || !histForm.valor) {
+      setErroHist('Vencimento e valor são obrigatórios.')
+      return
+    }
+    setErroHist('')
+    setSavingHist(true)
+    const payload = {
+      profissional_id: profissional.id,
+      unidade_id: unidadeId,
+      vencimento: histForm.vencimento,
+      item: histForm.item || 'Comissão',
+      valor: parseFloat(histForm.valor) || 0,
+      historico: histForm.historico || null,
+      status: histForm.status,
+    }
+    if (editandoHistId) {
+      await supabase.from('comissoes_historico').update(payload).eq('id', editandoHistId)
+      setEditandoHistId(null)
+    } else {
+      await supabase.from('comissoes_historico').insert(payload)
+    }
+    setHistForm({ vencimento: '', item: 'Comissão', valor: '', historico: 'Pagamento de comissão', status: 'pendente' })
+    await fetchHistorico()
+    setSavingHist(false)
+  }
+
+  function iniciarEdicaoHist(h: ComissaoHistorico) {
+    setEditandoHistId(h.id)
+    setHistForm({
+      vencimento: h.vencimento,
+      item: h.item,
+      valor: h.valor.toString(),
+      historico: h.historico || '',
+      status: h.status,
+    })
+  }
+
+  async function removerHistorico(id: string) {
+    await supabase.from('comissoes_historico').delete().eq('id', id)
+    setHistorico(prev => prev.filter(h => h.id !== id))
+  }
+
+  async function toggleStatusHistorico(h: ComissaoHistorico) {
+    const novoStatus = h.status === 'pago' ? 'pendente' : 'pago'
+    await supabase.from('comissoes_historico').update({ status: novoStatus }).eq('id', h.id)
+    setHistorico(prev => prev.map(x => x.id === h.id ? { ...x, status: novoStatus } : x))
   }
 
   async function fetchBloqueios() {
@@ -261,6 +346,7 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     ['cadastro', 'Cadastro'],
     ['endereco', 'Endereço'],
     ['comissao', 'Comissão'],
+    ['historico', 'Histórico'],
     ['configuracoes', 'Configurações'],
     ['fechamento', 'Fechamento'],
   ]
@@ -514,6 +600,148 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
               </div>
             )}
 
+            {aba === 'historico' && (
+              <div className="space-y-4">
+                {!profissional ? (
+                  <p className="text-sm text-gray-400 italic">Salve o profissional primeiro para registrar o histórico.</p>
+                ) : (
+                  <>
+                    {/* Formulário */}
+                    <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                      <h3 className="text-sm font-semibold text-gray-900">{editandoHistId ? 'Editar registro' : 'Novo registro'}</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Vencimento <span className="text-red-500">*</span></label>
+                          <input type="date" value={histForm.vencimento}
+                            onChange={e => setHistForm(p => ({ ...p, vencimento: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Valor (R$) <span className="text-red-500">*</span></label>
+                          <input type="number" min="0" step="0.01" value={histForm.valor}
+                            onChange={e => setHistForm(p => ({ ...p, valor: e.target.value }))}
+                            placeholder="0,00"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Item</label>
+                          <input type="text" value={histForm.item}
+                            onChange={e => setHistForm(p => ({ ...p, item: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                          <select value={histForm.status}
+                            onChange={e => setHistForm(p => ({ ...p, status: e.target.value as 'pago' | 'pendente' }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 bg-white">
+                            <option value="pendente">Pendente</option>
+                            <option value="pago">Pago</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Histórico</label>
+                        <input type="text" value={histForm.historico}
+                          onChange={e => setHistForm(p => ({ ...p, historico: e.target.value }))}
+                          placeholder="Ex: Pagamento de comissão"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
+                      </div>
+                      {erroHist && <p className="text-xs text-red-500">{erroHist}</p>}
+                      <div className="flex gap-2">
+                        <button onClick={salvarHistorico} disabled={savingHist}
+                          className="flex-1 px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors">
+                          {savingHist ? 'Salvando...' : editandoHistId ? 'Atualizar' : 'Adicionar'}
+                        </button>
+                        {editandoHistId && (
+                          <button onClick={() => { setEditandoHistId(null); setHistForm({ vencimento: '', item: 'Comissão', valor: '', historico: 'Pagamento de comissão', status: 'pendente' }) }}
+                            className="px-4 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors">
+                            Cancelar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Lista */}
+                    {loadingHistorico ? (
+                      <p className="text-sm text-gray-400">Carregando...</p>
+                    ) : historico.length === 0 ? (
+                      <p className="text-sm text-gray-400 italic text-center py-4">Nenhum registro cadastrado.</p>
+                    ) : (
+                      <>
+                        <div className="border border-gray-200 rounded-xl overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-50 border-b border-gray-200">
+                                <th className="text-left text-xs font-medium text-gray-500 px-3 py-2">Vencimento</th>
+                                <th className="text-left text-xs font-medium text-gray-500 px-3 py-2">Item</th>
+                                <th className="text-right text-xs font-medium text-gray-500 px-3 py-2">Valor</th>
+                                <th className="text-left text-xs font-medium text-gray-500 px-3 py-2">Histórico</th>
+                                <th className="text-center text-xs font-medium text-gray-500 px-3 py-2">Pagamento</th>
+                                <th className="w-12" />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {historico
+                                .slice((histPagina - 1) * HIST_POR_PAG, histPagina * HIST_POR_PAG)
+                                .map(h => (
+                                  <tr key={h.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                                    <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                                      {format(parseISO(h.vencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                                    </td>
+                                    <td className="px-3 py-2 text-gray-700">{h.item}</td>
+                                    <td className="px-3 py-2 text-right font-medium text-gray-900 whitespace-nowrap">
+                                      {h.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </td>
+                                    <td className="px-3 py-2 text-gray-500 text-xs">{h.historico || '—'}</td>
+                                    <td className="px-3 py-2 text-center">
+                                      <button onClick={() => toggleStatusHistorico(h)}
+                                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                                          h.status === 'pago'
+                                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                            : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                                        }`}>
+                                        {h.status === 'pago' ? 'Pago' : 'Pendente'}
+                                      </button>
+                                    </td>
+                                    <td className="px-2 py-2">
+                                      <div className="flex items-center gap-1">
+                                        <button onClick={() => iniciarEdicaoHist(h)} className="text-gray-400 hover:text-amber-600 transition-colors">
+                                          <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => removerHistorico(h.id)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Paginação */}
+                        {historico.length > HIST_POR_PAG && (
+                          <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
+                            <span>{historico.length} no total</span>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => setHistPagina(p => Math.max(1, p - 1))} disabled={histPagina === 1}
+                                className="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-40">‹</button>
+                              <span>{histPagina} / {Math.ceil(historico.length / HIST_POR_PAG)}</span>
+                              <button onClick={() => setHistPagina(p => Math.min(Math.ceil(historico.length / HIST_POR_PAG), p + 1))}
+                                disabled={histPagina >= Math.ceil(historico.length / HIST_POR_PAG)}
+                                className="px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-40">›</button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {aba === 'configuracoes' && (
               <div className="space-y-1">
                 {[
@@ -656,7 +884,7 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
           {erro && <p className="text-sm text-red-600">{erro}</p>}
           <div className="flex gap-3 ml-auto">
             <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
-            {aba !== 'fechamento' && (
+            {aba !== 'fechamento' && aba !== 'historico' && (
               <button onClick={handleSalvar} disabled={loading}
                 className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors">
                 {loading ? 'Salvando...' : 'Salvar'}

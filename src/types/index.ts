@@ -212,6 +212,18 @@ export interface BloqueioAgenda {
   created_at: string
 }
 
+export interface ComissaoHistorico {
+  id: string
+  profissional_id: string
+  unidade_id: string
+  vencimento: string
+  item: string
+  valor: number
+  historico?: string
+  status: 'pago' | 'pendente'
+  created_at: string
+}
+
 export interface ComissaoProfissionalItem {
   id: string
   profissional_id: string
