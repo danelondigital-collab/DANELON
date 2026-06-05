@@ -164,6 +164,7 @@ export interface ComandaItem {
 
 export interface Comanda {
   id: string
+  numero?: string
   cliente_id: string
   cliente?: Cliente
   unidade_id: string

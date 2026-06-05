@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Plus, Search, ClipboardList, Layers } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import type { Comanda, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem } from '@/types'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 import ComandaModal from './comanda-modal'
@@ -26,15 +27,34 @@ const statusCor: Record<string, string> = {
 }
 
 export default function ComandasClient({ comandas: initial, clientes, profissionais, servicos, produtos, comissoesProfissional, unidadeId, perfil }: Props) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [comandas, setComandas] = useState(initial)
-  const [busca, setBusca] = useState('')
+  const [busca, setBusca] = useState(searchParams.get('q') || '')
   const [filtroStatus, setFiltroStatus] = useState<string>('todos')
   const [modalAberto, setModalAberto] = useState(false)
   const [modalGenericaAberto, setModalGenericaAberto] = useState(false)
   const [comandaSelecionada, setComandaSelecionada] = useState<Comanda | null>(null)
+  const buscaTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Atualiza lista quando initial muda (nova busca server-side)
+  useEffect(() => { setComandas(initial) }, [initial])
+
+  function handleBusca(valor: string) {
+    setBusca(valor)
+    if (buscaTimer.current) clearTimeout(buscaTimer.current)
+    buscaTimer.current = setTimeout(() => {
+      const ehNumero = /^C?#?\d+$/i.test(valor.trim())
+      if (ehNumero && valor.trim().length >= 2) {
+        router.push(`/dashboard/comandas?q=${encodeURIComponent(valor.trim())}`)
+      } else if (!valor.trim()) {
+        router.push('/dashboard/comandas')
+      }
+    }, 500)
+  }
 
   const filtradas = comandas.filter(c => {
-    const matchBusca = c.cliente?.nome.toLowerCase().includes(busca.toLowerCase()) || String(c.id).includes(busca)
+    const matchBusca = c.cliente?.nome.toLowerCase().includes(busca.toLowerCase()) || String(c.id).includes(busca) || (c.numero || '').toLowerCase().includes(busca.toLowerCase())
     const matchStatus = filtroStatus === 'todos' || c.status === filtroStatus
     return matchBusca && matchStatus
   })
@@ -94,7 +114,7 @@ export default function ComandasClient({ comandas: initial, clientes, profission
         <div className="p-4 border-b border-gray-100 flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" placeholder="Buscar por cliente..." value={busca} onChange={e => setBusca(e.target.value)}
+            <input type="text" placeholder="Buscar por cliente ou C#número..." value={busca} onChange={e => handleBusca(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600" />
           </div>
           <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
@@ -120,6 +140,7 @@ export default function ComandasClient({ comandas: initial, clientes, profission
             <table className="w-full hidden md:table">
               <thead>
                 <tr className="border-b border-gray-100">
+                  <th className="text-left text-xs font-medium text-gray-500 px-4 py-3 w-20">Nº</th>
                   <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Cliente</th>
                   <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Abertura</th>
                   <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
@@ -130,6 +151,9 @@ export default function ComandasClient({ comandas: initial, clientes, profission
                 {filtradas.map(c => (
                   <tr key={c.id} onClick={() => abrirExistente(c)}
                     className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="text-xs font-mono font-medium text-amber-700">{c.numero || '—'}</span>
+                    </td>
                     <td className="px-4 py-3">
                       <p className="text-sm font-medium text-gray-900">{c.cliente?.nome || '—'}</p>
                       {c.cliente?.telefone && <p className="text-xs text-gray-500">{c.cliente.telefone}</p>}
@@ -158,7 +182,10 @@ export default function ComandasClient({ comandas: initial, clientes, profission
                     <ClipboardList className="w-4 h-4 text-amber-700" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{c.cliente?.nome || '—'}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900 truncate">{c.cliente?.nome || '—'}</p>
+                      {c.numero && <span className="text-xs font-mono text-amber-700 flex-shrink-0">{c.numero}</span>}
+                    </div>
                     <p className="text-xs text-gray-500">{formatDateTime(c.data_abertura)}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
