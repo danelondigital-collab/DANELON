@@ -172,7 +172,7 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
         }))
 
         for (const cp of (item.profissionais || []) as any[]) {
-          if (!cp.valor_comissao) continue
+          if (!cp.profissional_id) continue
           rows.push({
             id: cp.id,
             comanda_id: c.id,
@@ -252,7 +252,7 @@ export default function ComissoesClient({ profissionais, unidadeId }: Props) {
         tem_rateio,
       }
     })
-    .filter(r => r.valor_comissao > 0)
+    .filter(r => r.total_itens > 0)
     .sort((a, b) => b.valor_comissao - a.valor_comissao)
 
   const profSelecionadoObj = profissionais.find(p => p.id === profissionalSelecionado)
