@@ -257,7 +257,7 @@ function PainelImportacao({ imp, onExcluir }: { imp: Importacao; onExcluir: () =
               className="text-xs text-violet-600 hover:text-violet-800 flex items-center gap-1">
               {expandido ? <><EyeOff className="w-3.5 h-3.5" /> Ocultar dias</> : <><Eye className="w-3.5 h-3.5" /> Ver dia a dia</>}
             </button>
-            <a href={`/crm/rh/espelho-ponto/relatorio/${imp.id}`} target="_blank" rel="noopener noreferrer"
+            <a href={`/print/ponto/${imp.id}`} target="_blank" rel="noopener noreferrer"
               className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
               title="Imprimir Aditivo Folha de Ponto">
               <Printer className="w-3.5 h-3.5" />
