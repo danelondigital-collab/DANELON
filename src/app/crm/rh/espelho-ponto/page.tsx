@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import EspelhoPontoClient from './espelho-ponto-client'
 
 export default async function EspelhoPontoPage() {
@@ -30,8 +31,9 @@ export default async function EspelhoPontoPage() {
     intervalo_minutos: (p as any).intervalo_minutos as number ?? 60,
   }))
 
-  // Importações com registros
-  const impQuery = supabase
+  // Importações com registros (admin para bypassar RLS — tabelas sem policy de SELECT)
+  const admin = createAdminClient()
+  const impQuery = admin
     .from('ponto_importacoes')
     .select(`
       id, arquivo_nome, periodo_inicio, periodo_fim,
