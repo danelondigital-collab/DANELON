@@ -213,7 +213,12 @@ export function calcularMes(dias: MarcacaoDia[], horarioEntradaStr: string, hora
   let totalDiasTrabalhados = 0
 
   for (const d of diasAnalisados) {
-    if (d.tipoDia === 'folga' || d.tipoDia === 'recesso') continue
+    if (d.tipoDia === 'folga') continue
+    if (d.tipoDia === 'recesso') {
+      // recesso com horas marcadas = HE 100%
+      if (d.he100Min > 0) he100Min += d.he100Min
+      continue
+    }
     if (d.tipoDia === 'falta') { faltasSemJustificativa++; continue }
     if (d.tipoDia === 'atestado') continue
 
