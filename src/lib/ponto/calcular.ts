@@ -232,7 +232,7 @@ export function calcularMes(dias: MarcacaoDia[], horarioEntradaStr: string, hora
     if (d.tipoDia === 'falta') { faltasSemJustificativa++; continue }
     if (d.tipoDia === 'atestado') continue
 
-    if (d.tipoDia === 'feriado' || (d.tipoDia === 'recesso' && d.he100Min > 0)) {
+    if (d.tipoDia === 'feriado') {
       he100Min += d.he100Min
       continue
     }
