@@ -14,21 +14,23 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const body = await req.json() as {
-    texto: string
-    arquivo_nome: string
-    profissional_id: string
-    unidade_id: string
-    horario_entrada: string
-    horario_saida: string
-    intervalo_minutos: number
-  }
+  const form = await req.formData()
+  const file = form.get('file') as File | null
+  const profissional_id = form.get('profissional_id') as string
+  const unidade_id = form.get('unidade_id') as string
+  const horario_entrada = form.get('horario_entrada') as string
+  const horario_saida = form.get('horario_saida') as string
+  const intervalo_minutos = parseInt(form.get('intervalo_minutos') as string || '60')
+  const arquivo_nome = file?.name ?? 'folha-ponto.pdf'
 
-  const { texto, arquivo_nome, profissional_id, unidade_id, horario_entrada, horario_saida, intervalo_minutos } = body
-
-  if (!texto || !profissional_id || !unidade_id || !horario_entrada || !horario_saida) {
+  if (!file || !profissional_id || !unidade_id || !horario_entrada || !horario_saida) {
     return NextResponse.json({ error: 'Dados incompletos.' }, { status: 400 })
   }
+
+  const buffer = Buffer.from(await file.arrayBuffer())
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
+  const { text: texto } = await pdfParse(buffer)
 
   const folha = parseFolhaPontoGenyo(texto)
 

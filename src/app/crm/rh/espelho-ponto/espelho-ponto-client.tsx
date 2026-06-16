@@ -98,47 +98,19 @@ function UploadModal({ profissional, onClose, onSucesso }: UploadModalProps) {
   const [sucesso, setSucesso] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  async function extrairTextoPDF(file: File): Promise<string> {
-    // Extrai texto do PDF no navegador usando PDF.js — sem enviar o arquivo para o servidor
-    const arrayBuffer = await file.arrayBuffer()
-    const pdfjsLib = await import('pdfjs-dist')
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-    let texto = ''
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i)
-      const content = await page.getTextContent()
-      texto += content.items.map((item) => 'str' in item ? (item as { str: string }).str : '').join(' ') + '\n'
-    }
-    return texto
-  }
-
   async function enviar() {
     if (!arquivo) { setErro('Selecione o PDF da folha de ponto.'); return }
     setLoading(true); setErro(null)
 
-    let texto: string
-    try {
-      texto = await extrairTextoPDF(arquivo)
-    } catch {
-      setErro('Erro ao ler o PDF. Verifique se o arquivo não está protegido por senha.')
-      setLoading(false)
-      return
-    }
+    const form = new FormData()
+    form.append('file', arquivo)
+    form.append('profissional_id', profissional.id)
+    form.append('unidade_id', profissional.unidade_id)
+    form.append('horario_entrada', entrada)
+    form.append('horario_saida', saida)
+    form.append('intervalo_minutos', intervalo)
 
-    const res = await fetch('/api/ponto/processar-pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        texto,
-        arquivo_nome: arquivo.name,
-        profissional_id: profissional.id,
-        unidade_id: profissional.unidade_id,
-        horario_entrada: entrada,
-        horario_saida: saida,
-        intervalo_minutos: parseInt(intervalo),
-      }),
-    })
+    const res = await fetch('/api/ponto/processar-pdf', { method: 'POST', body: form })
     const json = await res.json()
     setLoading(false)
 
