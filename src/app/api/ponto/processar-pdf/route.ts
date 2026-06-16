@@ -4,6 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { parseFolhaPontoGenyo } from '@/lib/ponto/parser-genyo'
 import { calcularMes } from '@/lib/ponto/calcular'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const admin = createAdminClient()
@@ -11,47 +14,36 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const form = await req.formData()
-  const file = form.get('file') as File | null
-  const profissionalId = form.get('profissional_id') as string
-  const unidadeId = form.get('unidade_id') as string
-  const horarioEntrada = form.get('horario_entrada') as string  // HH:MM
-  const horarioSaida = form.get('horario_saida') as string      // HH:MM
-  const intervaloMin = parseInt(form.get('intervalo_minutos') as string || '60')
+  const body = await req.json() as {
+    texto: string
+    arquivo_nome: string
+    profissional_id: string
+    unidade_id: string
+    horario_entrada: string
+    horario_saida: string
+    intervalo_minutos: number
+  }
 
-  if (!file || !profissionalId || !unidadeId || !horarioEntrada || !horarioSaida) {
+  const { texto, arquivo_nome, profissional_id, unidade_id, horario_entrada, horario_saida, intervalo_minutos } = body
+
+  if (!texto || !profissional_id || !unidade_id || !horario_entrada || !horario_saida) {
     return NextResponse.json({ error: 'Dados incompletos.' }, { status: 400 })
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer())
-  let text = ''
-
-  if (file.name.endsWith('.pdf')) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
-    const data = await pdfParse(buffer)
-    text = data.text
-  } else {
-    return NextResponse.json({ error: 'Formato não suportado. Use PDF.' }, { status: 400 })
-  }
-
-  // Parsear o texto do Gênio
-  const folha = parseFolhaPontoGenyo(text)
+  const folha = parseFolhaPontoGenyo(texto)
 
   if (folha.dias.length === 0) {
     return NextResponse.json({ error: 'Não foi possível extrair registros do PDF. Verifique se é um relatório Folha de Ponto do Gênio.' }, { status: 400 })
   }
 
-  // Calcular com as regras Danelon
-  const resumo = calcularMes(folha.dias, horarioEntrada, horarioSaida, intervaloMin)
+  const resumo = calcularMes(folha.dias, horario_entrada, horario_saida, intervalo_minutos ?? 60)
 
-  // Salvar no banco
   const { data: importacao, error: impErr } = await admin
     .from('ponto_importacoes')
     .insert({
-      profissional_id: profissionalId,
-      unidade_id: unidadeId,
-      arquivo_nome: file.name,
+      profissional_id,
+      unidade_id,
+      arquivo_nome,
       periodo_inicio: folha.periodoInicio || null,
       periodo_fim: folha.periodoFim || null,
       total_dias_trabalhados: resumo.totalDiasTrabalhados,
@@ -67,14 +59,13 @@ export async function POST(req: NextRequest) {
 
   if (impErr) return NextResponse.json({ error: impErr.message }, { status: 500 })
 
-  // Salvar dias
   const rows = resumo.diasAnalisados.map(d => ({
     importacao_id: importacao.id,
-    profissional_id: profissionalId,
-    unidade_id: unidadeId,
+    profissional_id,
+    unidade_id,
     data: (() => {
       const [dd, mm, yyyy] = d.data.split('/')
-      return `${yyyy}-${mm}-${dd}`
+      return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`
     })(),
     dia_semana: d.diaSemana,
     e1: d.e1,
@@ -102,26 +93,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: regErr.message }, { status: 500 })
   }
 
-  // Atualizar horário na profissional (salvar para próximas importações)
   await admin.from('profissionais').update({
-    horario_entrada: horarioEntrada,
-    horario_saida: horarioSaida,
-    intervalo_minutos: intervaloMin,
-  }).eq('id', profissionalId)
+    horario_entrada,
+    horario_saida,
+    intervalo_minutos,
+  }).eq('id', profissional_id)
 
-  return NextResponse.json({
-    success: true,
-    importacao_id: importacao.id,
-    resumo: {
-      nomeProfissional: folha.nomeProfissional,
-      periodo: folha.periodo,
-      totalDiasTrabalhados: resumo.totalDiasTrabalhados,
-      he50Min: resumo.he50Min,
-      he100Min: resumo.he100Min,
-      intervaloSuprimidoMin: resumo.intervaloSuprimidoMin,
-      horasNegativasMin: resumo.horasNegativasMin,
-      faltasSemJustificativa: resumo.faltasSemJustificativa,
-      dias: resumo.diasAnalisados,
-    }
-  })
+  return NextResponse.json({ success: true, importacao_id: importacao.id })
 }
