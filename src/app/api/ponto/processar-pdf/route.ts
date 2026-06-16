@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { parseFolhaPontoGenyo } from '@/lib/ponto/parser-genyo'
+import { parseFolhaPontoGenyoExcel } from '@/lib/ponto/parser-genyo-excel'
 import { calcularMes } from '@/lib/ponto/calcular'
 
 export const runtime = 'nodejs'
@@ -28,11 +29,24 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
-  const { text: texto } = await pdfParse(buffer)
+  const nome = file.name.toLowerCase()
+  const isExcel = nome.endsWith('.xls') || nome.endsWith('.xlsx')
 
-  const folha = parseFolhaPontoGenyo(texto)
+  let folha
+  if (isExcel) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const XLSX = require('xlsx') as typeof import('xlsx')
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false, raw: false })
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+    folha = parseFolhaPontoGenyoExcel(rows)
+  } else {
+    // PDF
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
+    const { text } = await pdfParse(buffer)
+    folha = parseFolhaPontoGenyo(text)
+  }
 
   if (folha.dias.length === 0) {
     return NextResponse.json({ error: 'Não foi possível extrair registros do PDF. Verifique se é um relatório Folha de Ponto do Gênio.' }, { status: 400 })

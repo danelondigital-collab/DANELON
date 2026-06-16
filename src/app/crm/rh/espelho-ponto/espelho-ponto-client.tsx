@@ -164,7 +164,7 @@ function UploadModal({ profissional, onClose, onSucesso }: UploadModalProps) {
 
             {/* Upload PDF */}
             <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">PDF da Folha de Ponto (Gênio)</label>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Folha de Ponto do Gênio (Excel ou PDF)</label>
               <div onClick={() => inputRef.current?.click()}
                 className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center cursor-pointer hover:border-violet-400 hover:bg-violet-50 transition-colors">
                 {arquivo ? (
@@ -178,11 +178,11 @@ function UploadModal({ profissional, onClose, onSucesso }: UploadModalProps) {
                 ) : (
                   <>
                     <Upload className="w-7 h-7 text-slate-300 mx-auto mb-2" />
-                    <p className="text-sm text-slate-500">Clique para selecionar o PDF</p>
+                    <p className="text-sm text-slate-500">Clique para selecionar (Excel ou PDF)</p>
                   </>
                 )}
               </div>
-              <input ref={inputRef} type="file" accept=".pdf" className="hidden" onChange={e => setArquivo(e.target.files?.[0] || null)} />
+              <input ref={inputRef} type="file" accept=".pdf,.xls,.xlsx" className="hidden" onChange={e => setArquivo(e.target.files?.[0] || null)} />
             </div>
 
             {erro && (
