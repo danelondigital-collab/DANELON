@@ -124,20 +124,25 @@ export function calcularDia(dia: MarcacaoDia, horarioEntradaMin: number, horario
     return { ...base, deltaEntradaMin: 0, deltaSaidaMin: 0, saldoDiaMin: 0, intervaloRealMin: null, intervaloSuprimidoMin: 0, he100Min: he100, statusLabel: label, temPendencia: false }
   }
 
-  // Declaração de horas: dia com abono, não aplica tolerância de entrada
+  // Declaração de horas: atraso de entrada é excusado, mas HE na saída ainda conta
   if (dia.tipoDia === 'declaracao_horas') {
     let intervaloReal: number | null = null
     let intervaloSuprimido = 0
 
-    if (dia.e1 && dia.s1 && dia.e2 && dia.s2) {
+    if (dia.e2 && dia.s1) {
       intervaloReal = calcularIntervalo(dia.s1, dia.e2)
       if (intervaloReal < intervaloEsperadoMin) {
         intervaloSuprimido = intervaloEsperadoMin - intervaloReal
       }
     }
 
-    // Saldo: Gênio já calcula com abono, usamos o saldo do Gênio como referência mas zeramos penalidade
-    return { ...base, deltaEntradaMin: 0, deltaSaidaMin: 0, saldoDiaMin: 0, intervaloRealMin: intervaloReal, intervaloSuprimidoMin: intervaloSuprimido, he100Min: 0, statusLabel: 'Dec. de Horas', temPendencia: false }
+    // Entrada excusada (delta = 0), mas saída além do horário previsto ainda gera HE 50%
+    const saidaFinal = dia.s2 || dia.s1
+    const deltaSaida = saidaFinal ? calcularDeltaSaida(saidaFinal, horarioSaidaMin) : 0
+    const heExtra = deltaSaida > 0 ? deltaSaida : 0  // só positivo conta; saída antecipada não penaliza
+
+    const label = heExtra > 0 ? `Dec. de Horas | HE saída +${minutosParaHora(heExtra)}h` : 'Dec. de Horas'
+    return { ...base, deltaEntradaMin: 0, deltaSaidaMin: heExtra, saldoDiaMin: heExtra, intervaloRealMin: intervaloReal, intervaloSuprimidoMin: intervaloSuprimido, he100Min: 0, statusLabel: label, temPendencia: false }
   }
 
   // Dia normal: aplica todas as regras

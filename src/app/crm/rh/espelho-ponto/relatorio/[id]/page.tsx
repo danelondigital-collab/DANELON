@@ -74,16 +74,39 @@ export default async function RelatorioAditivoPage({
       horas_negativas_minutos, faltas_sem_justificativa,
       total_dias_trabalhados, created_at,
       profissional_id,
-      profissionais(nome, unidades(nome))
+      profissionais(nome, horario_entrada, horario_saida, intervalo_minutos, unidades(nome))
     `)
     .eq('id', id)
     .single()
 
   if (!imp) notFound()
 
-  const prof = imp.profissionais as unknown as { nome: string; unidades: { nome: string } | null } | null
+  const prof = imp.profissionais as unknown as {
+    nome: string
+    horario_entrada: string | null
+    horario_saida: string | null
+    intervalo_minutos: number | null
+    unidades: { nome: string } | null
+  } | null
   const nomeProfissional = prof?.nome ?? '—'
   const nomeUnidade = prof?.unidades?.nome ?? '—'
+  const horarioEntrada = prof?.horario_entrada ?? null
+  const horarioSaida = prof?.horario_saida ?? null
+  const intervaloMin = prof?.intervalo_minutos ?? 60
+
+  // Carga horária diária = saída - entrada - almoço
+  let cargaDiariaMin = 0
+  if (horarioEntrada && horarioSaida) {
+    const [he, me] = horarioEntrada.split(':').map(Number)
+    const [hs, ms] = horarioSaida.split(':').map(Number)
+    cargaDiariaMin = (hs * 60 + ms) - (he * 60 + me) - intervaloMin
+  }
+  const cargaDiaria = cargaDiariaMin > 0
+    ? `${Math.floor(cargaDiariaMin / 60)}h${(cargaDiariaMin % 60).toString().padStart(2, '0')}min`
+    : '—'
+  const horarioContratual = horarioEntrada && horarioSaida
+    ? `${horarioEntrada.slice(0, 5)} às ${horarioSaida.slice(0, 5)} (almoço: ${intervaloMin}min)`
+    : '—'
   const hoje = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
   const periodo = fmtPeriodo(imp.periodo_inicio, imp.periodo_fim)
 
@@ -120,18 +143,30 @@ export default async function RelatorioAditivoPage({
 
       {/* Identificação */}
       <div className="label-sec">Identificação</div>
-      <div className="info-box">
-        <div className="info-item">
-          <label>Profissional</label>
-          <span>{nomeProfissional}</span>
+      <div className="info-box" style={{ flexDirection: 'column', gap: 12 }}>
+        <div className="info-row">
+          <div className="info-item">
+            <label>Profissional</label>
+            <span>{nomeProfissional}</span>
+          </div>
+          <div className="info-item">
+            <label>Período de apuração</label>
+            <span>{periodo}</span>
+          </div>
+          <div className="info-item">
+            <label>Dias trabalhados</label>
+            <span>{imp.total_dias_trabalhados}</span>
+          </div>
         </div>
-        <div className="info-item">
-          <label>Período de apuração</label>
-          <span>{periodo}</span>
-        </div>
-        <div className="info-item">
-          <label>Dias trabalhados</label>
-          <span>{imp.total_dias_trabalhados}</span>
+        <div className="info-row">
+          <div className="info-item">
+            <label>Horário contratual</label>
+            <span>{horarioContratual}</span>
+          </div>
+          <div className="info-item">
+            <label>Carga horária diária</label>
+            <span>{cargaDiaria}</span>
+          </div>
         </div>
       </div>
 
