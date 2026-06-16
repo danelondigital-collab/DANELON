@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Building2, ChevronDown, ChevronRight, AlertTriangle, Clock,
   UserX, Upload, X, Check, Loader2, FileText, Eye, EyeOff,
-  TrendingUp, TrendingDown, Minus, AlertCircle
+  TrendingUp, TrendingDown, Minus, AlertCircle, Trash2
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -222,9 +222,20 @@ function corDia(tipo: string, saldo: number) {
 
 // ─── Painel de uma importação ───────────────────────────────────────────────
 
-function PainelImportacao({ imp }: { imp: Importacao }) {
+function PainelImportacao({ imp, onExcluir }: { imp: Importacao; onExcluir: () => void }) {
   const [expandido, setExpandido] = useState(false)
   const [mostrarTodos, setMostrarTodos] = useState(false)
+  const [excluindo, setExcluindo] = useState(false)
+  const router = useRouter()
+
+  async function handleExcluir() {
+    if (!confirm('Excluir esta importação? Os registros diários também serão removidos.')) return
+    setExcluindo(true)
+    const res = await fetch(`/api/ponto/importacao/${imp.id}`, { method: 'DELETE' })
+    setExcluindo(false)
+    if (res.ok) { onExcluir(); router.refresh() }
+    else alert('Erro ao excluir importação.')
+  }
 
   const diasVisiveis = mostrarTodos ? imp.registros : imp.registros.slice(0, 10)
 
@@ -241,10 +252,17 @@ function PainelImportacao({ imp }: { imp: Importacao }) {
             </p>
             <p className="text-xs text-slate-400">{imp.total_dias_trabalhados} dias trabalhados</p>
           </div>
-          <button onClick={() => setExpandido(v => !v)}
-            className="text-xs text-violet-600 hover:text-violet-800 flex items-center gap-1">
-            {expandido ? <><EyeOff className="w-3.5 h-3.5" /> Ocultar dias</> : <><Eye className="w-3.5 h-3.5" /> Ver dia a dia</>}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setExpandido(v => !v)}
+              className="text-xs text-violet-600 hover:text-violet-800 flex items-center gap-1">
+              {expandido ? <><EyeOff className="w-3.5 h-3.5" /> Ocultar dias</> : <><Eye className="w-3.5 h-3.5" /> Ver dia a dia</>}
+            </button>
+            <button onClick={handleExcluir} disabled={excluindo}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+              title="Excluir importação">
+              {excluindo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
 
         {/* Cards resumo */}
@@ -404,7 +422,7 @@ function CardProfissional({ dados, onUpload }: { dados: ProfissionalComDados; on
 
       {expandido && dados.importacoes.length > 0 && (
         <div className="px-5 pb-4 space-y-3">
-          {dados.importacoes.map(imp => <PainelImportacao key={imp.id} imp={imp} />)}
+          {dados.importacoes.map(imp => <PainelImportacao key={imp.id} imp={imp} onExcluir={() => {}} />)}
         </div>
       )}
 
