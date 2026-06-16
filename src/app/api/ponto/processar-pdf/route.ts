@@ -38,7 +38,8 @@ export async function POST(req: NextRequest) {
     const XLSX = require('xlsx') as typeof import('xlsx')
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false, raw: false })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+    // header:1 retorna arrays — robusto para planilhas com linhas de metadados antes da tabela
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
     folha = parseFolhaPontoGenyoExcel(rows)
   } else {
     // PDF
@@ -49,7 +50,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (folha.dias.length === 0) {
-    return NextResponse.json({ error: 'Não foi possível extrair registros do PDF. Verifique se é um relatório Folha de Ponto do Gênio.' }, { status: 400 })
+    const tipo = isExcel ? 'Excel' : 'PDF'
+    return NextResponse.json({
+      error: `Não foi possível extrair registros do ${tipo}. Verifique se é um relatório Folha de Ponto do Gênio.`,
+    }, { status: 400 })
   }
 
   const resumo = calcularMes(folha.dias, horario_entrada, horario_saida, intervalo_minutos ?? 60)
