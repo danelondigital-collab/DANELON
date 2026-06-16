@@ -108,7 +108,7 @@ function UploadModal({ profissional, onClose, onSucesso }: UploadModalProps) {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i)
       const content = await page.getTextContent()
-      texto += content.items.map((item: { str?: string }) => item.str ?? '').join(' ') + '\n'
+      texto += content.items.map((item) => 'str' in item ? (item as { str: string }).str : '').join(' ') + '\n'
     }
     return texto
   }
