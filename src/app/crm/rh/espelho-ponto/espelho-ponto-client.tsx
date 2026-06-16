@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Building2, ChevronDown, ChevronRight, AlertTriangle, Clock,
   UserX, Upload, X, Check, Loader2, FileText, Eye, EyeOff,
@@ -367,7 +368,7 @@ function PainelImportacao({ imp }: { imp: Importacao }) {
 // ─── Card de profissional ───────────────────────────────────────────────────
 
 function CardProfissional({ dados, onUpload }: { dados: ProfissionalComDados; onUpload: () => void }) {
-  const [expandido, setExpandido] = useState(false)
+  const [expandido, setExpandido] = useState(dados.importacoes.length > 0)
   const ultima = dados.importacoes[0]
 
   return (
@@ -482,11 +483,11 @@ function CardUnidade({ unidade, profissionais, onUpload }: {
 
 export default function EspelhoPontoClient({ unidades, profissionais, unidadeId, todasUnidades }: Props) {
   const [uploadProf, setUploadProf] = useState<Profissional | null>(null)
-  const [refreshKey, setRefreshKey] = useState(0)
+  const router = useRouter()
 
   return (
     <>
-      <div className="space-y-4" key={refreshKey}>
+      <div className="space-y-4">
         {unidades.length === 0 && (
           <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center">
             <Clock className="w-10 h-10 text-slate-200 mx-auto mb-3" />
@@ -510,7 +511,7 @@ export default function EspelhoPontoClient({ unidades, profissionais, unidadeId,
         <UploadModal
           profissional={uploadProf}
           onClose={() => setUploadProf(null)}
-          onSucesso={() => { setUploadProf(null); setRefreshKey(k => k + 1) }}
+          onSucesso={() => { setUploadProf(null); router.refresh() }}
         />
       )}
     </>
