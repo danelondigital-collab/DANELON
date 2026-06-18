@@ -36,6 +36,13 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
     cpf: cliente?.cpf || '',
     data_nascimento: cliente?.data_nascimento || '',
     observacoes: cliente?.observacoes || '',
+    cep: cliente?.cep || '',
+    logradouro: cliente?.logradouro || '',
+    numero: cliente?.numero || '',
+    complemento: cliente?.complemento || '',
+    bairro: cliente?.bairro || '',
+    cidade: cliente?.cidade || '',
+    estado: cliente?.estado || '',
     ativo: cliente?.ativo ?? true,
   })
 
@@ -120,6 +127,13 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
           cpf: form.cpf || null,
           data_nascimento: form.data_nascimento || null,
           observacoes: form.observacoes || null,
+          cep: form.cep || null,
+          logradouro: form.logradouro || null,
+          numero: form.numero || null,
+          complemento: form.complemento || null,
+          bairro: form.bairro || null,
+          cidade: form.cidade || null,
+          estado: form.estado || null,
           ativo: form.ativo,
           unidade_id: unidadeId,
         })
@@ -182,6 +196,13 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
       cpf: form.cpf || null,
       data_nascimento: form.data_nascimento || null,
       observacoes: form.observacoes || null,
+      cep: form.cep || null,
+      logradouro: form.logradouro || null,
+      numero: form.numero || null,
+      complemento: form.complemento || null,
+      bairro: form.bairro || null,
+      cidade: form.cidade || null,
+      estado: form.estado || null,
       ativo: form.ativo,
       unidade_id: unidadeId,
     }
@@ -319,6 +340,88 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
                     placeholder="Anotações sobre o cliente..."
                   />
                 </div>
+
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Endereço</p>
+
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
+                      <input
+                        type="text"
+                        value={form.cep}
+                        onChange={e => set('cep', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                        placeholder="00000-000"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Logradouro</label>
+                      <input
+                        type="text"
+                        value={form.logradouro}
+                        onChange={e => set('logradouro', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                        placeholder="Rua, Avenida..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+                      <input
+                        type="text"
+                        value={form.numero}
+                        onChange={e => set('numero', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                        placeholder="123"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Complemento</label>
+                      <input
+                        type="text"
+                        value={form.complemento}
+                        onChange={e => set('complemento', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                        placeholder="Apto, bloco..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+                      <input
+                        type="text"
+                        value={form.bairro}
+                        onChange={e => set('bairro', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
+                      <input
+                        type="text"
+                        value={form.cidade}
+                        onChange={e => set('cidade', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+                      <input
+                        type="text"
+                        value={form.estado}
+                        onChange={e => set('estado', e.target.value)}
+                        maxLength={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 uppercase"
+                        placeholder="SP"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -404,18 +507,16 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
                             </div>
                             {/* Botões ao hover */}
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                              {isImage(doc.nome) && (
-                                <a
-                                  href={doc.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-1.5 bg-white rounded-lg hover:bg-gray-100"
-                                  title="Ver imagem"
-                                  onClick={e => e.stopPropagation()}
-                                >
-                                  <ImageIcon className="w-4 h-4 text-gray-700" />
-                                </a>
-                              )}
+                              <a
+                                href={doc.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 bg-white rounded-lg hover:bg-gray-100"
+                                title={isImage(doc.nome) ? 'Ver imagem' : 'Abrir PDF'}
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <ImageIcon className="w-4 h-4 text-gray-700" />
+                              </a>
                               <button
                                 onClick={() => deletarDocumento(doc)}
                                 disabled={deletando === doc.id}

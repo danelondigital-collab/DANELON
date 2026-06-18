@@ -38,6 +38,13 @@ export interface Cliente {
   cpf?: string
   data_nascimento?: string
   observacoes?: string
+  cep?: string
+  logradouro?: string
+  numero?: string
+  complemento?: string
+  bairro?: string
+  cidade?: string
+  estado?: string
   unidade_id: string
   unidade?: Unidade
   ativo: boolean
