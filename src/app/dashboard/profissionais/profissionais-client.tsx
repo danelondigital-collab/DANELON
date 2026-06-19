@@ -9,15 +9,20 @@ import ProfissionalModal from './profissional-modal'
 interface Props {
   profissionais: Profissional[]
   unidadeId: string
+  perfil: string
 }
 
-export default function ProfissionaisClient({ profissionais: initial, unidadeId }: Props) {
+export default function ProfissionaisClient({ profissionais: initial, unidadeId, perfil }: Props) {
   const [profissionais, setProfissionais] = useState(initial)
   const [busca, setBusca] = useState('')
+  const [aba, setAba] = useState<'ativos' | 'inativos'>('ativos')
   const [modalAberto, setModalAberto] = useState(false)
   const [selecionado, setSelecionado] = useState<Profissional | null>(null)
 
-  const filtrados = profissionais.filter(p =>
+  const ativos = profissionais.filter(p => p.ativo)
+  const inativos = profissionais.filter(p => !p.ativo)
+
+  const filtrados = (aba === 'ativos' ? ativos : inativos).filter(p =>
     p.nome.toLowerCase().includes(busca.toLowerCase()) ||
     p.telefone?.includes(busca)
   )
@@ -52,6 +57,28 @@ export default function ProfissionaisClient({ profissionais: initial, unidadeId 
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200">
+        <div className="flex items-center gap-6 px-4 pt-3 border-b border-gray-100">
+          <button
+            onClick={() => setAba('ativos')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              aba === 'ativos'
+                ? 'border-amber-700 text-amber-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Ativos ({ativos.length})
+          </button>
+          <button
+            onClick={() => setAba('inativos')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              aba === 'inativos'
+                ? 'border-amber-700 text-amber-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Inativos ({inativos.length})
+          </button>
+        </div>
         <div className="p-4 border-b border-gray-100">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -69,9 +96,11 @@ export default function ProfissionaisClient({ profissionais: initial, unidadeId 
           <div className="text-center py-12">
             <UserCog className="w-10 h-10 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 text-sm">
-              {busca ? 'Nenhum profissional encontrado' : 'Nenhum profissional cadastrado'}
+              {busca
+                ? 'Nenhum profissional encontrado'
+                : aba === 'ativos' ? 'Nenhum profissional ativo' : 'Nenhum profissional inativo'}
             </p>
-            {!busca && (
+            {!busca && aba === 'ativos' && (
               <button onClick={abrirNovo} className="mt-3 text-sm text-amber-700 hover:underline">
                 Cadastrar primeiro profissional
               </button>
@@ -157,6 +186,7 @@ export default function ProfissionaisClient({ profissionais: initial, unidadeId 
         <ProfissionalModal
           profissional={selecionado}
           unidadeId={unidadeId}
+          perfil={perfil}
           onClose={() => setModalAberto(false)}
           onSalvo={onSalvo}
         />

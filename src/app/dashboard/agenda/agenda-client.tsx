@@ -13,6 +13,7 @@ interface Props {
   profissionais: Profissional[]
   servicos: Servico[]
   clientes: Cliente[]
+  perfil: string
 }
 
 const HORAS = Array.from({ length: 13 }, (_, i) => i + 7) // 7h às 19h
@@ -55,7 +56,7 @@ function calcAlturaFromTimes(inicio: string, fim: string): number {
   return Math.max((mins / 60) * SLOT_HEIGHT, 20)
 }
 
-export default function AgendaClient({ unidadeId, profissionais, servicos, clientes }: Props) {
+export default function AgendaClient({ unidadeId, profissionais, servicos, clientes, perfil }: Props) {
   const supabase = createClient()
   const [semanaAtual, setSemanaAtual] = useState(() => new Date())
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([])
@@ -91,7 +92,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
           *,
           cliente:clientes(id, nome, telefone),
           itens:agendamento_itens(
-            id, profissional_id, servico_id,
+            id, profissional_id, servico_id, data_hora_inicio, data_hora_fim,
             profissional:profissionais(id, nome, cor_agenda),
             servico:servicos(id, nome, duracao_minutos)
           )
@@ -615,6 +616,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
           servicos={servicos}
           clientes={clientes}
           horarioInicial={horarioInicial}
+          perfil={perfil}
           onClose={() => setModalAberto(false)}
           onSalvo={onSalvo}
         />

@@ -118,31 +118,41 @@ export function calcularDia(dia: MarcacaoDia, horarioEntradaMin: number, horario
 
   // Dia de feriado trabalhado (HE 100%) ou recesso com marcações
   if (dia.tipoDia === 'feriado' || (dia.tipoDia === 'recesso' && dia.e1)) {
-    // Usa diretamente o valor "Trabalhadas" do Gênio — ele já calculou corretamente
-    const he100 = dia.genyoTrabalhadas ? horaParaMinutos(dia.genyoTrabalhadas) : 0
-    const label = he100 > 0 ? `HE 100% (${minutosParaHora(he100)}h)` : 'Feriado s/ trabalho'
-    return { ...base, deltaEntradaMin: 0, deltaSaidaMin: 0, saldoDiaMin: 0, intervaloRealMin: null, intervaloSuprimidoMin: 0, he100Min: he100, statusLabel: label, temPendencia: false }
+    let he100 = 0
+    let intervaloReal: number | null = null
+    if (dia.e1) {
+      const inicioMin = horaParaMinutos(dia.e1)
+      let fimMin: number
+
+      if (dia.s2 && dia.e2 && dia.s1) {
+        // 4 marcações: descontar almoço real
+        intervaloReal = calcularIntervalo(dia.s1, dia.e2)
+        const manha = horaParaMinutos(dia.s1) - inicioMin
+        const tarde = horaParaMinutos(dia.s2) - horaParaMinutos(dia.e2)
+        he100 = manha + tarde
+      } else if (dia.s1) {
+        // 2 marcações: total direto
+        fimMin = horaParaMinutos(dia.s1)
+        he100 = fimMin - inicioMin
+      }
+    }
+    return { ...base, deltaEntradaMin: 0, deltaSaidaMin: 0, saldoDiaMin: 0, intervaloRealMin: intervaloReal, intervaloSuprimidoMin: 0, he100Min: he100, statusLabel: `HE 100% (${minutosParaHora(he100)}h)`, temPendencia: false }
   }
 
-  // Declaração de horas: atraso de entrada é excusado, mas HE na saída ainda conta
+  // Declaração de horas: dia com abono, não aplica tolerância de entrada
   if (dia.tipoDia === 'declaracao_horas') {
     let intervaloReal: number | null = null
     let intervaloSuprimido = 0
 
-    if (dia.e2 && dia.s1) {
+    if (dia.e1 && dia.s1 && dia.e2 && dia.s2) {
       intervaloReal = calcularIntervalo(dia.s1, dia.e2)
       if (intervaloReal < intervaloEsperadoMin) {
         intervaloSuprimido = intervaloEsperadoMin - intervaloReal
       }
     }
 
-    // Entrada excusada (delta = 0), mas saída além do horário previsto ainda gera HE 50%
-    const saidaFinal = dia.s2 || dia.s1
-    const deltaSaida = saidaFinal ? calcularDeltaSaida(saidaFinal, horarioSaidaMin) : 0
-    const heExtra = deltaSaida > 0 ? deltaSaida : 0  // só positivo conta; saída antecipada não penaliza
-
-    const label = heExtra > 0 ? `Dec. de Horas | HE saída +${minutosParaHora(heExtra)}h` : 'Dec. de Horas'
-    return { ...base, deltaEntradaMin: 0, deltaSaidaMin: heExtra, saldoDiaMin: heExtra, intervaloRealMin: intervaloReal, intervaloSuprimidoMin: intervaloSuprimido, he100Min: 0, statusLabel: label, temPendencia: false }
+    // Saldo: Gênio já calcula com abono, usamos o saldo do Gênio como referência mas zeramos penalidade
+    return { ...base, deltaEntradaMin: 0, deltaSaidaMin: 0, saldoDiaMin: 0, intervaloRealMin: intervaloReal, intervaloSuprimidoMin: intervaloSuprimido, he100Min: 0, statusLabel: 'Dec. de Horas', temPendencia: false }
   }
 
   // Dia normal: aplica todas as regras
@@ -218,12 +228,7 @@ export function calcularMes(dias: MarcacaoDia[], horarioEntradaStr: string, hora
   let totalDiasTrabalhados = 0
 
   for (const d of diasAnalisados) {
-    if (d.tipoDia === 'folga') continue
-    if (d.tipoDia === 'recesso') {
-      // recesso com horas marcadas = HE 100%
-      if (d.he100Min > 0) he100Min += d.he100Min
-      continue
-    }
+    if (d.tipoDia === 'folga' || d.tipoDia === 'recesso') continue
     if (d.tipoDia === 'falta') { faltasSemJustificativa++; continue }
     if (d.tipoDia === 'atestado') continue
 

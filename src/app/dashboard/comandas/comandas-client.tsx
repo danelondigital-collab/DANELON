@@ -210,6 +210,7 @@ export default function ComandasClient({ comandas: initial, clientes, profission
           produtos={produtos}
           comissoesProfissional={comissoesProfissional}
           unidadeId={unidadeId}
+          perfil={perfil}
           onClose={onFechada}
           onSalva={onSalva}
         />

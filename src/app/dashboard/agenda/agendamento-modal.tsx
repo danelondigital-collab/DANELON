@@ -2,14 +2,17 @@
 
 import { useState } from 'react'
 import { X, Plus, Trash2 } from 'lucide-react'
-import { format, addMinutes } from 'date-fns'
+import { format, addMinutes, parse } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
 import type { Agendamento, Profissional, Servico, Cliente } from '@/types'
+import HistoricoLog from '@/components/ui/historico-log'
 
 interface ItemAgendamento {
   profissional_id: string
   servico_id: string
+  hora_inicio: string
+  duracao_minutos: number
 }
 
 interface Props {
@@ -19,6 +22,7 @@ interface Props {
   servicos: Servico[]
   clientes: Cliente[]
   horarioInicial: { data: Date; profissional_id?: string } | null
+  perfil: string
   onClose: () => void
   onSalvo: () => void
 }
@@ -32,9 +36,22 @@ const STATUS_OPTIONS = [
   { value: 'faltou', label: 'Faltou' },
 ]
 
+const DURACOES_MIN = [15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180, 210, 240, 270, 300, 330, 360]
+
+function fmtDuracao(min: number): string {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return h > 0 ? `${h}h ${m}min` : `${m}min`
+}
+
+function somaMin(hora: string, minutos: number): string {
+  const base = parse(hora, 'HH:mm', new Date())
+  return format(addMinutes(base, minutos), 'HH:mm')
+}
+
 export default function AgendamentoModal({
   agendamento, unidadeId, profissionais, servicos, clientes,
-  horarioInicial, onClose, onSalvo
+  horarioInicial, perfil, onClose, onSalvo
 }: Props) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -44,26 +61,30 @@ export default function AgendamentoModal({
     ? new Date(agendamento.data_hora_inicio)
     : (horarioInicial?.data || new Date())
 
-  const dataFim = agendamento
-    ? new Date(agendamento.data_hora_fim)
-    : addMinutes(dataInicio, 60)
-
   const [form, setForm] = useState({
     cliente_id: agendamento?.cliente_id || '',
     data: format(dataInicio, 'yyyy-MM-dd'),
-    hora_inicio: format(dataInicio, 'HH:mm'),
-    hora_fim: format(dataFim, 'HH:mm'),
     status: agendamento?.status || 'agendado',
     observacoes: agendamento?.observacoes || '',
   })
+
+  function duracaoServico(servicoId: string): number {
+    return servicos.find(s => s.id === servicoId)?.duracao_minutos || 60
+  }
 
   const [itens, setItens] = useState<ItemAgendamento[]>(
     agendamento?.itens?.map(i => ({
       profissional_id: i.profissional_id,
       servico_id: i.servico_id,
+      hora_inicio: i.data_hora_inicio ? format(new Date(i.data_hora_inicio), 'HH:mm') : format(dataInicio, 'HH:mm'),
+      duracao_minutos: i.data_hora_inicio && i.data_hora_fim
+        ? Math.round((new Date(i.data_hora_fim).getTime() - new Date(i.data_hora_inicio).getTime()) / 60000)
+        : duracaoServico(i.servico_id),
     })) || [{
       profissional_id: horarioInicial?.profissional_id || (profissionais[0]?.id || ''),
       servico_id: servicos[0]?.id || '',
+      hora_inicio: format(dataInicio, 'HH:mm'),
+      duracao_minutos: duracaoServico(servicos[0]?.id || ''),
     }]
   )
 
@@ -72,15 +93,33 @@ export default function AgendamentoModal({
   }
 
   function addItem() {
-    setItens(prev => [...prev, { profissional_id: profissionais[0]?.id || '', servico_id: servicos[0]?.id || '' }])
+    setItens(prev => {
+      const ultimo = prev[prev.length - 1]
+      const horaInicio = ultimo ? somaMin(ultimo.hora_inicio, ultimo.duracao_minutos) : format(dataInicio, 'HH:mm')
+      const servicoId = servicos[0]?.id || ''
+      return [...prev, {
+        profissional_id: ultimo?.profissional_id || profissionais[0]?.id || '',
+        servico_id: servicoId,
+        hora_inicio: horaInicio,
+        duracao_minutos: duracaoServico(servicoId),
+      }]
+    })
   }
 
   function removeItem(idx: number) {
     setItens(prev => prev.filter((_, i) => i !== idx))
   }
 
-  function setItemField(idx: number, field: string, value: string) {
-    setItens(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item))
+  function setItemField(idx: number, field: keyof ItemAgendamento, value: string | number) {
+    setItens(prev => prev.map((item, i) => {
+      if (i !== idx) return item
+      const atualizado = { ...item, [field]: value }
+      // Ao trocar o serviço, prevalece a duração configurada no cadastro do serviço
+      if (field === 'servico_id') {
+        atualizado.duracao_minutos = duracaoServico(value as string)
+      }
+      return atualizado
+    }))
   }
 
   async function handleSalvar() {
@@ -90,8 +129,14 @@ export default function AgendamentoModal({
 
     setLoading(true); setErro('')
 
+    const itensComHorario = itens.map(i => ({
+      ...i,
+      inicio: new Date(`${form.data}T${i.hora_inicio}:00`),
+      fim: new Date(`${form.data}T${somaMin(i.hora_inicio, i.duracao_minutos)}:00`),
+    }))
+
     // Verificar bloqueios de agenda antes de salvar
-    const profIds = [...new Set(itens.map(i => i.profissional_id).filter(Boolean))]
+    const profIds = [...new Set(itensComHorario.map(i => i.profissional_id).filter(Boolean))]
     const { data: bloqueios } = await supabase
       .from('bloqueios_agenda')
       .select('*')
@@ -99,13 +144,12 @@ export default function AgendamentoModal({
       .eq('data', form.data)
 
     if (bloqueios && bloqueios.length > 0) {
-      const apInicio = new Date(`${form.data}T${form.hora_inicio}:00`)
-      const apFim = new Date(`${form.data}T${form.hora_fim}:00`)
-
       const dataFmt = format(new Date(`${form.data}T12:00:00`), "dd/MM/yyyy (EEEE)", { locale: ptBR })
       for (const b of bloqueios) {
         const prof = profissionais.find(p => p.id === b.profissional_id)
         const nome = prof?.nome || 'Profissional'
+        const itensDoProf = itensComHorario.filter(i => i.profissional_id === b.profissional_id)
+        if (itensDoProf.length === 0) continue
 
         if (!b.hora_inicio && !b.hora_fim) {
           setErro(`${nome} não está disponível em ${dataFmt} — agenda bloqueada o dia inteiro.`)
@@ -115,24 +159,34 @@ export default function AgendamentoModal({
 
         const blqInicio = new Date(`${form.data}T${b.hora_inicio}`)
         const blqFim = new Date(`${form.data}T${b.hora_fim}`)
-        if (apInicio < blqFim && apFim > blqInicio) {
-          const hIni = b.hora_inicio.slice(0, 5)
-          const hFim = b.hora_fim.slice(0, 5)
-          setErro(`${nome} não está disponível em ${dataFmt} das ${hIni} às ${hFim}.`)
-          setLoading(false)
-          return
+        for (const item of itensDoProf) {
+          if (item.inicio < blqFim && item.fim > blqInicio) {
+            const hIni = b.hora_inicio.slice(0, 5)
+            const hFim = b.hora_fim.slice(0, 5)
+            setErro(`${nome} não está disponível em ${dataFmt} das ${hIni} às ${hFim}.`)
+            setLoading(false)
+            return
+          }
         }
       }
     }
 
-    const inicio = new Date(`${form.data}T${form.hora_inicio}:00`)
-    const fim = new Date(`${form.data}T${form.hora_fim}:00`)
+    // O período do agendamento (para a grade da agenda) abrange do início do 1º item ao fim do último
+    const inicioGeral = new Date(Math.min(...itensComHorario.map(i => i.inicio.getTime())))
+    const fimGeral = new Date(Math.max(...itensComHorario.map(i => i.fim.getTime())))
+
+    const itensPayload = itensComHorario.map(i => ({
+      profissional_id: i.profissional_id,
+      servico_id: i.servico_id,
+      data_hora_inicio: i.inicio.toISOString(),
+      data_hora_fim: i.fim.toISOString(),
+    }))
 
     if (agendamento) {
       const { error } = await supabase.from('agendamentos').update({
         cliente_id: form.cliente_id,
-        data_hora_inicio: inicio.toISOString(),
-        data_hora_fim: fim.toISOString(),
+        data_hora_inicio: inicioGeral.toISOString(),
+        data_hora_fim: fimGeral.toISOString(),
         status: form.status,
         observacoes: form.observacoes || null,
       }).eq('id', agendamento.id)
@@ -141,14 +195,14 @@ export default function AgendamentoModal({
 
       await supabase.from('agendamento_itens').delete().eq('agendamento_id', agendamento.id)
       await supabase.from('agendamento_itens').insert(
-        itens.map(i => ({ agendamento_id: agendamento.id, ...i }))
+        itensPayload.map(i => ({ agendamento_id: agendamento.id, ...i }))
       )
     } else {
       const { data: novoAg, error } = await supabase.from('agendamentos').insert({
         cliente_id: form.cliente_id,
         unidade_id: unidadeId,
-        data_hora_inicio: inicio.toISOString(),
-        data_hora_fim: fim.toISOString(),
+        data_hora_inicio: inicioGeral.toISOString(),
+        data_hora_fim: fimGeral.toISOString(),
         status: form.status,
         observacoes: form.observacoes || null,
       }).select().single()
@@ -156,7 +210,7 @@ export default function AgendamentoModal({
       if (error || !novoAg) { setErro(error?.message || 'Erro ao salvar'); setLoading(false); return }
 
       await supabase.from('agendamento_itens').insert(
-        itens.map(i => ({ agendamento_id: novoAg.id, ...i }))
+        itensPayload.map(i => ({ agendamento_id: novoAg.id, ...i }))
       )
     }
 
@@ -173,7 +227,7 @@ export default function AgendamentoModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-900">{agendamento ? 'Editar agendamento' : 'Novo agendamento'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
@@ -190,62 +244,70 @@ export default function AgendamentoModal({
             </select>
           </div>
 
-          {/* Data e horários */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-1">
+          {/* Data e status */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Data</label>
               <input type="date" value={form.data} onChange={e => setField('data', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Início</label>
-              <input type="time" value={form.hora_inicio} onChange={e => setField('hora_inicio', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fim</label>
-              <input type="time" value={form.hora_fim} onChange={e => setField('hora_fim', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select value={form.status} onChange={e => setField('status', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600">
+                {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
             </div>
           </div>
 
-          {/* Status */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <select value={form.status} onChange={e => setField('status', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600">
-              {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </div>
-
-          {/* Itens: profissional + serviço */}
+          {/* Itens do agendamento: serviço + profissional + horário + duração */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700">Serviços</label>
+              <label className="text-sm font-medium text-gray-700">Itens do agendamento</label>
               <button onClick={addItem} className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 transition-colors">
                 <Plus className="w-3.5 h-3.5" /> Adicionar
               </button>
             </div>
+
+            <div className="grid grid-cols-[1fr_1fr_88px_110px_28px] gap-2 mb-1.5 px-0.5">
+              <span className="text-xs font-medium text-gray-500">Serviço</span>
+              <span className="text-xs font-medium text-gray-500">Profissional</span>
+              <span className="text-xs font-medium text-gray-500">Horário</span>
+              <span className="text-xs font-medium text-gray-500">Duração</span>
+              <span />
+            </div>
+
             <div className="space-y-2">
               {itens.map((item, idx) => (
-                <div key={idx} className="flex gap-2 items-start">
-                  <div className="flex-1 grid grid-cols-2 gap-2">
-                    <select value={item.profissional_id} onChange={e => setItemField(idx, 'profissional_id', e.target.value)}
-                      className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600">
-                      <option value="">Profissional</option>
-                      {profissionais.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                    </select>
-                    <select value={item.servico_id} onChange={e => setItemField(idx, 'servico_id', e.target.value)}
-                      className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600">
-                      <option value="">Serviço</option>
-                      {servicos.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                    </select>
-                  </div>
-                  {itens.length > 1 && (
-                    <button onClick={() => removeItem(idx)} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                <div key={idx} className="grid grid-cols-[1fr_1fr_88px_110px_28px] gap-2 items-center">
+                  <select value={item.servico_id} onChange={e => setItemField(idx, 'servico_id', e.target.value)}
+                    className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600">
+                    <option value="">Serviço</option>
+                    {servicos.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                  </select>
+
+                  <select value={item.profissional_id} onChange={e => setItemField(idx, 'profissional_id', e.target.value)}
+                    className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600">
+                    <option value="">Profissional</option>
+                    {profissionais.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                  </select>
+
+                  <input type="time" value={item.hora_inicio} onChange={e => setItemField(idx, 'hora_inicio', e.target.value)}
+                    className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600" />
+
+                  <select value={item.duracao_minutos} onChange={e => setItemField(idx, 'duracao_minutos', Number(e.target.value))}
+                    className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600">
+                    {!DURACOES_MIN.includes(item.duracao_minutos) && (
+                      <option value={item.duracao_minutos}>{fmtDuracao(item.duracao_minutos)}</option>
+                    )}
+                    {DURACOES_MIN.map(d => <option key={d} value={d}>{fmtDuracao(d)}</option>)}
+                  </select>
+
+                  {itens.length > 1 ? (
+                    <button onClick={() => removeItem(idx)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors justify-self-center">
                       <Trash2 className="w-4 h-4" />
                     </button>
-                  )}
+                  ) : <span />}
                 </div>
               ))}
             </div>
@@ -258,6 +320,11 @@ export default function AgendamentoModal({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 resize-none"
               placeholder="Observações sobre o agendamento..." />
           </div>
+
+          {/* Histórico de alterações — apenas admin */}
+          {agendamento && perfil === 'admin' && (
+            <HistoricoLog tabela="agendamento" registroId={agendamento.id} />
+          )}
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">

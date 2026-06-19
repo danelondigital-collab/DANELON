@@ -1,0 +1,3 @@
+ALTER TABLE agendamento_itens
+  ADD COLUMN IF NOT EXISTS data_hora_inicio TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS data_hora_fim TIMESTAMPTZ;

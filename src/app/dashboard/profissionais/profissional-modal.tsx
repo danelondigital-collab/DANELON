@@ -6,19 +6,21 @@ import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
 import type { Profissional, BloqueioAgenda, ComissaoProfissionalItem, ComissaoHistorico } from '@/types'
+import AtividadeProfissional from '@/components/ui/atividade-profissional'
 
 interface Props {
   profissional: Profissional | null
   unidadeId: string
+  perfil: string
   onClose: () => void
   onSalvo: (p: Profissional) => void
 }
 
-type Aba = 'cadastro' | 'endereco' | 'comissao' | 'historico' | 'configuracoes' | 'fechamento'
+type Aba = 'cadastro' | 'endereco' | 'comissao' | 'historico' | 'atividade' | 'configuracoes' | 'fechamento'
 
 const CORES = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4']
 
-export default function ProfissionalModal({ profissional, unidadeId, onClose, onSalvo }: Props) {
+export default function ProfissionalModal({ profissional, unidadeId, perfil, onClose, onSalvo }: Props) {
   const supabase = createClient()
   const [aba, setAba] = useState<Aba>('cadastro')
   const [loading, setLoading] = useState(false)
@@ -43,6 +45,10 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     comissao_padrao: profissional?.comissao_padrao?.toString() || '0',
     cor_agenda: profissional?.cor_agenda || '#6366f1',
     ativo: profissional?.ativo ?? true,
+    gerar_agenda: profissional?.gerar_agenda ?? true,
+    recebe_comissao: profissional?.recebe_comissao ?? true,
+    disponivel_agendamento_online: profissional?.disponivel_agendamento_online ?? false,
+    contratado_lei_salao_parceiro: profissional?.contratado_lei_salao_parceiro ?? false,
   })
 
   const [buscandoCep, setBuscandoCep] = useState(false)
@@ -327,6 +333,10 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
       comissao_padrao: parseFloat(form.comissao_padrao) || 0,
       cor_agenda: form.cor_agenda,
       ativo: form.ativo,
+      gerar_agenda: form.gerar_agenda,
+      recebe_comissao: form.recebe_comissao,
+      disponivel_agendamento_online: form.disponivel_agendamento_online,
+      contratado_lei_salao_parceiro: form.contratado_lei_salao_parceiro,
       unidade_id: unidadeId,
     }
 
@@ -349,6 +359,7 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
     ['historico', 'Histórico'],
     ['configuracoes', 'Configurações'],
     ['fechamento', 'Fechamento'],
+    ...(perfil === 'admin' ? [['atividade', 'Atividade'] as [Aba, string]] : []),
   ]
 
   return (
@@ -600,6 +611,16 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
               </div>
             )}
 
+            {aba === 'atividade' && (
+              <div className="space-y-4">
+                {!profissional ? (
+                  <p className="text-sm text-gray-400 italic">Salve o profissional primeiro para ver a atividade.</p>
+                ) : (
+                  <AtividadeProfissional profissionalId={profissional.id} />
+                )}
+              </div>
+            )}
+
             {aba === 'historico' && (
               <div className="space-y-4">
                 {!profissional ? (
@@ -745,7 +766,11 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
             {aba === 'configuracoes' && (
               <div className="space-y-1">
                 {[
-                  { field: 'ativo', label: 'Ativo', desc: 'Profissional inativa não aparece em agendamentos e comandas' },
+                  { field: 'ativo', label: 'Ativo', desc: 'Um profissional desativado não será listado para realizar agendamentos, comandas ou comissões.' },
+                  { field: 'disponivel_agendamento_online', label: 'Disponível para agendamento online', desc: 'Clientes podem escolher esse profissional para fazer agendamentos online.' },
+                  { field: 'gerar_agenda', label: 'Gerar agenda', desc: 'Caso esteja desativado não será gerada agenda para este profissional.' },
+                  { field: 'recebe_comissao', label: 'Recebe comissão', desc: 'Desmarque se o profissional não recebe comissão.' },
+                  { field: 'contratado_lei_salao_parceiro', label: 'Contratado pela Lei do Salão Parceiro', desc: 'Marque caso este profissional seja um parceiro contratado pela lei.' },
                 ].map(item => (
                   <div key={item.field} className="flex items-start justify-between py-3 border-b border-gray-100">
                     <div>
@@ -884,7 +909,7 @@ export default function ProfissionalModal({ profissional, unidadeId, onClose, on
           {erro && <p className="text-sm text-red-600">{erro}</p>}
           <div className="flex gap-3 ml-auto">
             <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
-            {aba !== 'fechamento' && aba !== 'historico' && (
+            {aba !== 'fechamento' && aba !== 'historico' && aba !== 'atividade' && (
               <button onClick={handleSalvar} disabled={loading}
                 className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors">
                 {loading ? 'Salvando...' : 'Salvar'}

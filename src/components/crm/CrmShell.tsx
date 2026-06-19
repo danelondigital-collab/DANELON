@@ -7,7 +7,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Users, BarChart3, TrendingUp, Settings,
   LogOut, ChevronDown, Building2, LayoutGrid, Menu, X,
-  Target, Truck, UserCog, Globe, Warehouse, Smartphone
+  Target, Truck, UserCog, Globe, Warehouse, Smartphone, History
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -29,6 +29,7 @@ const NAV = [
   { href: '/crm/estoque',       label: 'Estoque',        icon: Warehouse },
   { href: '/crm/desempenho',    label: 'Desempenho',     icon: TrendingUp },
   { href: '/crm/relatorios',    label: 'Relatórios',     icon: BarChart3 },
+  { href: '/crm/relatorios/logs', label: 'Logs',         icon: History },
   { href: '/crm/app-mobile',    label: 'App Mobile',     icon: Smartphone },
   { href: '/crm/configuracoes', label: 'Configurações',  icon: Settings },
 ]

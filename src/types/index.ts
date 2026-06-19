@@ -75,6 +75,10 @@ export interface Profissional {
   unidade_id: string
   unidade?: Unidade
   ativo: boolean
+  gerar_agenda: boolean
+  recebe_comissao: boolean
+  disponivel_agendamento_online: boolean
+  contratado_lei_salao_parceiro: boolean
   created_at: string
   updated_at: string
 }
@@ -123,6 +127,8 @@ export interface AgendamentoItem {
   profissional?: Profissional
   servico_id: string
   servico?: Servico
+  data_hora_inicio?: string
+  data_hora_fim?: string
   created_at: string
 }
 
@@ -254,4 +260,18 @@ export interface RelatorioComissao {
   total_valor_base: number
   total_comissao: number
   comandas_count: number
+}
+
+export interface LogAtividade {
+  id: string
+  tabela: 'comanda' | 'agendamento'
+  registro_id: string
+  acao: 'criar' | 'editar' | 'excluir'
+  usuario_id: string | null
+  usuario_nome: string | null
+  unidade_id: string | null
+  profissional_ids: string[]
+  cliente_nome: string | null
+  dados: unknown
+  created_at: string
 }

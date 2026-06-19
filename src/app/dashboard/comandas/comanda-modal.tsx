@@ -5,6 +5,7 @@ import { X, Plus, Trash2, Search, Scissors, ShoppingBag, Pencil, Wallet } from '
 import { createClient } from '@/lib/supabase/client'
 import type { Comanda, ComandaItem, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem } from '@/types'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
+import HistoricoLog from '@/components/ui/historico-log'
 
 interface Props {
   comanda: Comanda | null
@@ -14,6 +15,7 @@ interface Props {
   produtos: Produto[]
   comissoesProfissional: ComissaoProfissionalItem[]
   unidadeId: string
+  perfil: string
   onClose: () => void
   onSalva: (c: Comanda) => void
 }
@@ -26,7 +28,7 @@ const FORMAS_PAGAMENTO = [
   { value: 'misto', label: 'Misto' },
 ]
 
-export default function ComandaModal({ comanda: comandaInicial, profissionais, servicos, produtos, comissoesProfissional, unidadeId, onClose, onSalva }: Props) {
+export default function ComandaModal({ comanda: comandaInicial, profissionais, servicos, produtos, comissoesProfissional, unidadeId, perfil, onClose, onSalva }: Props) {
   const supabase = createClient()
   const isNova = !comandaInicial
 
@@ -46,6 +48,8 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [saldoCredito, setSaldoCredito] = useState(0)
   const [creditoAplicado, setCreditoAplicado] = useState(comandaInicial?.credito_utilizado || 0)
   const [valorRecebido, setValorRecebido] = useState('')
+  const [observacoes, setObservacoes] = useState(comandaInicial?.observacoes || '')
+  const [salvandoObs, setSalvandoObs] = useState(false)
 
   useEffect(() => {
     if (!clienteBusca.trim() || comanda?.id) { setClientesFiltrados([]); return }
@@ -278,6 +282,17 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     if (data) { onSalva(data as unknown as Comanda); onClose() }
   }
 
+  async function salvarObservacoes() {
+    if (isFechada) return
+    if (!comanda?.id && !observacoes.trim()) return
+    setSalvandoObs(true)
+    const comandaId = await garantirComanda()
+    if (comandaId) {
+      await supabase.from('comandas').update({ observacoes: observacoes || null }).eq('id', comandaId)
+    }
+    setSalvandoObs(false)
+  }
+
   async function handleCancelar() {
     if (!comanda?.id) { onClose(); return }
     if (!confirm('Cancelar esta comanda?')) return
@@ -442,6 +457,31 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                 </div>
               )}
             </div>
+
+            {/* Observações/descrição da comanda */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-gray-700">Observação</label>
+                {salvandoObs && <span className="text-xs text-gray-400">Salvando...</span>}
+              </div>
+              {isFechada ? (
+                <p className="text-sm text-gray-600">{observacoes || '—'}</p>
+              ) : (
+                <textarea
+                  value={observacoes}
+                  onChange={e => setObservacoes(e.target.value)}
+                  onBlur={salvarObservacoes}
+                  rows={2}
+                  placeholder="Anotações sobre esta comanda..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 resize-none"
+                />
+              )}
+            </div>
+
+            {/* Histórico de alterações — apenas admin */}
+            {comanda && perfil === 'admin' && (
+              <HistoricoLog tabela="comanda" registroId={comanda.id} />
+            )}
           </div>
 
           {/* Resumo lateral */}
