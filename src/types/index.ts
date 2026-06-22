@@ -207,6 +207,43 @@ export interface CreditoCliente {
   created_at: string
 }
 
+export type StatusPacote = 'aberto' | 'finalizado' | 'cancelado'
+
+export interface PacoteItem {
+  id: string
+  pacote_id: string
+  servico_id?: string
+  servico?: Servico
+  descricao: string
+  quantidade: number
+  valor_unitario: number
+  desconto: number
+  total: number
+  created_at: string
+}
+
+export interface Pacote {
+  id: string
+  numero: number
+  cliente_id: string
+  cliente?: Cliente
+  unidade_id: string
+  vendedor_id?: string
+  vendedor?: Profissional
+  status: StatusPacote
+  data: string
+  validade?: string
+  valor_total: number
+  desconto: number
+  credito_utilizado: number
+  cashback: number
+  valor_final: number
+  observacao?: string
+  itens?: PacoteItem[]
+  created_at: string
+  updated_at: string
+}
+
 export interface UsuarioUnidade {
   id: string
   usuario_id: string

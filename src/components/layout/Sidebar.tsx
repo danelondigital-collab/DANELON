@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Layers,
   Banknote,
+  Gift,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -33,6 +34,7 @@ const navItems = [
   { href: '/dashboard/produtos', label: 'Produtos', icon: Package, adminOnly: false },
   { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarDays, adminOnly: false },
   { href: '/dashboard/comandas', label: 'Comandas', icon: ClipboardList, adminOnly: false },
+  { href: '/dashboard/pacotes', label: 'Pacotes', icon: Gift, adminOnly: false },
   { href: '/dashboard/comissoes', label: 'Comissões', icon: Banknote, adminOnly: false },
   { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3, adminOnly: true },
   { href: '/dashboard/usuarios', label: 'Usuários', icon: ShieldCheck, adminOnly: true },
