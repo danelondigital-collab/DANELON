@@ -11,10 +11,16 @@ interface Props { produtos: Produto[]; unidadeId: string }
 export default function ProdutosClient({ produtos: initial, unidadeId }: Props) {
   const [produtos, setProdutos] = useState(initial)
   const [busca, setBusca] = useState('')
+  const [aba, setAba] = useState<'ativos' | 'inativos'>('ativos')
   const [modalAberto, setModalAberto] = useState(false)
   const [selecionado, setSelecionado] = useState<Produto | null>(null)
 
-  const filtrados = produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()) || p.marca?.toLowerCase().includes(busca.toLowerCase()))
+  const ativos = produtos.filter(p => p.ativo)
+  const inativos = produtos.filter(p => !p.ativo)
+
+  const filtrados = (aba === 'ativos' ? ativos : inativos).filter(p =>
+    p.nome.toLowerCase().includes(busca.toLowerCase()) || p.marca?.toLowerCase().includes(busca.toLowerCase())
+  )
 
   function onSalvo(p: Produto) {
     setProdutos(prev => {
@@ -41,6 +47,28 @@ export default function ProdutosClient({ produtos: initial, unidadeId }: Props) 
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200">
+        <div className="flex items-center gap-6 px-4 pt-3 border-b border-gray-100">
+          <button
+            onClick={() => setAba('ativos')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              aba === 'ativos'
+                ? 'border-amber-700 text-amber-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Ativos ({ativos.length})
+          </button>
+          <button
+            onClick={() => setAba('inativos')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              aba === 'inativos'
+                ? 'border-amber-700 text-amber-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Inativos ({inativos.length})
+          </button>
+        </div>
         <div className="p-4 border-b border-gray-100">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -52,7 +80,9 @@ export default function ProdutosClient({ produtos: initial, unidadeId }: Props) 
         {filtrados.length === 0 ? (
           <div className="text-center py-12">
             <Package className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm">{busca ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}</p>
+            <p className="text-gray-500 text-sm">
+              {busca ? 'Nenhum produto encontrado' : aba === 'ativos' ? 'Nenhum produto ativo' : 'Nenhum produto inativo'}
+            </p>
           </div>
         ) : (
           <>
