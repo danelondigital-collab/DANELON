@@ -244,6 +244,27 @@ export interface Pacote {
   updated_at: string
 }
 
+export interface PacotePredefinidoItem {
+  id: string
+  pacote_predefinido_id: string
+  servico_id?: string
+  servico?: Servico
+  descricao: string
+  quantidade: number
+  valor_unitario: number
+  created_at: string
+}
+
+export interface PacotePredefinido {
+  id: string
+  unidade_id: string
+  nome: string
+  ativo: boolean
+  itens?: PacotePredefinidoItem[]
+  created_at: string
+  updated_at: string
+}
+
 export interface UsuarioUnidade {
   id: string
   usuario_id: string

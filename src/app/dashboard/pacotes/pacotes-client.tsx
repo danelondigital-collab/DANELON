@@ -1,16 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Search, Gift } from 'lucide-react'
-import type { Pacote, Cliente, Servico } from '@/types'
+import { Plus, Search, Gift, Settings } from 'lucide-react'
+import type { Pacote, Cliente, Servico, PacotePredefinido } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import PacoteModal from './pacote-modal'
+import PacotesPredefinidosModal from './pacotes-predefinidos-modal'
 
 interface Props {
   pacotes: Pacote[]
   clientes: Cliente[]
   profissionais: { id: string; nome: string }[]
   servicos: Servico[]
+  pacotesPredefinidos: PacotePredefinido[]
   unidadeId: string
 }
 
@@ -29,10 +31,12 @@ function disponibilidade(p: Pacote): { label: string; cor: string } | null {
     : { label: 'Ativo', cor: 'bg-green-100 text-green-700' }
 }
 
-export default function PacotesClient({ pacotes: initial, clientes, profissionais, servicos, unidadeId }: Props) {
+export default function PacotesClient({ pacotes: initial, clientes, profissionais, servicos, pacotesPredefinidos: predefinidosInicial, unidadeId }: Props) {
   const [pacotes, setPacotes] = useState(initial)
+  const [pacotesPredefinidos, setPacotesPredefinidos] = useState(predefinidosInicial)
   const [busca, setBusca] = useState('')
   const [modalAberto, setModalAberto] = useState(false)
+  const [modalPredefinidosAberto, setModalPredefinidosAberto] = useState(false)
   const [selecionado, setSelecionado] = useState<Pacote | null>(null)
 
   const filtrados = pacotes.filter(p =>
@@ -58,12 +62,20 @@ export default function PacotesClient({ pacotes: initial, clientes, profissionai
           <h1 className="text-xl font-bold text-gray-900">Pacotes</h1>
           <p className="text-sm text-gray-500 mt-0.5">{pacotes.length} pacote{pacotes.length !== 1 ? 's' : ''} cadastrado{pacotes.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onClick={abrirNovo}
-          className="flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Novo pacote</span>
-          <span className="sm:hidden">Novo</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={abrirNovo}
+            className="flex items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+            <Gift className="w-4 h-4" />
+            <span className="hidden sm:inline">Nova comanda de pacote</span>
+            <span className="sm:hidden">Nova comanda</span>
+          </button>
+          <button onClick={() => setModalPredefinidosAberto(true)}
+            className="flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+            <Settings className="w-4 h-4" />
+            <span className="hidden sm:inline">Cadastrar pacote</span>
+            <span className="sm:hidden">Cadastrar</span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200">
@@ -80,7 +92,7 @@ export default function PacotesClient({ pacotes: initial, clientes, profissionai
             <Gift className="w-10 h-10 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 text-sm">{busca ? 'Nenhum pacote encontrado' : 'Nenhum pacote cadastrado'}</p>
             {!busca && (
-              <button onClick={abrirNovo} className="mt-3 text-sm text-amber-700 hover:underline">Criar primeiro pacote</button>
+              <button onClick={abrirNovo} className="mt-3 text-sm text-amber-700 hover:underline">Criar primeira comanda de pacote</button>
             )}
           </div>
         ) : (
@@ -162,9 +174,20 @@ export default function PacotesClient({ pacotes: initial, clientes, profissionai
           clientes={clientes}
           profissionais={profissionais}
           servicos={servicos}
+          pacotesPredefinidos={pacotesPredefinidos}
           unidadeId={unidadeId}
           onClose={() => setModalAberto(false)}
           onSalvo={onSalvo}
+        />
+      )}
+
+      {modalPredefinidosAberto && (
+        <PacotesPredefinidosModal
+          pacotesPredefinidos={pacotesPredefinidos}
+          servicos={servicos}
+          unidadeId={unidadeId}
+          onClose={() => setModalPredefinidosAberto(false)}
+          onChange={setPacotesPredefinidos}
         />
       )}
     </div>

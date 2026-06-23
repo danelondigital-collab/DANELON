@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, Plus, Trash2, Scissors } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { Pacote, PacoteItem, Cliente, Servico } from '@/types'
+import type { Pacote, Cliente, Servico, PacotePredefinido } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   clientes: Cliente[]
   profissionais: { id: string; nome: string }[]
   servicos: Servico[]
+  pacotesPredefinidos: PacotePredefinido[]
   unidadeId: string
   onClose: () => void
   onSalvo: (p: Pacote) => void
@@ -32,7 +33,7 @@ function hoje() {
   return new Date().toISOString().slice(0, 10)
 }
 
-export default function PacoteModal({ pacote, clientes, profissionais, servicos, unidadeId, onClose, onSalvo }: Props) {
+export default function PacoteModal({ pacote, clientes, profissionais, servicos, pacotesPredefinidos, unidadeId, onClose, onSalvo }: Props) {
   const supabase = createClient()
   const isNovo = !pacote
   const travado = pacote?.status === 'finalizado' || pacote?.status === 'cancelado'
@@ -43,6 +44,7 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
   const [data, setData] = useState(pacote?.data || hoje())
   const [validade, setValidade] = useState(pacote?.validade || '')
   const [vendedorId, setVendedorId] = useState(pacote?.vendedor_id || '')
+  const [predefinidoId, setPredefinidoId] = useState('')
   const [itens, setItens] = useState<ItemForm[]>(
     pacote?.itens?.length
       ? pacote.itens.map(i => ({ servico_id: i.servico_id || '', descricao: i.descricao, quantidade: i.quantidade, valor_unitario: i.valor_unitario, desconto: i.desconto }))
@@ -93,6 +95,20 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
       descricao: servico?.nome || '',
       valor_unitario: servico?.preco || 0,
     })
+  }
+
+  function aplicarPredefinido(id: string) {
+    setPredefinidoId(id)
+    if (!id) return
+    const predefinido = pacotesPredefinidos.find(p => p.id === id)
+    if (!predefinido?.itens?.length) return
+    setItens(predefinido.itens.map(i => ({
+      servico_id: i.servico_id || '',
+      descricao: i.descricao,
+      quantidade: i.quantidade,
+      valor_unitario: i.valor_unitario,
+      desconto: 0,
+    })))
   }
 
   function adicionarItem() {
@@ -191,7 +207,7 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 flex flex-col max-h-[92vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="font-semibold text-gray-900">
-            {isNovo ? 'Novo pacote' : `Pacote #${pacote?.numero}`}
+            {isNovo ? 'Nova comanda de pacote' : `Comanda de pacote #${pacote?.numero}`}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
@@ -231,6 +247,14 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pacote Predefinido</label>
+              <select value={predefinidoId} disabled={travado} onChange={e => aplicarPredefinido(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 bg-white disabled:bg-gray-50">
+                <option value="">Selecione um pacote predefinido</option>
+                {pacotesPredefinidos.filter(p => p.ativo).map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+              </select>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Vendedor</label>
               <select value={vendedorId} disabled={travado} onChange={e => setVendedorId(e.target.value)}

@@ -10,7 +10,7 @@ export default async function PacotesPage() {
   const cookieStore = await cookies()
   const unidadeId = cookieStore.get('unidade_id')?.value!
 
-  const [{ data: pacotes }, { data: clientes }, { data: profissionais }, { data: servicos }] = await Promise.all([
+  const [{ data: pacotes }, { data: clientes }, { data: profissionais }, { data: servicos }, { data: pacotesPredefinidos }] = await Promise.all([
     supabase.from('pacotes')
       .select('*, cliente:clientes(id, nome, telefone), vendedor:profissionais(id, nome)')
       .eq('unidade_id', unidadeId)
@@ -19,6 +19,10 @@ export default async function PacotesPage() {
     supabase.from('clientes').select('id, nome, telefone').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
     supabase.from('profissionais').select('id, nome').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
     supabase.from('servicos').select('*').eq('ativo', true).order('nome'),
+    supabase.from('pacotes_predefinidos')
+      .select('*, itens:pacotes_predefinidos_itens(*)')
+      .eq('unidade_id', unidadeId)
+      .order('nome'),
   ])
 
   return (
@@ -28,6 +32,7 @@ export default async function PacotesPage() {
         clientes={(clientes as unknown as import('@/types').Cliente[]) || []}
         profissionais={profissionais || []}
         servicos={servicos || []}
+        pacotesPredefinidos={(pacotesPredefinidos as unknown as import('@/types').PacotePredefinido[]) || []}
         unidadeId={unidadeId}
       />
     </Suspense>
