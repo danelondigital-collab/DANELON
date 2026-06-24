@@ -81,6 +81,10 @@ export default function ComandasClient({ comandas: initial, clientes, profission
     setModalAberto(false)
   }
 
+  function onExcluida(id: string) {
+    setComandas(prev => prev.filter(c => c.id !== id))
+  }
+
   return (
     <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
@@ -213,6 +217,7 @@ export default function ComandasClient({ comandas: initial, clientes, profission
           perfil={perfil}
           onClose={onFechada}
           onSalva={onSalva}
+          onExcluida={onExcluida}
         />
       )}
 

@@ -55,6 +55,10 @@ export default function PacotesClient({ pacotes: initial, clientes, profissionai
     })
   }
 
+  function onExcluido(id: string) {
+    setPacotes(prev => prev.filter(p => p.id !== id))
+  }
+
   return (
     <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
@@ -178,6 +182,7 @@ export default function PacotesClient({ pacotes: initial, clientes, profissionai
           unidadeId={unidadeId}
           onClose={() => setModalAberto(false)}
           onSalvo={onSalvo}
+          onExcluido={onExcluido}
         />
       )}
 

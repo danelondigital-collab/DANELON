@@ -15,6 +15,7 @@ interface Props {
   unidadeId: string
   onClose: () => void
   onSalvo: (p: Pacote) => void
+  onExcluido: (id: string) => void
 }
 
 interface ItemForm {
@@ -41,7 +42,7 @@ const FORMAS_PAGAMENTO = [
   { value: 'misto', label: 'Misto' },
 ]
 
-export default function PacoteModal({ pacote, clientes, profissionais, servicos, pacotesPredefinidos, unidadeId, onClose, onSalvo }: Props) {
+export default function PacoteModal({ pacote, clientes, profissionais, servicos, pacotesPredefinidos, unidadeId, onClose, onSalvo, onExcluido }: Props) {
   const supabase = createClient()
   const isNovo = !pacote
   const travado = pacote?.status === 'finalizado' || pacote?.status === 'cancelado'
@@ -67,6 +68,7 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
   const [salvando, setSalvando] = useState(false)
   const [faturando, setFaturando] = useState(false)
   const [erro, setErro] = useState('')
+  const [excluindo, setExcluindo] = useState(false)
 
   const clientesFiltrados = clienteBusca.trim() && !clienteId
     ? clientes.filter(c => c.nome.toLowerCase().includes(clienteBusca.toLowerCase())).slice(0, 20)
@@ -210,6 +212,24 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
 
     setFaturando(false)
     onSalvo(salvo)
+    onClose()
+  }
+
+  async function handleExcluir() {
+    if (!pacote?.id) return
+    if (!confirm(`Excluir o pacote #${pacote.numero}? Essa ação não pode ser desfeita.`)) return
+    setExcluindo(true)
+    const { error } = await supabase.from('pacotes').delete().eq('id', pacote.id)
+    setExcluindo(false)
+    if (error) {
+      alert(
+        error.code === '23503'
+          ? 'Não é possível excluir: este pacote já tem itens usados em comandas.'
+          : error.message
+      )
+      return
+    }
+    onExcluido(pacote.id)
     onClose()
   }
 
@@ -394,20 +414,28 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
           {erro && <p className="text-sm text-red-600">{erro}</p>}
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
-          {!travado && (
-            <>
-              <button onClick={handleSalvar} disabled={salvando || faturando}
-                className="px-4 py-2 border border-amber-700 text-amber-700 hover:bg-amber-50 disabled:opacity-50 text-sm font-medium rounded-lg transition-colors">
-                {salvando ? 'Salvando...' : 'Salvar'}
-              </button>
-              <button onClick={handleFaturar} disabled={salvando || faturando}
-                className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors">
-                {faturando ? 'Faturando...' : 'Faturar'}
-              </button>
-            </>
-          )}
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between flex-shrink-0">
+          {pacote?.id ? (
+            <button onClick={handleExcluir} disabled={excluindo}
+              className="px-4 py-2 text-sm text-red-600 hover:text-red-700 disabled:opacity-50 font-medium">
+              {excluindo ? 'Excluindo...' : 'Excluir pacote'}
+            </button>
+          ) : <span />}
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
+            {!travado && (
+              <>
+                <button onClick={handleSalvar} disabled={salvando || faturando}
+                  className="px-4 py-2 border border-amber-700 text-amber-700 hover:bg-amber-50 disabled:opacity-50 text-sm font-medium rounded-lg transition-colors">
+                  {salvando ? 'Salvando...' : 'Salvar'}
+                </button>
+                <button onClick={handleFaturar} disabled={salvando || faturando}
+                  className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors">
+                  {faturando ? 'Faturando...' : 'Faturar'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

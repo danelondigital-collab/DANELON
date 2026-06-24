@@ -18,6 +18,7 @@ interface Props {
   perfil: string
   onClose: () => void
   onSalva: (c: Comanda) => void
+  onExcluida: (id: string) => void
 }
 
 const FORMAS_PAGAMENTO = [
@@ -28,7 +29,7 @@ const FORMAS_PAGAMENTO = [
   { value: 'misto', label: 'Misto' },
 ]
 
-export default function ComandaModal({ comanda: comandaInicial, profissionais, servicos, produtos, comissoesProfissional, unidadeId, perfil, onClose, onSalva }: Props) {
+export default function ComandaModal({ comanda: comandaInicial, profissionais, servicos, produtos, comissoesProfissional, unidadeId, perfil, onClose, onSalva, onExcluida }: Props) {
   const supabase = createClient()
   const isNova = !comandaInicial
 
@@ -42,6 +43,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [adicionandoItem, setAdicionandoItem] = useState(false)
   const [itemEditando, setItemEditando] = useState<ComandaItem | null>(null)
   const [fechando, setFechando] = useState(false)
+  const [excluindo, setExcluindo] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [clientesFiltrados, setClientesFiltrados] = useState<Cliente[]>([])
   const [buscandoCliente, setBuscandoCliente] = useState(false)
@@ -400,6 +402,17 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     const { data } = await supabase.from('comandas').update({ status: 'cancelada' }).eq('id', comanda.id)
       .select('*, cliente:clientes(id, nome, telefone, data_nascimento)').single()
     if (data) onSalva(data as unknown as Comanda)
+    onClose()
+  }
+
+  async function handleExcluir() {
+    if (!comanda?.id) { onClose(); return }
+    if (!confirm('Excluir esta comanda e todos os itens dela? Essa ação não pode ser desfeita.')) return
+    setExcluindo(true)
+    const { error } = await supabase.from('comandas').delete().eq('id', comanda.id)
+    setExcluindo(false)
+    if (error) { alert(error.message); return }
+    onExcluida(comanda.id)
     onClose()
   }
 
@@ -783,17 +796,25 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
               )}
             </div>
 
-            {!isFechada && (
-              <div className="space-y-2 mt-6">
-                <button onClick={handleFechar} disabled={fechando}
-                  className="w-full bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium py-2.5 rounded-lg transition-colors">
-                  {fechando ? 'Fechando...' : 'Fechar comanda'}
+            <div className="space-y-2 mt-6">
+              {!isFechada && (
+                <>
+                  <button onClick={handleFechar} disabled={fechando}
+                    className="w-full bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium py-2.5 rounded-lg transition-colors">
+                    {fechando ? 'Fechando...' : 'Fechar comanda'}
+                  </button>
+                  <button onClick={handleCancelar} className="w-full text-sm text-red-500 hover:text-red-700 py-2 transition-colors">
+                    Cancelar comanda
+                  </button>
+                </>
+              )}
+              {comanda?.id && (
+                <button onClick={handleExcluir} disabled={excluindo}
+                  className="w-full text-sm text-red-600 hover:text-red-800 disabled:opacity-50 py-2 transition-colors font-medium">
+                  {excluindo ? 'Excluindo...' : 'Excluir comanda'}
                 </button>
-                <button onClick={handleCancelar} className="w-full text-sm text-red-500 hover:text-red-700 py-2 transition-colors">
-                  Cancelar comanda
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
