@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, Plus, Trash2, Search, Scissors, ShoppingBag, Pencil, Wallet } from 'lucide-react'
+import { X, Plus, Trash2, Search, Scissors, ShoppingBag, Pencil, Wallet, Gift, MessageCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { Comanda, ComandaItem, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem } from '@/types'
-import { formatCurrency, formatDateTime } from '@/lib/utils'
+import type { Comanda, ComandaItem, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem, Pacote } from '@/types'
+import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
 import HistoricoLog from '@/components/ui/historico-log'
 
 interface Props {
@@ -50,6 +50,10 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [valorRecebido, setValorRecebido] = useState('')
   const [observacoes, setObservacoes] = useState(comandaInicial?.observacoes || '')
   const [salvandoObs, setSalvandoObs] = useState(false)
+  const [pacotesCliente, setPacotesCliente] = useState<Pacote[]>([])
+  const [usandoItemPacote, setUsandoItemPacote] = useState<string | null>(null)
+  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(comandaInicial?.cliente || null)
+  const [comandasAbertasCount, setComandasAbertasCount] = useState(0)
 
   useEffect(() => {
     if (!clienteBusca.trim() || comanda?.id) { setClientesFiltrados([]); return }
@@ -57,7 +61,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
       setBuscandoCliente(true)
       const { data } = await supabase
         .from('clientes')
-        .select('id, nome, telefone')
+        .select('id, nome, telefone, data_nascimento')
         .eq('unidade_id', unidadeId)
         .eq('ativo', true)
         .or(`nome.ilike.%${clienteBusca.trim()}%,telefone.ilike.%${clienteBusca.trim()}%`)
@@ -91,7 +95,14 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
   useEffect(() => {
     const cId = comanda?.cliente_id || clienteId
-    if (cId) buscarSaldoCredito(cId)
+    if (cId) {
+      buscarSaldoCredito(cId)
+      buscarPacotesCliente(cId)
+      buscarComandasAbertas(cId)
+    } else {
+      setPacotesCliente([])
+      setComandasAbertasCount(0)
+    }
   }, [comanda?.cliente_id, clienteId])
 
   const totalBruto = itens.reduce((s, i) => s + i.subtotal, 0)
@@ -100,6 +111,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const valorRecebidoNum = parseFloat(valorRecebido) || 0
   const creditoGerado = valorRecebidoNum > totalFinal ? parseFloat((valorRecebidoNum - totalFinal).toFixed(2)) : 0
   const isFechada = comanda?.status !== 'aberta' && comanda?.status !== undefined
+  const clienteExibido = comanda?.cliente || clienteSelecionado
 
   async function buscarSaldoCredito(cId: string) {
     const { data } = await supabase
@@ -111,6 +123,57 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     setSaldoCredito(Math.max(0, parseFloat(saldo.toFixed(2))))
   }
 
+  async function buscarPacotesCliente(cId: string) {
+    const hoje = new Date().toISOString().slice(0, 10)
+    const { data } = await supabase
+      .from('pacotes')
+      .select('*, itens:pacote_itens(*, servico:servicos(id, nome, preco))')
+      .eq('cliente_id', cId)
+      .eq('status', 'finalizado')
+      .or(`validade.is.null,validade.gte.${hoje}`)
+      .order('numero', { ascending: false })
+    setPacotesCliente((data as unknown as Pacote[]) || [])
+  }
+
+  async function buscarComandasAbertas(cId: string) {
+    const { count } = await supabase
+      .from('comandas')
+      .select('id', { count: 'exact', head: true })
+      .eq('cliente_id', cId)
+      .eq('status', 'aberta')
+    setComandasAbertasCount(count || 0)
+  }
+
+  async function usarItemPacote(pacote: Pacote, item: NonNullable<Pacote['itens']>[number]) {
+    const comandaId = await garantirComanda()
+    if (!comandaId) return
+    setUsandoItemPacote(item.id)
+
+    const { data: novoItem, error } = await supabase.from('comanda_itens').insert({
+      comanda_id: comandaId,
+      tipo: 'servico',
+      servico_id: item.servico_id,
+      quantidade: 1,
+      preco_unitario: 0,
+      desconto_percentual: 0,
+      subtotal: 0,
+      pacote_item_id: item.id,
+    }).select().single()
+
+    if (error || !novoItem) { alert(error?.message || 'Erro ao usar item do pacote.'); setUsandoItemPacote(null); return }
+
+    await supabase.from('pacote_itens').update({ quantidade_usada: item.quantidade_usada + 1 }).eq('id', item.id)
+
+    setPacotesCliente(prev => prev.map(p => p.id !== pacote.id ? p : {
+      ...p,
+      itens: p.itens?.map(i => i.id === item.id ? { ...i, quantidade_usada: i.quantidade_usada + 1 } : i),
+    }))
+
+    await atualizarTotaisDb(comandaId)
+    await buscarItens(comandaId)
+    setUsandoItemPacote(null)
+  }
+
   async function garantirComanda(): Promise<string | null> {
     if (comanda?.id) return comanda.id
     if (!clienteId) { alert('Selecione o cliente antes de adicionar itens.'); return null }
@@ -119,7 +182,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     const { data, error } = await supabase
       .from('comandas')
       .insert({ cliente_id: clienteId, unidade_id: unidadeId, status: 'aberta', valor_total: 0, desconto: 0, valor_final: 0 })
-      .select('*, cliente:clientes(id, nome, telefone)')
+      .select('*, cliente:clientes(id, nome, telefone, data_nascimento)')
       .single()
     setSalvando(false)
 
@@ -224,7 +287,23 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
   async function removerItem(itemId: string) {
     if (!comanda?.id) return
+    const item = itens.find(i => i.id === itemId)
     await supabase.from('comanda_itens').delete().eq('id', itemId)
+
+    if (item?.pacote_item_id) {
+      const pacoteItemId = item.pacote_item_id
+      const pacote = pacotesCliente.find(p => p.itens?.some(i => i.id === pacoteItemId))
+      const pacoteItem = pacote?.itens?.find(i => i.id === pacoteItemId)
+      if (pacoteItem) {
+        const novaQtdUsada = Math.max(0, pacoteItem.quantidade_usada - item.quantidade)
+        await supabase.from('pacote_itens').update({ quantidade_usada: novaQtdUsada }).eq('id', pacoteItemId)
+        setPacotesCliente(prev => prev.map(p => p.id !== pacote!.id ? p : {
+          ...p,
+          itens: p.itens?.map(i => i.id === pacoteItemId ? { ...i, quantidade_usada: novaQtdUsada } : i),
+        }))
+      }
+    }
+
     await atualizarTotaisDb(comanda.id)
     buscarItens(comanda.id)
   }
@@ -256,7 +335,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
         forma_pagamento: formaPagamento,
       })
       .eq('id', comanda.id)
-      .select('*, cliente:clientes(id, nome, telefone)').single()
+      .select('*, cliente:clientes(id, nome, telefone, data_nascimento)').single()
 
     if (creditoAplicado > 0) {
       await supabase.from('creditos_clientes').insert({
@@ -297,14 +376,14 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     if (!comanda?.id) { onClose(); return }
     if (!confirm('Cancelar esta comanda?')) return
     const { data } = await supabase.from('comandas').update({ status: 'cancelada' }).eq('id', comanda.id)
-      .select('*, cliente:clientes(id, nome, telefone)').single()
+      .select('*, cliente:clientes(id, nome, telefone, data_nascimento)').single()
     if (data) onSalva(data as unknown as Comanda)
     onClose()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 flex flex-col max-h-[92vh]">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-6xl mx-4 flex flex-col max-h-[92vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
@@ -325,6 +404,83 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
         </div>
 
         <div className="flex flex-1 overflow-hidden min-h-0">
+          {/* Painel da cliente */}
+          {clienteExibido && (
+            <div className="w-64 flex-shrink-0 border-r border-gray-100 p-5 overflow-y-auto space-y-5">
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-full bg-gray-100 mx-auto flex items-center justify-center text-xl font-semibold text-gray-400">
+                  {clienteExibido.nome.charAt(0).toUpperCase()}
+                </div>
+                <p className="text-sm font-semibold text-gray-900 mt-2">{clienteExibido.nome}</p>
+                {clienteExibido.telefone && <p className="text-xs text-gray-500">{clienteExibido.telefone}</p>}
+                {clienteExibido.telefone && (
+                  <a
+                    href={`https://wa.me/55${clienteExibido.telefone.replace(/\D/g, '')}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
+                  >
+                    <MessageCircle className="w-3 h-3" /> Conversar
+                  </a>
+                )}
+              </div>
+
+              <div className="space-y-2.5 border-t border-gray-100 pt-4">
+                <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <Gift className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  <span>{clienteExibido.data_nascimento ? `Aniversário: ${formatDate(clienteExibido.data_nascimento)}` : 'Aniversário não definido'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <Wallet className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  <span>{formatCurrency(saldoCredito)} em crédito</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <ShoppingBag className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  <span>{comandasAbertasCount} comanda{comandasAbertasCount !== 1 ? 's' : ''} em aberto</span>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-700 mb-2">Pacotes</p>
+                {pacotesCliente.length === 0 ? (
+                  <p className="text-xs text-gray-400">Não há pacotes disponíveis</p>
+                ) : (
+                  <div className="space-y-2">
+                    {pacotesCliente.map(pacote => {
+                      const itensComSaldo = (pacote.itens || []).filter(i => i.quantidade_usada < i.quantidade)
+                      if (itensComSaldo.length === 0) return null
+                      return (
+                        <div key={pacote.id} className="bg-amber-50 border border-amber-100 rounded-lg p-2.5">
+                          <p className="text-xs font-medium text-amber-800 mb-1.5">
+                            Pacote #{pacote.numero}{pacote.validade ? ` · até ${formatDate(pacote.validade)}` : ''}
+                          </p>
+                          <div className="space-y-1.5">
+                            {itensComSaldo.map(item => (
+                              <div key={item.id} className="flex items-center justify-between gap-1.5">
+                                <span className="text-xs text-gray-600 leading-tight">
+                                  {item.descricao}
+                                  <span className="text-gray-400"> ({item.quantidade - item.quantidade_usada}/{item.quantidade})</span>
+                                </span>
+                                {!isFechada && (
+                                  <button
+                                    onClick={() => usarItemPacote(pacote, item)}
+                                    disabled={usandoItemPacote === item.id}
+                                    className="flex-shrink-0 text-xs font-medium text-amber-700 hover:text-amber-900 disabled:opacity-50 hover:underline"
+                                  >
+                                    {usandoItemPacote === item.id ? '...' : 'Usar'}
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Área principal */}
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
 
@@ -342,7 +498,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                     <input type="text"
                       placeholder="Buscar cliente pelo nome ou telefone..."
                       value={clienteBusca}
-                      onChange={e => { setClienteBusca(e.target.value); setClienteId(''); setMostrarClientes(true) }}
+                      onChange={e => { setClienteBusca(e.target.value); setClienteId(''); setClienteSelecionado(null); setMostrarClientes(true) }}
                       onFocus={() => setMostrarClientes(true)}
                       disabled={!!comanda?.id}
                       className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 disabled:bg-gray-50 disabled:text-gray-600"
@@ -355,7 +511,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                           <p className="px-4 py-3 text-sm text-gray-500">Nenhum cliente encontrado</p>
                         ) : clientesFiltrados.map(c => (
                           <button key={c.id}
-                            onClick={() => { setClienteId(c.id); setClienteBusca(c.nome); setMostrarClientes(false) }}
+                            onClick={() => { setClienteId(c.id); setClienteBusca(c.nome); setClienteSelecionado(c); setMostrarClientes(false) }}
                             className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors border-b border-gray-50 last:border-0">
                             <p className="text-sm font-medium text-gray-900">{c.nome}</p>
                             {c.telefone && <p className="text-xs text-gray-500">{c.telefone}</p>}
@@ -415,6 +571,11 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                                   {item.tipo === 'servico' ? 'S' : 'P'}
                                 </span>
                                 <span className="text-sm text-gray-900">{nome}</span>
+                                {item.pacote_item_id && (
+                                  <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium bg-green-100 text-green-700 flex-shrink-0">
+                                    <Gift className="w-3 h-3" /> Pacote
+                                  </span>
+                                )}
                               </div>
                             </td>
                             <td className="px-3 py-3">

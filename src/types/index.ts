@@ -171,6 +171,7 @@ export interface ComandaItem {
   preco_unitario: number
   desconto_percentual: number
   subtotal: number
+  pacote_item_id?: string
   profissionais?: ComandaItemProfissional[]
   created_at: string
 }
@@ -216,6 +217,7 @@ export interface PacoteItem {
   servico?: Servico
   descricao: string
   quantidade: number
+  quantidade_usada: number
   valor_unitario: number
   desconto: number
   total: number

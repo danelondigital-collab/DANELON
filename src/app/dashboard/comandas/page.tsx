@@ -26,15 +26,15 @@ export default async function ComandasPage({ searchParams }: { searchParams: Pro
   const [{ data: comandas }, { data: clientes }, { data: profissionais }, { data: servicos }, { data: produtos }, { data: comissoesProfissional }] = await Promise.all([
     numeroFormatado
       ? supabase.from('comandas')
-          .select('*, cliente:clientes(id, nome, telefone)')
+          .select('*, cliente:clientes(id, nome, telefone, data_nascimento)')
           .eq('unidade_id', unidadeId)
           .eq('numero', numeroFormatado)
       : supabase.from('comandas')
-          .select('*, cliente:clientes(id, nome, telefone)')
+          .select('*, cliente:clientes(id, nome, telefone, data_nascimento)')
           .eq('unidade_id', unidadeId)
           .order('created_at', { ascending: false })
           .limit(100),
-    supabase.from('clientes').select('id, nome, telefone').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
+    supabase.from('clientes').select('id, nome, telefone, data_nascimento').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
     supabase.from('profissionais').select('*').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
     supabase.from('servicos').select('*').eq('ativo', true).order('nome'),
     supabase.from('produtos').select('*').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
