@@ -33,6 +33,14 @@ function hoje() {
   return new Date().toISOString().slice(0, 10)
 }
 
+const FORMAS_PAGAMENTO = [
+  { value: 'dinheiro', label: 'Dinheiro' },
+  { value: 'cartao_debito', label: 'Cartão Débito' },
+  { value: 'cartao_credito', label: 'Cartão Crédito' },
+  { value: 'pix', label: 'Pix' },
+  { value: 'misto', label: 'Misto' },
+]
+
 export default function PacoteModal({ pacote, clientes, profissionais, servicos, pacotesPredefinidos, unidadeId, onClose, onSalvo }: Props) {
   const supabase = createClient()
   const isNovo = !pacote
@@ -52,6 +60,7 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
   )
   const [descontoGeral, setDescontoGeral] = useState(pacote?.desconto?.toString() || '0')
   const [cashback, setCashback] = useState(pacote?.cashback?.toString() || '0')
+  const [formaPagamento, setFormaPagamento] = useState(pacote?.forma_pagamento || '')
   const [creditoAplicado, setCreditoAplicado] = useState(pacote?.credito_utilizado || 0)
   const [saldoCredito, setSaldoCredito] = useState(0)
   const [observacao, setObservacao] = useState(pacote?.observacao || '')
@@ -124,6 +133,7 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
     const itensValidos = itens.filter(i => i.descricao.trim())
     if (itensValidos.length === 0) { setErro('Adicione pelo menos um serviço ao pacote.'); return null }
     if (creditoAplicado > saldoCredito + 0.01) { setErro('Crédito aplicado maior que o saldo disponível do cliente.'); return null }
+    if (novoStatus === 'finalizado' && !formaPagamento) { setErro('Selecione a forma de pagamento antes de faturar.'); return null }
     setErro('')
 
     const payload: Record<string, unknown> = {
@@ -135,6 +145,7 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
       desconto: descontoGeralNum,
       credito_utilizado: creditoAplicado,
       cashback: cashbackNum,
+      forma_pagamento: formaPagamento || null,
       valor_total: totalItens,
       valor_final: totalFinal,
       observacao: observacao || null,
@@ -261,6 +272,14 @@ export default function PacoteModal({ pacote, clientes, profissionais, servicos,
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 bg-white disabled:bg-gray-50">
                 <option value="">Selecione um vendedor</option>
                 {profissionais.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Forma de pagamento</label>
+              <select value={formaPagamento} disabled={travado} onChange={e => setFormaPagamento(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 bg-white disabled:bg-gray-50">
+                <option value="">Selecionar...</option>
+                {FORMAS_PAGAMENTO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
             </div>
           </div>

@@ -32,6 +32,7 @@ export default function ProdutoModal({ produto, unidadeId, onClose, onSalvo }: P
     descricao: produto?.descricao || '',
     preco_custo: produto?.preco_custo?.toString() || '0',
     preco_venda: produto?.preco_venda?.toString() || '0',
+    comissao_produto: produto?.comissao_produto?.toString() || '0',
     estoque: produto?.estoque?.toString() || '0',
     classificacao: produto?.classificacao || '',
     ativo: produto?.ativo ?? true,
@@ -51,6 +52,7 @@ export default function ProdutoModal({ produto, unidadeId, onClose, onSalvo }: P
       descricao: form.descricao || null,
       preco_custo: parseFloat(form.preco_custo) || 0,
       preco_venda: parseFloat(form.preco_venda) || 0,
+      comissao_produto: parseFloat(form.comissao_produto) || 0,
       estoque: parseInt(form.estoque) || 0,
       classificacao: form.classificacao || null,
       ativo: form.ativo,
@@ -112,7 +114,7 @@ export default function ProdutoModal({ produto, unidadeId, onClose, onSalvo }: P
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Preço de venda</label>
                     <div className="relative">
@@ -127,6 +129,14 @@ export default function ProdutoModal({ produto, unidadeId, onClose, onSalvo }: P
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">R$</span>
                       <input type="number" min="0" step="0.01" value={form.preco_custo} onChange={e => set('preco_custo', e.target.value)}
                         className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Comissão</label>
+                    <div className="relative">
+                      <input type="number" min="0" max="100" step="0.5" value={form.comissao_produto} onChange={e => set('comissao_produto', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 pr-8" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
                     </div>
                   </div>
                 </div>

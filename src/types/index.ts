@@ -112,6 +112,7 @@ export interface Produto {
   descricao?: string
   preco_custo: number
   preco_venda: number
+  comissao_produto: number
   estoque: number
   unidade_id?: string
   classificacao?: string | null
@@ -240,6 +241,7 @@ export interface Pacote {
   credito_utilizado: number
   cashback: number
   valor_final: number
+  forma_pagamento?: FormaPagamento
   observacao?: string
   itens?: PacoteItem[]
   created_at: string
