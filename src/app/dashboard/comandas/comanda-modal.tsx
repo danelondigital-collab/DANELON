@@ -154,8 +154,8 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
       tipo: 'servico',
       servico_id: item.servico_id,
       quantidade: 1,
-      preco_unitario: 0,
-      desconto_percentual: 0,
+      preco_unitario: item.valor_unitario,
+      desconto_percentual: 100,
       subtotal: 0,
       pacote_item_id: item.id,
     }).select().single()
