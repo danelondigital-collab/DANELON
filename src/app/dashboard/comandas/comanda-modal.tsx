@@ -52,6 +52,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [salvandoObs, setSalvandoObs] = useState(false)
   const [pacotesCliente, setPacotesCliente] = useState<Pacote[]>([])
   const [usandoItemPacote, setUsandoItemPacote] = useState<string | null>(null)
+  const [profissionalPacotePorItem, setProfissionalPacotePorItem] = useState<Record<string, string>>({})
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(comandaInicial?.cliente || null)
   const [comandasAbertasCount, setComandasAbertasCount] = useState(0)
 
@@ -145,6 +146,9 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   }
 
   async function usarItemPacote(pacote: Pacote, item: NonNullable<Pacote['itens']>[number]) {
+    const profissionalId = profissionalPacotePorItem[item.id]
+    if (!profissionalId) { alert('Selecione o profissional que irá realizar o serviço.'); return }
+
     const comandaId = await garantirComanda()
     if (!comandaId) return
     setUsandoItemPacote(item.id)
@@ -162,12 +166,30 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
     if (error || !novoItem) { alert(error?.message || 'Erro ao usar item do pacote.'); setUsandoItemPacote(null); return }
 
+    const servico = servicos.find(s => s.id === item.servico_id)
+    const comissaoServico = servico?.comissao_servico || 0
+    const especifica = comissoesProfissional.find(c =>
+      c.profissional_id === profissionalId && c.tipo === 'servico' && c.servico_id === item.servico_id
+    )
+    const pctComissao = especifica ? especifica.percentual : comissaoServico
+    const valorBase = item.valor_unitario
+
+    await supabase.from('comanda_item_profissionais').insert({
+      comanda_item_id: novoItem.id,
+      profissional_id: profissionalId,
+      percentual_participacao: 100,
+      percentual_comissao: pctComissao,
+      valor_base: valorBase,
+      valor_comissao: valorBase * (pctComissao / 100),
+    })
+
     await supabase.from('pacote_itens').update({ quantidade_usada: item.quantidade_usada + 1 }).eq('id', item.id)
 
     setPacotesCliente(prev => prev.map(p => p.id !== pacote.id ? p : {
       ...p,
       itens: p.itens?.map(i => i.id === item.id ? { ...i, quantidade_usada: i.quantidade_usada + 1 } : i),
     }))
+    setProfissionalPacotePorItem(prev => { const next = { ...prev }; delete next[item.id]; return next })
 
     await atualizarTotaisDb(comandaId)
     await buscarItens(comandaId)
@@ -453,21 +475,31 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                           <p className="text-xs font-medium text-amber-800 mb-1.5">
                             Pacote #{pacote.numero}{pacote.validade ? ` · até ${formatDate(pacote.validade)}` : ''}
                           </p>
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             {itensComSaldo.map(item => (
-                              <div key={item.id} className="flex items-center justify-between gap-1.5">
+                              <div key={item.id} className="space-y-1">
                                 <span className="text-xs text-gray-600 leading-tight">
                                   {item.descricao}
                                   <span className="text-gray-400"> ({item.quantidade - item.quantidade_usada}/{item.quantidade})</span>
                                 </span>
                                 {!isFechada && (
-                                  <button
-                                    onClick={() => usarItemPacote(pacote, item)}
-                                    disabled={usandoItemPacote === item.id}
-                                    className="flex-shrink-0 text-xs font-medium text-amber-700 hover:text-amber-900 disabled:opacity-50 hover:underline"
-                                  >
-                                    {usandoItemPacote === item.id ? '...' : 'Usar'}
-                                  </button>
+                                  <div className="flex items-center gap-1.5">
+                                    <select
+                                      value={profissionalPacotePorItem[item.id] || ''}
+                                      onChange={e => setProfissionalPacotePorItem(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                      className="flex-1 min-w-0 px-1.5 py-1 border border-amber-200 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-amber-600"
+                                    >
+                                      <option value="">Profissional...</option>
+                                      {profissionais.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                    </select>
+                                    <button
+                                      onClick={() => usarItemPacote(pacote, item)}
+                                      disabled={usandoItemPacote === item.id || !profissionalPacotePorItem[item.id]}
+                                      className="flex-shrink-0 text-xs font-medium text-amber-700 hover:text-amber-900 disabled:opacity-50 hover:underline"
+                                    >
+                                      {usandoItemPacote === item.id ? '...' : 'Usar'}
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             ))}
