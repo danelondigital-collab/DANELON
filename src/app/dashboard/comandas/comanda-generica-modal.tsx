@@ -108,6 +108,7 @@ export default function ComandaGenericaModal({
 
   useEffect(() => {
     if (!buscaCliente.trim()) { setClientesBusca([]); return }
+    const termo = buscaCliente.trim()
     const t = setTimeout(async () => {
       setBuscandoCliente(true)
       const { data } = await supabase
@@ -115,10 +116,17 @@ export default function ComandaGenericaModal({
         .select('id, nome, telefone, data_nascimento')
         .eq('unidade_id', unidadeId)
         .eq('ativo', true)
-        .or(`nome.ilike.%${buscaCliente.trim()}%,telefone.ilike.%${buscaCliente.trim()}%`)
+        .or(`nome.ilike.%${termo}%,telefone.ilike.%${termo}%`)
         .order('nome')
-        .limit(30)
-      setClientesBusca((data as Cliente[]) || [])
+        .limit(100)
+      const termoLower = termo.toLowerCase()
+      const ordenados = ((data as Cliente[]) || []).sort((a, b) => {
+        const aComeca = a.nome.toLowerCase().startsWith(termoLower) ? 0 : 1
+        const bComeca = b.nome.toLowerCase().startsWith(termoLower) ? 0 : 1
+        if (aComeca !== bComeca) return aComeca - bComeca
+        return a.nome.localeCompare(b.nome)
+      })
+      setClientesBusca(ordenados.slice(0, 30))
       setBuscandoCliente(false)
     }, 300)
     return () => clearTimeout(t)

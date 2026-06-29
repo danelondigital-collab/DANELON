@@ -60,6 +60,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
   useEffect(() => {
     if (!clienteBusca.trim() || comanda?.id) { setClientesFiltrados([]); return }
+    const termo = clienteBusca.trim()
     const t = setTimeout(async () => {
       setBuscandoCliente(true)
       const { data } = await supabase
@@ -67,10 +68,17 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
         .select('id, nome, telefone, data_nascimento')
         .eq('unidade_id', unidadeId)
         .eq('ativo', true)
-        .or(`nome.ilike.%${clienteBusca.trim()}%,telefone.ilike.%${clienteBusca.trim()}%`)
+        .or(`nome.ilike.%${termo}%,telefone.ilike.%${termo}%`)
         .order('nome')
-        .limit(20)
-      setClientesFiltrados((data as Cliente[]) || [])
+        .limit(100)
+      const termoLower = termo.toLowerCase()
+      const ordenados = ((data as Cliente[]) || []).sort((a, b) => {
+        const aComeca = a.nome.toLowerCase().startsWith(termoLower) ? 0 : 1
+        const bComeca = b.nome.toLowerCase().startsWith(termoLower) ? 0 : 1
+        if (aComeca !== bComeca) return aComeca - bComeca
+        return a.nome.localeCompare(b.nome)
+      })
+      setClientesFiltrados(ordenados.slice(0, 20))
       setBuscandoCliente(false)
     }, 300)
     return () => clearTimeout(t)
