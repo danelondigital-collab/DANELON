@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Cliente, Profissional, Servico, ComissaoProfissionalItem } from '@/types'
 import { formatCurrency } from '@/lib/utils'
@@ -103,14 +103,31 @@ export default function ComandaGenericaModal({
   const [criando, setCriando] = useState(false)
   const [erro, setErro] = useState('')
 
-  const clientesFiltrados = useMemo(() =>
-    clientes.filter(c =>
-      !buscaCliente || c.nome.toLowerCase().includes(buscaCliente.toLowerCase())
-    ).slice(0, 50),
-    [clientes, buscaCliente]
-  )
+  const [clientesBusca, setClientesBusca] = useState<Cliente[]>([])
+  const [buscandoCliente, setBuscandoCliente] = useState(false)
 
-  const clienteSelecionado = clientes.find(c => c.id === clienteId)
+  useEffect(() => {
+    if (!buscaCliente.trim()) { setClientesBusca([]); return }
+    const t = setTimeout(async () => {
+      setBuscandoCliente(true)
+      const { data } = await supabase
+        .from('clientes')
+        .select('id, nome, telefone, data_nascimento')
+        .eq('unidade_id', unidadeId)
+        .eq('ativo', true)
+        .or(`nome.ilike.%${buscaCliente.trim()}%,telefone.ilike.%${buscaCliente.trim()}%`)
+        .order('nome')
+        .limit(30)
+      setClientesBusca((data as Cliente[]) || [])
+      setBuscandoCliente(false)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [buscaCliente, unidadeId, supabase])
+
+  const clientesFiltrados = clientesBusca
+
+  const [clienteSelecionadoObj, setClienteSelecionadoObj] = useState<Cliente | null>(null)
+  const clienteSelecionado = clienteSelecionadoObj || clientes.find(c => c.id === clienteId)
   const servicoSelecionado = servicos.find(s => s.id === servicoId)
   const valor = parseFloat(valorStr.replace(',', '.')) || 0
   const formValida = clienteId && servicoId && mes && valor > 0
@@ -272,7 +289,7 @@ export default function ComandaGenericaModal({
                         <p className="text-xs text-gray-500">{clienteSelecionado.telefone}</p>
                       )}
                     </div>
-                    <button onClick={() => { setClienteId(''); setBuscaCliente('') }}
+                    <button onClick={() => { setClienteId(''); setClienteSelecionadoObj(null); setBuscaCliente('') }}
                       className="text-xs text-red-500 hover:underline flex-shrink-0 ml-2">
                       Trocar
                     </button>
@@ -288,10 +305,12 @@ export default function ComandaGenericaModal({
                     />
                     {buscaCliente.length > 0 && (
                       <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-xl divide-y divide-gray-50 bg-white shadow-sm">
-                        {clientesFiltrados.length === 0 ? (
+                        {buscandoCliente ? (
+                          <p className="px-3 py-2 text-sm text-gray-400">Buscando...</p>
+                        ) : clientesFiltrados.length === 0 ? (
                           <p className="px-3 py-2 text-sm text-gray-400">Nenhum cliente encontrado</p>
                         ) : clientesFiltrados.map(c => (
-                          <button key={c.id} onClick={() => { setClienteId(c.id); setBuscaCliente('') }}
+                          <button key={c.id} onClick={() => { setClienteId(c.id); setClienteSelecionadoObj(c); setBuscaCliente('') }}
                             className="w-full text-left px-3 py-2.5 hover:bg-amber-50 transition-colors">
                             <p className="text-sm font-medium text-gray-900">{c.nome}</p>
                             {c.telefone && <p className="text-xs text-gray-500">{c.telefone}</p>}
