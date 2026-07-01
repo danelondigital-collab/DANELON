@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Cliente, Profissional, Servico, ComissaoProfissionalItem } from '@/types'
 import { formatCurrency } from '@/lib/utils'
@@ -10,7 +10,6 @@ import { X, Shuffle, CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react'
 
 interface Props {
   unidadeId: string
-  clientes: Cliente[]
   profissionais: Profissional[]
   servicos: Servico[]
   comissoesProfissional: ComissaoProfissionalItem[]
@@ -83,7 +82,7 @@ function distribuirAleatorio(totalCents: number, n: number): number[] {
 }
 
 export default function ComandaGenericaModal({
-  unidadeId, clientes, profissionais, servicos, comissoesProfissional, onClose, onCriadas,
+  unidadeId, profissionais, servicos, comissoesProfissional, onClose, onCriadas,
 }: Props) {
   const supabase = createClient()
 
@@ -93,6 +92,7 @@ export default function ComandaGenericaModal({
   // Campos do formulário
   const [buscaCliente, setBuscaCliente] = useState('')
   const [clienteId, setClienteId] = useState('')
+  const [clienteSelecionadoObj, setClienteSelecionadoObj] = useState<Cliente | null>(null)
   const [servicoId, setServicoId] = useState('')
   const [profissionalId, setProfissionalId] = useState('')
   const [mes, setMes] = useState(mesAtual)
@@ -102,18 +102,17 @@ export default function ComandaGenericaModal({
   const [distribuicao, setDistribuicao] = useState<DiaDist[]>([])
   const [criando, setCriando] = useState(false)
   const [erro, setErro] = useState('')
-
-  const [clientesBusca, setClientesBusca] = useState<Cliente[]>([])
+  const [clientesFiltrados, setClientesFiltrados] = useState<Cliente[]>([])
   const [buscandoCliente, setBuscandoCliente] = useState(false)
 
   useEffect(() => {
-    if (!buscaCliente.trim()) { setClientesBusca([]); return }
+    if (!buscaCliente.trim()) { setClientesFiltrados([]); return }
     const termo = buscaCliente.trim()
     const t = setTimeout(async () => {
       setBuscandoCliente(true)
       const { data } = await supabase
         .from('clientes')
-        .select('id, nome, telefone, data_nascimento')
+        .select('id, nome, telefone')
         .eq('unidade_id', unidadeId)
         .eq('ativo', true)
         .or(`nome.ilike.%${termo}%,telefone.ilike.%${termo}%`)
@@ -126,16 +125,13 @@ export default function ComandaGenericaModal({
         if (aComeca !== bComeca) return aComeca - bComeca
         return a.nome.localeCompare(b.nome)
       })
-      setClientesBusca(ordenados.slice(0, 30))
+      setClientesFiltrados(ordenados.slice(0, 30))
       setBuscandoCliente(false)
     }, 300)
     return () => clearTimeout(t)
-  }, [buscaCliente, unidadeId, supabase])
+  }, [buscaCliente, unidadeId])
 
-  const clientesFiltrados = clientesBusca
-
-  const [clienteSelecionadoObj, setClienteSelecionadoObj] = useState<Cliente | null>(null)
-  const clienteSelecionado = clienteSelecionadoObj || clientes.find(c => c.id === clienteId)
+  const clienteSelecionado = clienteSelecionadoObj
   const servicoSelecionado = servicos.find(s => s.id === servicoId)
   const valor = parseFloat(valorStr.replace(',', '.')) || 0
   const formValida = clienteId && servicoId && mes && valor > 0

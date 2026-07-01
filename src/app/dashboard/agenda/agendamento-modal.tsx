@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Plus, Trash2, Search } from 'lucide-react'
 import { format, addMinutes, parse } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
@@ -20,7 +20,6 @@ interface Props {
   unidadeId: string
   profissionais: Profissional[]
   servicos: Servico[]
-  clientes: Cliente[]
   horarioInicial: { data: Date; profissional_id?: string } | null
   perfil: string
   onClose: () => void
@@ -50,7 +49,7 @@ function somaMin(hora: string, minutos: number): string {
 }
 
 export default function AgendamentoModal({
-  agendamento, unidadeId, profissionais, servicos, clientes,
+  agendamento, unidadeId, profissionais, servicos,
   horarioInicial, perfil, onClose, onSalvo
 }: Props) {
   const supabase = createClient()
@@ -61,12 +60,38 @@ export default function AgendamentoModal({
     ? new Date(agendamento.data_hora_inicio)
     : (horarioInicial?.data || new Date())
 
+  const clienteInicial = agendamento?.cliente || null
+
   const [form, setForm] = useState({
     cliente_id: agendamento?.cliente_id || '',
     data: format(dataInicio, 'yyyy-MM-dd'),
     status: agendamento?.status || 'agendado',
     observacoes: agendamento?.observacoes || '',
   })
+
+  const [clienteBusca, setClienteBusca] = useState(clienteInicial?.nome || '')
+  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(clienteInicial)
+  const [clientesFiltrados, setClientesFiltrados] = useState<Cliente[]>([])
+  const [buscandoCliente, setBuscandoCliente] = useState(false)
+  const [mostrarDropdown, setMostrarDropdown] = useState(false)
+
+  useEffect(() => {
+    if (!clienteBusca.trim() || clienteSelecionado) { setClientesFiltrados([]); return }
+    const t = setTimeout(async () => {
+      setBuscandoCliente(true)
+      const { data } = await supabase
+        .from('clientes')
+        .select('id, nome, telefone')
+        .eq('unidade_id', unidadeId)
+        .eq('ativo', true)
+        .or(`nome.ilike.%${clienteBusca.trim()}%,telefone.ilike.%${clienteBusca.trim()}%`)
+        .order('nome')
+        .limit(20)
+      setClientesFiltrados((data as Cliente[]) || [])
+      setBuscandoCliente(false)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [clienteBusca, clienteSelecionado, unidadeId])
 
   function duracaoServico(servicoId: string): number {
     return servicos.find(s => s.id === servicoId)?.duracao_minutos || 60
@@ -237,11 +262,48 @@ export default function AgendamentoModal({
           {/* Cliente */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Cliente <span className="text-red-500">*</span></label>
-            <select value={form.cliente_id} onChange={e => setField('cliente_id', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600">
-              <option value="">Selecione o cliente</option>
-              {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}{c.telefone ? ` — ${c.telefone}` : ''}</option>)}
-            </select>
+            {agendamento && clienteSelecionado ? (
+              <p className="text-sm font-medium text-gray-900 py-2">{clienteSelecionado.nome}</p>
+            ) : (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Buscar pelo nome ou telefone..."
+                  value={clienteBusca}
+                  onChange={e => {
+                    setClienteBusca(e.target.value)
+                    setClienteSelecionado(null)
+                    setField('cliente_id', '')
+                    setMostrarDropdown(true)
+                  }}
+                  onFocus={() => setMostrarDropdown(true)}
+                  onBlur={() => setTimeout(() => setMostrarDropdown(false), 150)}
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                />
+                {mostrarDropdown && clienteBusca && !clienteSelecionado && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto">
+                    {buscandoCliente ? (
+                      <p className="px-4 py-3 text-sm text-gray-400">Buscando...</p>
+                    ) : clientesFiltrados.length === 0 ? (
+                      <p className="px-4 py-3 text-sm text-gray-500">Nenhum cliente encontrado</p>
+                    ) : clientesFiltrados.map(c => (
+                      <button key={c.id} type="button"
+                        onMouseDown={() => {
+                          setClienteSelecionado(c)
+                          setClienteBusca(c.nome)
+                          setField('cliente_id', c.id)
+                          setMostrarDropdown(false)
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors border-b border-gray-50 last:border-0">
+                        <p className="text-sm font-medium text-gray-900">{c.nome}</p>
+                        {c.telefone && <p className="text-xs text-gray-500">{c.telefone}</p>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Data e status */}

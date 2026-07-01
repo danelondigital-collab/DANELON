@@ -224,7 +224,6 @@ export default function ComandasClient({ comandas: initial, clientes, profission
       {modalGenericaAberto && (
         <ComandaGenericaModal
           unidadeId={unidadeId}
-          clientes={clientes}
           profissionais={profissionais}
           servicos={servicos}
           comissoesProfissional={comissoesProfissional}

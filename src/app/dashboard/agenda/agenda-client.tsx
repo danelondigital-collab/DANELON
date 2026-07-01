@@ -614,7 +614,6 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
           unidadeId={unidadeId}
           profissionais={profissionais}
           servicos={servicos}
-          clientes={clientes}
           horarioInicial={horarioInicial}
           perfil={perfil}
           onClose={() => setModalAberto(false)}
