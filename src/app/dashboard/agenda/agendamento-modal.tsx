@@ -76,7 +76,7 @@ export default function AgendamentoModal({
   const [mostrarDropdown, setMostrarDropdown] = useState(false)
 
   useEffect(() => {
-    if (!clienteBusca.trim() || clienteSelecionado) { setClientesFiltrados([]); return }
+    if (!clienteBusca.trim() || clienteSelecionado) { setClientesFiltrados([]); setBuscandoCliente(false); return }
     const termo = clienteBusca.trim()
     const t = setTimeout(async () => {
       setBuscandoCliente(true)
@@ -270,8 +270,22 @@ export default function AgendamentoModal({
           {/* Cliente */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Cliente <span className="text-red-500">*</span></label>
-            {agendamento && clienteSelecionado ? (
-              <p className="text-sm font-medium text-gray-900 py-2">{clienteSelecionado.nome}</p>
+            {clienteSelecionado ? (
+              <div className="flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{clienteSelecionado.nome}</p>
+                  {clienteSelecionado.telefone && <p className="text-xs text-gray-500">{clienteSelecionado.telefone}</p>}
+                </div>
+                {!agendamento && (
+                  <button type="button" onClick={() => {
+                    setClienteSelecionado(null)
+                    setClienteBusca('')
+                    setField('cliente_id', '')
+                  }} className="text-xs text-red-500 hover:underline ml-3 flex-shrink-0">
+                    Trocar
+                  </button>
+                )}
+              </div>
             ) : (
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -281,15 +295,13 @@ export default function AgendamentoModal({
                   value={clienteBusca}
                   onChange={e => {
                     setClienteBusca(e.target.value)
-                    setClienteSelecionado(null)
-                    setField('cliente_id', '')
                     setMostrarDropdown(true)
                   }}
                   onFocus={() => setMostrarDropdown(true)}
                   onBlur={() => setTimeout(() => setMostrarDropdown(false), 150)}
                   className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
                 />
-                {mostrarDropdown && clienteBusca && !clienteSelecionado && (
+                {mostrarDropdown && clienteBusca && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto">
                     {buscandoCliente ? (
                       <p className="px-4 py-3 text-sm text-gray-400">Buscando...</p>
