@@ -465,55 +465,41 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                     {agsProf.flatMap(ag => {
                       const statusClass = statusCor[ag.status] || statusCor.agendado
                       const itensProf = (ag.itens || []).filter(i => i.profissional_id === prof.id)
-                      // Se os itens têm horário próprio, renderiza um bloco por item
-                      if (itensProf.length > 0 && itensProf[0].data_hora_inicio) {
-                        return itensProf.map(item => {
-                          const top = calcTop(item.data_hora_inicio!)
-                          const height = calcAlturaItem(item.data_hora_inicio!, item.data_hora_fim, item.servico?.duracao_minutos)
-                          return (
-                            <div
-                              key={item.id}
-                              draggable
-                              onDragStart={(e) => handleDragStart(e, ag)}
-                              onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
-                              className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
-                              style={{ top: top + 1, height: height - 2, borderLeftColor: prof.cor_agenda || '#6366f1' }}
-                            >
-                              <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
-                              <p className="text-xs truncate opacity-75 leading-tight">{item.servico?.nome || 'Serviço'}</p>
-                              {height >= 52 && (
-                                <p className="text-xs opacity-60 leading-tight mt-0.5">
-                                  {format(parseISO(item.data_hora_inicio!), 'HH:mm')}
-                                  {item.data_hora_fim && ` – ${format(parseISO(item.data_hora_fim), 'HH:mm')}`}
-                                </p>
-                              )}
-                            </div>
-                          )
-                        })
-                      }
-                      // Fallback: legado sem horário por item → bloco único do agendamento
-                      const top = calcTop(ag.data_hora_inicio)
-                      const height = calcAltura(ag)
-                      const servNome = itensProf[0]?.servico?.nome || ag.itens?.[0]?.servico?.nome || 'Serviço'
-                      return [(
-                        <div
-                          key={ag.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, ag)}
-                          onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
-                          className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
-                          style={{ top: top + 1, height: height - 2, borderLeftColor: prof.cor_agenda || '#6366f1' }}
-                        >
-                          <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
-                          <p className="text-xs truncate opacity-75 leading-tight">{servNome}</p>
-                          {height >= 52 && (
-                            <p className="text-xs opacity-60 leading-tight mt-0.5">
-                              {format(parseISO(ag.data_hora_inicio), 'HH:mm')}
-                              {ag.data_hora_fim && ` – ${format(parseISO(ag.data_hora_fim), 'HH:mm')}`}
-                            </p>
-                          )}
-                        </div>
-                      )]
+                      if (!itensProf.length) return []
+                      // Calcula início/fim de cada item: usa DB se disponível, senão sequencial
+                      let cursor = ag.data_hora_inicio
+                      const itensComTempo = itensProf.map(item => {
+                        const inicio = item.data_hora_inicio || cursor
+                        const duracaoMs = (item.data_hora_inicio && item.data_hora_fim)
+                          ? parseISO(item.data_hora_fim).getTime() - parseISO(item.data_hora_inicio).getTime()
+                          : (item.servico?.duracao_minutos || 60) * 60000
+                        const fim = item.data_hora_fim || new Date(parseISO(inicio).getTime() + duracaoMs).toISOString()
+                        cursor = fim
+                        return { ...item, _inicio: inicio, _fim: fim }
+                      })
+                      return itensComTempo.map(item => {
+                        const top = calcTop(item._inicio)
+                        const height = calcAlturaItem(item._inicio, item._fim)
+                        return (
+                          <div
+                            key={item.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, ag)}
+                            onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
+                            className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
+                            style={{ top: top + 1, height: height - 2, borderLeftColor: prof.cor_agenda || '#6366f1' }}
+                          >
+                            <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
+                            <p className="text-xs truncate opacity-75 leading-tight">{item.servico?.nome || 'Serviço'}</p>
+                            {height >= 52 && (
+                              <p className="text-xs opacity-60 leading-tight mt-0.5">
+                                {format(parseISO(item._inicio), 'HH:mm')}
+                                {` – ${format(parseISO(item._fim), 'HH:mm')}`}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })
                     })}
                   </div>
                 )
@@ -590,60 +576,46 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                     {/* Agendamentos — um bloco por item de serviço */}
                     {agsNoDia.flatMap(ag => {
                       const statusClass = statusCor[ag.status] || statusCor.agendado
-                      // Se os itens têm horário próprio, renderiza um bloco por item
-                      if (ag.itens?.length && ag.itens[0].data_hora_inicio) {
-                        return (ag.itens || []).map(item => {
-                          const top = calcTop(item.data_hora_inicio!)
-                          const height = calcAlturaItem(item.data_hora_inicio!, item.data_hora_fim, item.servico?.duracao_minutos)
-                          const cor = item.profissional?.cor_agenda || '#6366f1'
-                          return (
-                            <div
-                              key={item.id}
-                              draggable
-                              onDragStart={(e) => handleDragStart(e, ag)}
-                              onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
-                              className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
-                              style={{ top: top + 1, height: height - 2, borderLeftColor: cor }}
-                            >
-                              <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
-                              <p className="text-xs truncate opacity-75 leading-tight">{item.servico?.nome || 'Serviço'}</p>
-                              {item.profissional?.nome && (
-                                <p className="text-xs truncate opacity-60 leading-tight">{item.profissional.nome}</p>
-                              )}
-                              {height >= 52 && (
-                                <p className="text-xs opacity-60 leading-tight mt-0.5">
-                                  {format(parseISO(item.data_hora_inicio!), 'HH:mm')}
-                                  {item.data_hora_fim && ` – ${format(parseISO(item.data_hora_fim), 'HH:mm')}`}
-                                </p>
-                              )}
-                            </div>
-                          )
-                        })
-                      }
-                      // Fallback: legado → bloco único
-                      const top = calcTop(ag.data_hora_inicio)
-                      const height = calcAltura(ag)
-                      const cor = ag.itens?.[0]?.profissional?.cor_agenda || '#6366f1'
-                      const servNome = ag.itens?.[0]?.servico?.nome || 'Serviço'
-                      return [(
-                        <div
-                          key={ag.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, ag)}
-                          onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
-                          className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
-                          style={{ top: top + 1, height: height - 2, borderLeftColor: cor }}
-                        >
-                          <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
-                          <p className="text-xs truncate opacity-75 leading-tight">{servNome}</p>
-                          {height >= 52 && (
-                            <p className="text-xs opacity-60 leading-tight mt-0.5">
-                              {format(parseISO(ag.data_hora_inicio), 'HH:mm')}
-                              {ag.data_hora_fim && ` – ${format(parseISO(ag.data_hora_fim), 'HH:mm')}`}
-                            </p>
-                          )}
-                        </div>
-                      )]
+                      const items = ag.itens || []
+                      if (!items.length) return []
+                      // Calcula início/fim de cada item: usa DB se disponível, senão sequencial
+                      let cursor = ag.data_hora_inicio
+                      const itensComTempo = items.map(item => {
+                        const inicio = item.data_hora_inicio || cursor
+                        const duracaoMs = (item.data_hora_inicio && item.data_hora_fim)
+                          ? parseISO(item.data_hora_fim).getTime() - parseISO(item.data_hora_inicio).getTime()
+                          : (item.servico?.duracao_minutos || 60) * 60000
+                        const fim = item.data_hora_fim || new Date(parseISO(inicio).getTime() + duracaoMs).toISOString()
+                        cursor = fim
+                        return { ...item, _inicio: inicio, _fim: fim }
+                      })
+                      return itensComTempo.map(item => {
+                        const top = calcTop(item._inicio)
+                        const height = calcAlturaItem(item._inicio, item._fim)
+                        const cor = item.profissional?.cor_agenda || '#6366f1'
+                        return (
+                          <div
+                            key={item.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, ag)}
+                            onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
+                            className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
+                            style={{ top: top + 1, height: height - 2, borderLeftColor: cor }}
+                          >
+                            <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
+                            <p className="text-xs truncate opacity-75 leading-tight">{item.servico?.nome || 'Serviço'}</p>
+                            {item.profissional?.nome && (
+                              <p className="text-xs truncate opacity-60 leading-tight">{item.profissional.nome}</p>
+                            )}
+                            {height >= 52 && (
+                              <p className="text-xs opacity-60 leading-tight mt-0.5">
+                                {format(parseISO(item._inicio), 'HH:mm')}
+                                {` – ${format(parseISO(item._fim), 'HH:mm')}`}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })
                     })}
                   </div>
                 )

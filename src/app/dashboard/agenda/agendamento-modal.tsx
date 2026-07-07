@@ -60,6 +60,7 @@ export default function AgendamentoModal({
   const [erroCliente, setErroCliente] = useState(false)
   const [criandoComanda, setCriandoComanda] = useState(false)
   const [comandaCriada, setComandaCriada] = useState<{ id: string; numero?: string } | null>(null)
+  const [agendamentoSalvo, setAgendamentoSalvo] = useState<{ id: string } | null>(null)
 
   const dataInicio = agendamento
     ? new Date(agendamento.data_hora_inicio)
@@ -252,6 +253,11 @@ export default function AgendamentoModal({
         itensPayload.map(i => ({ agendamento_id: novoAg.id, ...i }))
       )
       if (erroItens) { setErro(erroItens.message); setLoading(false); return }
+
+      // Mantém modal aberto para o usuário poder criar a comanda
+      setAgendamentoSalvo({ id: novoAg.id })
+      setLoading(false)
+      return
     }
 
     setLoading(false)
@@ -259,7 +265,8 @@ export default function AgendamentoModal({
   }
 
   async function handleCriarComanda() {
-    if (!agendamento) return
+    const agId = agendamento?.id || agendamentoSalvo?.id
+    if (!agId) return
     const clienteId = clienteSelecionado?.id || form.cliente_id
     if (!clienteId) { setErro('Selecione a cliente antes de criar a comanda.'); return }
 
@@ -271,7 +278,7 @@ export default function AgendamentoModal({
       .insert({
         cliente_id: clienteId,
         unidade_id: unidadeId,
-        agendamento_id: agendamento.id,
+        agendamento_id: agId,
         status: 'aberta',
       })
       .select('id, numero')
@@ -490,12 +497,17 @@ export default function AgendamentoModal({
             {erro && <p className="text-sm text-red-600">{erro}</p>}
           </div>
           <div className="flex gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
-            {agendamento && (
+            {agendamentoSalvo ? (
+              // Após salvar novo agendamento: mostra "Fechar" que vai atualizar a agenda
+              <button onClick={onSalvo} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Fechar</button>
+            ) : (
+              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
+            )}
+            {(agendamento || agendamentoSalvo) && (
               comandaCriada ? (
                 <button
                   type="button"
-                  onClick={() => router.push('/dashboard/comandas')}
+                  onClick={() => { onSalvo(); router.push('/dashboard/comandas') }}
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
                 >
                   <ClipboardList className="w-4 h-4" />
@@ -513,10 +525,12 @@ export default function AgendamentoModal({
                 </button>
               )
             )}
-            <button onClick={handleSalvar} disabled={loading}
-              className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors">
-              {loading ? 'Salvando...' : 'Salvar'}
-            </button>
+            {!agendamentoSalvo && (
+              <button onClick={handleSalvar} disabled={loading}
+                className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors">
+                {loading ? 'Salvando...' : 'Salvar'}
+              </button>
+            )}
           </div>
         </div>
       </div>
