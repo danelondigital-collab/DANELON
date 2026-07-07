@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, Plus, Trash2, Search, ClipboardList } from 'lucide-react'
 import { format, addMinutes, parse } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -47,6 +47,49 @@ function fmtDuracao(min: number): string {
 function somaMin(hora: string, minutos: number): string {
   const base = parse(hora, 'HH:mm', new Date())
   return format(addMinutes(base, minutos), 'HH:mm')
+}
+
+function ServicoSearchInput({ value, servicos, onChange }: {
+  value: string
+  servicos: Servico[]
+  onChange: (id: string) => void
+}) {
+  const [busca, setBusca] = useState('')
+  const [aberto, setAberto] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const servicoAtual = servicos.find(s => s.id === value)
+
+  const filtrados = busca.trim()
+    ? servicos.filter(s => s.nome.toLowerCase().includes(busca.toLowerCase())).slice(0, 30)
+    : []
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="text"
+        value={aberto ? busca : (servicoAtual?.nome || '')}
+        placeholder="Buscar serviço..."
+        onChange={e => setBusca(e.target.value)}
+        onFocus={() => { setBusca(''); setAberto(true) }}
+        onBlur={() => setTimeout(() => setAberto(false), 150)}
+        className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600 truncate"
+      />
+      {aberto && filtrados.length > 0 && (
+        <div className="absolute top-full left-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto mt-0.5 min-w-[260px]">
+          {filtrados.map(s => (
+            <div
+              key={s.id}
+              onMouseDown={() => { onChange(s.id); setBusca(''); setAberto(false) }}
+              className={`px-3 py-2 text-xs cursor-pointer hover:bg-amber-50 ${s.id === value ? 'bg-amber-50 font-medium' : ''}`}
+            >
+              {s.nome}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function AgendamentoModal({
@@ -440,11 +483,11 @@ export default function AgendamentoModal({
             <div className="space-y-2">
               {itens.map((item, idx) => (
                 <div key={idx} className="grid grid-cols-[1fr_1fr_88px_110px_28px] gap-2 items-center">
-                  <select value={item.servico_id} onChange={e => setItemField(idx, 'servico_id', e.target.value)}
-                    className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600">
-                    <option value="">Serviço</option>
-                    {servicos.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                  </select>
+                  <ServicoSearchInput
+                    value={item.servico_id}
+                    servicos={servicos}
+                    onChange={id => setItemField(idx, 'servico_id', id)}
+                  />
 
                   <select value={item.profissional_id} onChange={e => setItemField(idx, 'profissional_id', e.target.value)}
                     className="w-full px-2 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600">
