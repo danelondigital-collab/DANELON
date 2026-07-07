@@ -157,7 +157,8 @@ export default function AgendamentoModal({
   }
 
   async function handleSalvar() {
-    if (!form.cliente_id) { setErroCliente(true); setErro('Selecione o cliente antes de salvar.'); return }
+    const clienteId = clienteSelecionado?.id || form.cliente_id
+    if (!clienteId) { setErroCliente(true); setErro('Selecione o cliente antes de salvar.'); return }
     if (itens.length === 0) { setErro('Adicione pelo menos um serviço.'); return }
     if (itens.some(i => !i.profissional_id || !i.servico_id)) { setErro('Preencha profissional e serviço em todos os itens.'); return }
 
@@ -218,7 +219,7 @@ export default function AgendamentoModal({
 
     if (agendamento) {
       const { error } = await supabase.from('agendamentos').update({
-        cliente_id: form.cliente_id,
+        cliente_id: clienteId,
         data_hora_inicio: inicioGeral.toISOString(),
         data_hora_fim: fimGeral.toISOString(),
         status: form.status,
@@ -233,7 +234,7 @@ export default function AgendamentoModal({
       )
     } else {
       const { data: novoAg, error } = await supabase.from('agendamentos').insert({
-        cliente_id: form.cliente_id,
+        cliente_id: clienteId,
         unidade_id: unidadeId,
         data_hora_inicio: inicioGeral.toISOString(),
         data_hora_fim: fimGeral.toISOString(),
