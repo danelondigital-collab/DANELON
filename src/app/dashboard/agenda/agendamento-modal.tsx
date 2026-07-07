@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Plus, Trash2, Search } from 'lucide-react'
+import { X, Plus, Trash2, Search, ClipboardList } from 'lucide-react'
 import { format, addMinutes, parse } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Agendamento, Profissional, Servico, Cliente } from '@/types'
 import HistoricoLog from '@/components/ui/historico-log'
@@ -53,9 +54,12 @@ export default function AgendamentoModal({
   horarioInicial, perfil, onClose, onSalvo
 }: Props) {
   const supabase = createClient()
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
   const [erroCliente, setErroCliente] = useState(false)
+  const [criandoComanda, setCriandoComanda] = useState(false)
+  const [comandaCriada, setComandaCriada] = useState<{ id: string; numero?: string } | null>(null)
 
   const dataInicio = agendamento
     ? new Date(agendamento.data_hora_inicio)
@@ -254,6 +258,68 @@ export default function AgendamentoModal({
     onSalvo()
   }
 
+  async function handleCriarComanda() {
+    if (!agendamento) return
+    const clienteId = clienteSelecionado?.id || form.cliente_id
+    if (!clienteId) { setErro('Selecione a cliente antes de criar a comanda.'); return }
+
+    setCriandoComanda(true); setErro('')
+
+    // Criar a comanda ligada ao agendamento
+    const { data: novaComanda, error: erroComanda } = await supabase
+      .from('comandas')
+      .insert({
+        cliente_id: clienteId,
+        unidade_id: unidadeId,
+        agendamento_id: agendamento.id,
+        status: 'aberta',
+      })
+      .select('id, numero')
+      .single()
+
+    if (erroComanda || !novaComanda) {
+      setErro(erroComanda?.message || 'Erro ao criar comanda')
+      setCriandoComanda(false)
+      return
+    }
+
+    // Criar os itens da comanda a partir dos itens do agendamento
+    for (const item of itens) {
+      const servico = servicos.find(s => s.id === item.servico_id)
+      const preco = servico?.preco ?? 0
+      const comissao = servico?.comissao_servico ?? 0
+
+      const { data: novoItem, error: erroItem } = await supabase
+        .from('comanda_itens')
+        .insert({
+          comanda_id: novaComanda.id,
+          tipo: 'servico',
+          servico_id: item.servico_id,
+          quantidade: 1,
+          preco_unitario: preco,
+          subtotal: preco,
+        })
+        .select('id')
+        .single()
+
+      if (erroItem || !novoItem) continue
+
+      if (item.profissional_id) {
+        await supabase.from('comanda_item_profissionais').insert({
+          comanda_item_id: novoItem.id,
+          profissional_id: item.profissional_id,
+          percentual_participacao: 100,
+          percentual_comissao: comissao,
+          valor_base: preco,
+          valor_comissao: Number(((preco * comissao) / 100).toFixed(2)),
+        })
+      }
+    }
+
+    setComandaCriada(novaComanda)
+    setCriandoComanda(false)
+  }
+
   async function handleExcluir() {
     if (!agendamento) return
     if (!confirm('Excluir este agendamento?')) return
@@ -425,6 +491,28 @@ export default function AgendamentoModal({
           </div>
           <div className="flex gap-3">
             <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
+            {agendamento && (
+              comandaCriada ? (
+                <button
+                  type="button"
+                  onClick={() => router.push('/dashboard/comandas')}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  Ver comanda
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleCriarComanda}
+                  disabled={criandoComanda}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  {criandoComanda ? 'Criando...' : 'Criar comanda'}
+                </button>
+              )
+            )}
             <button onClick={handleSalvar} disabled={loading}
               className="px-4 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-amber-400 text-white text-sm font-medium rounded-lg transition-colors">
               {loading ? 'Salvando...' : 'Salvar'}

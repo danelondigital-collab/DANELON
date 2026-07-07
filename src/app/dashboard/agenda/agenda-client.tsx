@@ -44,6 +44,14 @@ function calcAltura(ag: Agendamento): number {
   return Math.max((dur / 60) * SLOT_HEIGHT, 32)
 }
 
+function calcAlturaItem(inicio: string, fim?: string | null, duracao?: number): number {
+  if (fim) {
+    const mins = (parseISO(fim).getTime() - parseISO(inicio).getTime()) / 60000
+    return Math.max((mins / 60) * SLOT_HEIGHT, 32)
+  }
+  return Math.max(((duracao || 60) / 60) * SLOT_HEIGHT, 32)
+}
+
 function calcTopFromTime(time: string): number {
   const [h, m] = time.split(':').map(Number)
   return (h - HORAS[0]) * SLOT_HEIGHT + (m / 60) * SLOT_HEIGHT
@@ -453,27 +461,48 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                       </div>
                     )}
 
-                    {/* Agendamentos */}
-                    {agsProf.map(ag => {
+                    {/* Agendamentos — um bloco por item de serviço */}
+                    {agsProf.flatMap(ag => {
+                      const statusClass = statusCor[ag.status] || statusCor.agendado
+                      const itensProf = (ag.itens || []).filter(i => i.profissional_id === prof.id)
+                      // Se os itens têm horário próprio, renderiza um bloco por item
+                      if (itensProf.length > 0 && itensProf[0].data_hora_inicio) {
+                        return itensProf.map(item => {
+                          const top = calcTop(item.data_hora_inicio!)
+                          const height = calcAlturaItem(item.data_hora_inicio!, item.data_hora_fim, item.servico?.duracao_minutos)
+                          return (
+                            <div
+                              key={item.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, ag)}
+                              onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
+                              className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
+                              style={{ top: top + 1, height: height - 2, borderLeftColor: prof.cor_agenda || '#6366f1' }}
+                            >
+                              <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
+                              <p className="text-xs truncate opacity-75 leading-tight">{item.servico?.nome || 'Serviço'}</p>
+                              {height >= 52 && (
+                                <p className="text-xs opacity-60 leading-tight mt-0.5">
+                                  {format(parseISO(item.data_hora_inicio!), 'HH:mm')}
+                                  {item.data_hora_fim && ` – ${format(parseISO(item.data_hora_fim), 'HH:mm')}`}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })
+                      }
+                      // Fallback: legado sem horário por item → bloco único do agendamento
                       const top = calcTop(ag.data_hora_inicio)
                       const height = calcAltura(ag)
-                      const servNome =
-                        ag.itens?.find(i => i.profissional_id === prof.id)?.servico?.nome ||
-                        ag.itens?.[0]?.servico?.nome ||
-                        'Serviço'
-                      const statusClass = statusCor[ag.status] || statusCor.agendado
-                      return (
+                      const servNome = itensProf[0]?.servico?.nome || ag.itens?.[0]?.servico?.nome || 'Serviço'
+                      return [(
                         <div
                           key={ag.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, ag)}
                           onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
                           className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
-                          style={{
-                            top: top + 1,
-                            height: height - 2,
-                            borderLeftColor: prof.cor_agenda || '#6366f1',
-                          }}
+                          style={{ top: top + 1, height: height - 2, borderLeftColor: prof.cor_agenda || '#6366f1' }}
                         >
                           <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
                           <p className="text-xs truncate opacity-75 leading-tight">{servNome}</p>
@@ -484,7 +513,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                             </p>
                           )}
                         </div>
-                      )
+                      )]
                     })}
                   </div>
                 )
@@ -558,26 +587,52 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                       />
                     ))}
 
-                    {/* Agendamentos */}
-                    {agsNoDia.map(ag => {
+                    {/* Agendamentos — um bloco por item de serviço */}
+                    {agsNoDia.flatMap(ag => {
+                      const statusClass = statusCor[ag.status] || statusCor.agendado
+                      // Se os itens têm horário próprio, renderiza um bloco por item
+                      if (ag.itens?.length && ag.itens[0].data_hora_inicio) {
+                        return (ag.itens || []).map(item => {
+                          const top = calcTop(item.data_hora_inicio!)
+                          const height = calcAlturaItem(item.data_hora_inicio!, item.data_hora_fim, item.servico?.duracao_minutos)
+                          const cor = item.profissional?.cor_agenda || '#6366f1'
+                          return (
+                            <div
+                              key={item.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, ag)}
+                              onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
+                              className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
+                              style={{ top: top + 1, height: height - 2, borderLeftColor: cor }}
+                            >
+                              <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
+                              <p className="text-xs truncate opacity-75 leading-tight">{item.servico?.nome || 'Serviço'}</p>
+                              {item.profissional?.nome && (
+                                <p className="text-xs truncate opacity-60 leading-tight">{item.profissional.nome}</p>
+                              )}
+                              {height >= 52 && (
+                                <p className="text-xs opacity-60 leading-tight mt-0.5">
+                                  {format(parseISO(item.data_hora_inicio!), 'HH:mm')}
+                                  {item.data_hora_fim && ` – ${format(parseISO(item.data_hora_fim), 'HH:mm')}`}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })
+                      }
+                      // Fallback: legado → bloco único
                       const top = calcTop(ag.data_hora_inicio)
                       const height = calcAltura(ag)
-                      const profs = ag.itens?.map(i => i.profissional).filter(Boolean) || []
-                      const cor = profs[0]?.cor_agenda || '#6366f1'
+                      const cor = ag.itens?.[0]?.profissional?.cor_agenda || '#6366f1'
                       const servNome = ag.itens?.[0]?.servico?.nome || 'Serviço'
-                      const statusClass = statusCor[ag.status] || statusCor.agendado
-                      return (
+                      return [(
                         <div
                           key={ag.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, ag)}
                           onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
                           className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
-                          style={{
-                            top: top + 1,
-                            height: height - 2,
-                            borderLeftColor: cor,
-                          }}
+                          style={{ top: top + 1, height: height - 2, borderLeftColor: cor }}
                         >
                           <p className="text-xs font-semibold truncate leading-tight">{ag.cliente?.nome || 'Cliente'}</p>
                           <p className="text-xs truncate opacity-75 leading-tight">{servNome}</p>
@@ -588,7 +643,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                             </p>
                           )}
                         </div>
-                      )
+                      )]
                     })}
                   </div>
                 )
