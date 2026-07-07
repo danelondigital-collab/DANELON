@@ -55,6 +55,7 @@ export default function AgendamentoModal({
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
+  const [erroCliente, setErroCliente] = useState(false)
 
   const dataInicio = agendamento
     ? new Date(agendamento.data_hora_inicio)
@@ -156,11 +157,11 @@ export default function AgendamentoModal({
   }
 
   async function handleSalvar() {
-    if (!form.cliente_id) { setErro('Selecione o cliente.'); return }
+    if (!form.cliente_id) { setErroCliente(true); setErro('Selecione o cliente antes de salvar.'); return }
     if (itens.length === 0) { setErro('Adicione pelo menos um serviço.'); return }
     if (itens.some(i => !i.profissional_id || !i.servico_id)) { setErro('Preencha profissional e serviço em todos os itens.'); return }
 
-    setLoading(true); setErro('')
+    setLoading(true); setErro(''); setErroCliente(false)
 
     const itensComHorario = itens.map(i => ({
       ...i,
@@ -242,9 +243,10 @@ export default function AgendamentoModal({
 
       if (error || !novoAg) { setErro(error?.message || 'Erro ao salvar'); setLoading(false); return }
 
-      await supabase.from('agendamento_itens').insert(
+      const { error: erroItens } = await supabase.from('agendamento_itens').insert(
         itensPayload.map(i => ({ agendamento_id: novoAg.id, ...i }))
       )
+      if (erroItens) { setErro(erroItens.message); setLoading(false); return }
     }
 
     setLoading(false)
@@ -267,9 +269,10 @@ export default function AgendamentoModal({
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-4">
+          {erro && <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{erro}</div>}
           {/* Cliente */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cliente <span className="text-red-500">*</span></label>
+            <label className={`block text-sm font-medium mb-1 ${erroCliente ? 'text-red-600' : 'text-gray-700'}`}>Cliente <span className="text-red-500">*</span></label>
             {clienteSelecionado ? (
               <div className="flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">
                 <div>
@@ -299,7 +302,7 @@ export default function AgendamentoModal({
                   }}
                   onFocus={() => setMostrarDropdown(true)}
                   onBlur={() => setTimeout(() => setMostrarDropdown(false), 150)}
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                  className={`w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600 ${erroCliente ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                 />
                 {mostrarDropdown && clienteBusca && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto">
@@ -314,6 +317,7 @@ export default function AgendamentoModal({
                           setClienteBusca(c.nome)
                           setField('cliente_id', c.id)
                           setMostrarDropdown(false)
+                          setErroCliente(false)
                         }}
                         className="w-full text-left px-4 py-3 hover:bg-amber-50 transition-colors border-b border-gray-50 last:border-0">
                         <p className="text-sm font-medium text-gray-900">{c.nome}</p>
