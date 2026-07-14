@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Servico, CategoriaServico } from '@/types'
-import { registrarLog } from '@/lib/registrar-log'
 import HistoricoLog from '@/components/ui/historico-log'
 
 interface Props {
@@ -57,12 +56,10 @@ export default function ServicoModal({ servico, categorias, unidadeId, onClose, 
     if (servico) {
       const { data, error } = await supabase.from('servicos').update(payload).eq('id', servico.id).select('*, categoria:categorias_servico(*)').single()
       if (error) { setErro(error.message); setLoading(false); return }
-      await registrarLog(supabase, { tabela: 'servico', registroId: servico.id, acao: 'editar', unidadeId, dados: { nome: payload.nome } })
       onSalvo(data)
     } else {
       const { data, error } = await supabase.from('servicos').insert(payload).select('*, categoria:categorias_servico(*)').single()
       if (error) { setErro(error.message); setLoading(false); return }
-      await registrarLog(supabase, { tabela: 'servico', registroId: data.id, acao: 'criar', unidadeId, dados: { nome: payload.nome } })
       onSalvo(data)
     }
     setLoading(false)
