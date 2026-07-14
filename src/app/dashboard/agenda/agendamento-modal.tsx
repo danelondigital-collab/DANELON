@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Agendamento, Profissional, Servico, Cliente } from '@/types'
 import HistoricoLog from '@/components/ui/historico-log'
+import { registrarLog } from '@/lib/registrar-log'
 
 interface ItemAgendamento {
   profissional_id: string
@@ -280,6 +281,7 @@ export default function AgendamentoModal({
       await supabase.from('agendamento_itens').insert(
         itensPayload.map(i => ({ agendamento_id: agendamento.id, ...i }))
       )
+      await registrarLog(supabase, { tabela: 'agendamento', registroId: agendamento.id, acao: 'editar', unidadeId, dados: { cliente_id: clienteId, status: form.status } })
     } else {
       const { data: novoAg, error } = await supabase.from('agendamentos').insert({
         cliente_id: clienteId,
@@ -296,6 +298,8 @@ export default function AgendamentoModal({
         itensPayload.map(i => ({ agendamento_id: novoAg.id, ...i }))
       )
       if (erroItens) { setErro(erroItens.message); setLoading(false); return }
+
+      await registrarLog(supabase, { tabela: 'agendamento', registroId: novoAg.id, acao: 'criar', unidadeId, dados: { cliente_id: clienteId } })
 
       // Mantém modal aberto para o usuário poder criar a comanda
       setAgendamentoSalvo({ id: novoAg.id })
@@ -373,6 +377,7 @@ export default function AgendamentoModal({
   async function handleExcluir() {
     if (!agendamento) return
     if (!confirm('Excluir este agendamento?')) return
+    await registrarLog(supabase, { tabela: 'agendamento', registroId: agendamento.id, acao: 'excluir', unidadeId })
     await supabase.from('agendamentos').delete().eq('id', agendamento.id)
     onSalvo()
   }

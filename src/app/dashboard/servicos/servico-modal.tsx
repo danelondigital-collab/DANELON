@@ -4,17 +4,20 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Servico, CategoriaServico } from '@/types'
+import { registrarLog } from '@/lib/registrar-log'
+import HistoricoLog from '@/components/ui/historico-log'
 
 interface Props {
   servico: Servico | null
   categorias: CategoriaServico[]
+  unidadeId?: string
   onClose: () => void
   onSalvo: (s: Servico) => void
 }
 
 type Aba = 'cadastro' | 'configuracoes'
 
-export default function ServicoModal({ servico, categorias, onClose, onSalvo }: Props) {
+export default function ServicoModal({ servico, categorias, unidadeId, onClose, onSalvo }: Props) {
   const supabase = createClient()
   const [aba, setAba] = useState<Aba>('cadastro')
   const [loading, setLoading] = useState(false)
@@ -54,10 +57,12 @@ export default function ServicoModal({ servico, categorias, onClose, onSalvo }: 
     if (servico) {
       const { data, error } = await supabase.from('servicos').update(payload).eq('id', servico.id).select('*, categoria:categorias_servico(*)').single()
       if (error) { setErro(error.message); setLoading(false); return }
+      await registrarLog(supabase, { tabela: 'servico', registroId: servico.id, acao: 'editar', unidadeId, dados: { nome: payload.nome } })
       onSalvo(data)
     } else {
       const { data, error } = await supabase.from('servicos').insert(payload).select('*, categoria:categorias_servico(*)').single()
       if (error) { setErro(error.message); setLoading(false); return }
+      await registrarLog(supabase, { tabela: 'servico', registroId: data.id, acao: 'criar', unidadeId, dados: { nome: payload.nome } })
       onSalvo(data)
     }
     setLoading(false)
@@ -167,6 +172,12 @@ export default function ServicoModal({ servico, categorias, onClose, onSalvo }: 
             )}
           </div>
         </div>
+
+        {servico && (
+          <div className="px-6 pb-2">
+            <HistoricoLog tabela="servico" registroId={servico.id} />
+          </div>
+        )}
 
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
           {erro && <p className="text-sm text-red-600">{erro}</p>}

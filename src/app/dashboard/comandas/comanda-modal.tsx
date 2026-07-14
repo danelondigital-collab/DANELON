@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Comanda, ComandaItem, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem, Pacote } from '@/types'
 import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
 import HistoricoLog from '@/components/ui/historico-log'
+import { registrarLog } from '@/lib/registrar-log'
 
 interface Props {
   comanda: Comanda | null
@@ -220,6 +221,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
     if (error || !data) { alert(error?.message); return null }
     const novaComanda = data as unknown as Comanda
+    await registrarLog(supabase, { tabela: 'comanda', registroId: novaComanda.id, acao: 'criar', unidadeId })
     setComanda(novaComanda)
     onSalva(novaComanda)
     return novaComanda.id
@@ -390,7 +392,10 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     }
 
     setFechando(false)
-    if (data) { onSalva(data as unknown as Comanda); onClose() }
+    if (data) {
+      await registrarLog(supabase, { tabela: 'comanda', registroId: comanda.id, acao: 'editar', unidadeId, dados: { status: 'fechada', valor_final: totalFinal, forma_pagamento: formaPagamento } })
+      onSalva(data as unknown as Comanda); onClose()
+    }
   }
 
   async function salvarObservacoes() {
@@ -409,7 +414,10 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     if (!confirm('Cancelar esta comanda?')) return
     const { data } = await supabase.from('comandas').update({ status: 'cancelada' }).eq('id', comanda.id)
       .select('*, cliente:clientes(id, nome, telefone, data_nascimento)').single()
-    if (data) onSalva(data as unknown as Comanda)
+    if (data) {
+      await registrarLog(supabase, { tabela: 'comanda', registroId: comanda.id, acao: 'editar', unidadeId, dados: { status: 'cancelada' } })
+      onSalva(data as unknown as Comanda)
+    }
     onClose()
   }
 
@@ -417,6 +425,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     if (!comanda?.id) { onClose(); return }
     if (!confirm('Excluir esta comanda e todos os itens dela? Essa ação não pode ser desfeita.')) return
     setExcluindo(true)
+    await registrarLog(supabase, { tabela: 'comanda', registroId: comanda.id, acao: 'excluir', unidadeId })
     const { error } = await supabase.from('comandas').delete().eq('id', comanda.id)
     setExcluindo(false)
     if (error) { alert(error.message); return }

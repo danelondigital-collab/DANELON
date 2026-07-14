@@ -326,7 +326,7 @@ export interface RelatorioComissao {
 
 export interface LogAtividade {
   id: string
-  tabela: 'comanda' | 'agendamento'
+  tabela: 'comanda' | 'agendamento' | 'servico' | 'produto'
   registro_id: string
   acao: 'criar' | 'editar' | 'excluir'
   usuario_id: string | null

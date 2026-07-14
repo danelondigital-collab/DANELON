@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Produto } from '@/types'
+import { registrarLog } from '@/lib/registrar-log'
+import HistoricoLog from '@/components/ui/historico-log'
 
 interface Props { produto: Produto | null; unidadeId: string; onClose: () => void; onSalvo: (p: Produto) => void }
 
@@ -62,10 +64,12 @@ export default function ProdutoModal({ produto, unidadeId, onClose, onSalvo }: P
     if (produto) {
       const { data, error } = await supabase.from('produtos').update(payload).eq('id', produto.id).select().single()
       if (error) { setErro(error.message); setLoading(false); return }
+      await registrarLog(supabase, { tabela: 'produto', registroId: produto.id, acao: 'editar', unidadeId, dados: { nome: payload.nome } })
       onSalvo(data)
     } else {
       const { data, error } = await supabase.from('produtos').insert(payload).select().single()
       if (error) { setErro(error.message); setLoading(false); return }
+      await registrarLog(supabase, { tabela: 'produto', registroId: data.id, acao: 'criar', unidadeId, dados: { nome: payload.nome } })
       onSalvo(data)
     }
     setLoading(false)
@@ -170,6 +174,12 @@ export default function ProdutoModal({ produto, unidadeId, onClose, onSalvo }: P
             )}
           </div>
         </div>
+
+        {produto && (
+          <div className="px-6 pb-2">
+            <HistoricoLog tabela="produto" registroId={produto.id} />
+          </div>
+        )}
 
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
           {erro && <p className="text-sm text-red-600">{erro}</p>}

@@ -16,7 +16,7 @@ function fmtData(iso: string) {
 }
 
 interface Props {
-  tabela: 'comanda' | 'agendamento'
+  tabela: 'comanda' | 'agendamento' | 'servico' | 'produto'
   registroId: string
 }
 
