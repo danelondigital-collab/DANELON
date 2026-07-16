@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import type { Comanda } from '@/types'
 import PrintButton from '../PrintButton'
 
 const formaPagamentoLabel: Record<string, string> = {
@@ -14,6 +13,31 @@ const formaPagamentoLabel: Record<string, string> = {
   cartao_credito: 'Crédito',
   pix: 'PIX',
   misto: 'Misto',
+  retrabalho: 'Retrabalho',
+  avaliacao: 'Avaliação',
+}
+
+interface ItemRelatorio {
+  id: string
+  tipo: string
+  quantidade: number
+  preco_unitario: number
+  subtotal: number
+  servico?: { nome: string } | null
+  produto?: { nome: string } | null
+}
+
+interface ComandaRelatorio {
+  id: string
+  data_fechamento?: string
+  valor_total: number
+  desconto: number
+  sinal: number
+  credito_utilizado: number
+  valor_final: number
+  forma_pagamento?: string
+  cliente?: { nome: string } | null
+  itens?: ItemRelatorio[]
 }
 
 interface PageProps {
@@ -39,7 +63,7 @@ export default async function PrintComandasPage({ searchParams }: PageProps) {
   const { data: rawComandas } = await supabase
     .from('comandas')
     .select(`
-      id, data_abertura, data_fechamento, valor_total, desconto, valor_final, forma_pagamento, status,
+      id, data_fechamento, valor_total, desconto, sinal, credito_utilizado, valor_final, forma_pagamento,
       cliente:clientes(id, nome),
       itens:comanda_itens(
         id, tipo, quantidade, preco_unitario, subtotal,
@@ -53,17 +77,23 @@ export default async function PrintComandasPage({ searchParams }: PageProps) {
     .lte('data_fechamento', fim + 'T23:59:59')
     .order('data_fechamento', { ascending: true })
 
-  const comandas = (rawComandas as unknown as Comanda[]) || []
+  const comandas = (rawComandas as unknown as ComandaRelatorio[]) || []
 
+  // Totais
   const totalFaturamento = comandas.reduce((s, c) => s + (c.valor_final || 0), 0)
-  const totalBruto = comandas.reduce((s, c) => s + (c.valor_total || 0), 0)
-  const totalDesconto = comandas.reduce((s, c) => s + (c.desconto || 0), 0)
+  const totalDescontoGeral = comandas.reduce((s, c) => s + (c.desconto || 0), 0)
+  const totalDescontoItem = comandas.reduce((s, c) =>
+    s + (c.itens || []).reduce((si, i) => si + Math.max(0, i.preco_unitario * i.quantidade - i.subtotal), 0), 0)
+  const totalDescontos = totalDescontoGeral + totalDescontoItem
+  const totalSinal = comandas.reduce((s, c) => s + (c.sinal || 0), 0)
+  const totalBrutoOriginal = comandas.reduce((s, c) =>
+    s + (c.itens || []).reduce((si, i) => si + i.preco_unitario * i.quantidade, 0), 0)
 
   const periodoFormatado = `${format(new Date(inicio + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })} a ${format(new Date(fim + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="max-w-5xl mx-auto px-8 py-8">
+      <div className="max-w-6xl mx-auto px-8 py-8">
 
         {/* Cabeçalho */}
         <div className="flex items-start justify-between pb-5 border-b-2 border-gray-800 mb-6">
@@ -85,23 +115,47 @@ export default async function PrintComandasPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* Resumo */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        {/* Resumo — linha 1 */}
+        <div className="grid grid-cols-3 gap-4 mb-3">
           <div className="border border-gray-200 rounded-lg p-3 text-center">
             <p className="text-xs text-gray-500 mb-1">Comandas</p>
             <p className="text-2xl font-bold text-gray-900">{comandas.length}</p>
           </div>
           <div className="border border-gray-200 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-500 mb-1">Valor bruto</p>
-            <p className="text-xl font-bold text-gray-900">{formatCurrency(totalBruto)}</p>
-          </div>
-          <div className="border border-gray-200 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-500 mb-1">Descontos</p>
-            <p className="text-xl font-bold text-red-600">{totalDesconto > 0 ? `- ${formatCurrency(totalDesconto)}` : '—'}</p>
+            <p className="text-xs text-gray-500 mb-1">Valor bruto (sem descontos)</p>
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(totalBrutoOriginal)}</p>
           </div>
           <div className="border border-gray-200 rounded-lg p-3 text-center" style={{ backgroundColor: '#FFF8F0' }}>
             <p className="text-xs text-gray-500 mb-1">Faturamento líquido</p>
             <p className="text-xl font-bold" style={{ color: '#B8924A' }}>{formatCurrency(totalFaturamento)}</p>
+          </div>
+        </div>
+
+        {/* Resumo — linha 2: descontos e sinal */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="border border-red-100 bg-red-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-red-500 mb-1">Desc. geral (comanda)</p>
+            <p className="text-lg font-bold text-red-700">
+              {totalDescontoGeral > 0 ? `- ${formatCurrency(totalDescontoGeral)}` : '—'}
+            </p>
+          </div>
+          <div className="border border-red-100 bg-red-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-red-500 mb-1">Desc. por item</p>
+            <p className="text-lg font-bold text-red-700">
+              {totalDescontoItem > 0 ? `- ${formatCurrency(totalDescontoItem)}` : '—'}
+            </p>
+          </div>
+          <div className="border border-red-200 bg-red-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-red-600 font-semibold mb-1">Total de descontos</p>
+            <p className="text-lg font-bold text-red-800">
+              {totalDescontos > 0 ? `- ${formatCurrency(totalDescontos)}` : '—'}
+            </p>
+          </div>
+          <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-amber-600 mb-1">Total em sinais</p>
+            <p className="text-lg font-bold text-amber-800">
+              {totalSinal > 0 ? formatCurrency(totalSinal) : '—'}
+            </p>
           </div>
         </div>
 
@@ -114,57 +168,83 @@ export default async function PrintComandasPage({ searchParams }: PageProps) {
           <table className="w-full border-collapse">
             <thead>
               <tr style={{ backgroundColor: '#1F2937' }}>
-                <th className="text-left text-xs font-semibold text-white px-3 py-2.5">Data / Hora</th>
+                <th className="text-left text-xs font-semibold text-white px-3 py-2.5">Data</th>
                 <th className="text-left text-xs font-semibold text-white px-3 py-2.5">Cliente</th>
                 <th className="text-left text-xs font-semibold text-white px-3 py-2.5">Itens</th>
                 <th className="text-left text-xs font-semibold text-white px-3 py-2.5">Pagamento</th>
-                <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Desconto</th>
+                <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Desc. geral</th>
+                <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Desc. item</th>
+                <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Sinal</th>
                 <th className="text-right text-xs font-semibold text-white px-3 py-2.5">Total</th>
               </tr>
             </thead>
             <tbody>
-              {comandas.map((c, idx) => (
-                <tr key={c.id} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#F9FAFB' }}>
-                  <td className="px-3 py-2.5 text-xs text-gray-600 align-top whitespace-nowrap border-b border-gray-100">
-                    {c.data_fechamento ? format(parseISO(c.data_fechamento), 'dd/MM/yyyy') : '—'}
-                    <br />
-                    <span className="text-gray-400">
-                      {c.data_fechamento ? format(parseISO(c.data_fechamento), 'HH:mm') : ''}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-sm font-medium text-gray-900 align-top border-b border-gray-100">
-                    {c.cliente?.nome || '—'}
-                  </td>
-                  <td className="px-3 py-2.5 align-top border-b border-gray-100">
-                    {c.itens?.map(item => (
-                      <div key={item.id} className="text-xs text-gray-600 leading-5">
-                        · {item.tipo === 'servico' ? item.servico?.nome : item.produto?.nome}
-                        {item.quantidade > 1 ? ` ×${item.quantidade}` : ''}{' '}
-                        <span className="font-medium text-gray-800">{formatCurrency(item.subtotal)}</span>
-                      </div>
-                    ))}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-gray-600 align-top border-b border-gray-100 whitespace-nowrap">
-                    {c.forma_pagamento ? formaPagamentoLabel[c.forma_pagamento] : '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-right align-top border-b border-gray-100 whitespace-nowrap">
-                    {c.desconto > 0
-                      ? <span className="text-red-600">- {formatCurrency(c.desconto)}</span>
-                      : <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-sm font-semibold text-gray-900 text-right align-top border-b border-gray-100 whitespace-nowrap">
-                    {formatCurrency(c.valor_final)}
-                  </td>
-                </tr>
-              ))}
+              {comandas.map((c, idx) => {
+                const descItem = (c.itens || []).reduce((s, i) => s + Math.max(0, i.preco_unitario * i.quantidade - i.subtotal), 0)
+                return (
+                  <tr key={c.id} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#F9FAFB' }}>
+                    <td className="px-3 py-2.5 text-xs text-gray-600 align-top whitespace-nowrap border-b border-gray-100">
+                      {c.data_fechamento ? format(parseISO(c.data_fechamento), 'dd/MM/yyyy') : '—'}
+                      <br />
+                      <span className="text-gray-400">
+                        {c.data_fechamento ? format(parseISO(c.data_fechamento), 'HH:mm') : ''}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-sm font-medium text-gray-900 align-top border-b border-gray-100">
+                      {c.cliente?.nome || '—'}
+                    </td>
+                    <td className="px-3 py-2.5 align-top border-b border-gray-100">
+                      {(c.itens || []).map(item => (
+                        <div key={item.id} className="text-xs text-gray-600 leading-5">
+                          · {item.tipo === 'servico' ? item.servico?.nome : item.produto?.nome}
+                          {item.quantidade > 1 ? ` ×${item.quantidade}` : ''}{' '}
+                          <span className="font-medium text-gray-800">{formatCurrency(item.subtotal)}</span>
+                          {(item.preco_unitario * item.quantidade - item.subtotal) > 0.01 && (
+                            <span className="text-red-400 ml-1">
+                              (-{formatCurrency(item.preco_unitario * item.quantidade - item.subtotal)})
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-gray-600 align-top border-b border-gray-100 whitespace-nowrap">
+                      {c.forma_pagamento ? formaPagamentoLabel[c.forma_pagamento] : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-right align-top border-b border-gray-100 whitespace-nowrap">
+                      {(c.desconto || 0) > 0
+                        ? <span className="text-red-600">- {formatCurrency(c.desconto)}</span>
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-right align-top border-b border-gray-100 whitespace-nowrap">
+                      {descItem > 0.01
+                        ? <span className="text-red-600">- {formatCurrency(descItem)}</span>
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-right align-top border-b border-gray-100 whitespace-nowrap">
+                      {(c.sinal || 0) > 0
+                        ? <span className="text-amber-600">{formatCurrency(c.sinal)}</span>
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-sm font-semibold text-gray-900 text-right align-top border-b border-gray-100 whitespace-nowrap">
+                      {formatCurrency(c.valor_final)}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
             <tfoot>
               <tr style={{ backgroundColor: '#FFF8F0' }}>
                 <td colSpan={4} className="px-3 py-3 text-sm font-bold text-gray-800 border-t-2 border-gray-300">
                   TOTAL — {comandas.length} comanda{comandas.length !== 1 ? 's' : ''}
                 </td>
-                <td className="px-3 py-3 text-sm font-bold text-red-600 text-right border-t-2 border-gray-300">
-                  {totalDesconto > 0 ? `- ${formatCurrency(totalDesconto)}` : '—'}
+                <td className="px-3 py-3 text-xs font-bold text-red-600 text-right border-t-2 border-gray-300">
+                  {totalDescontoGeral > 0 ? `- ${formatCurrency(totalDescontoGeral)}` : '—'}
+                </td>
+                <td className="px-3 py-3 text-xs font-bold text-red-600 text-right border-t-2 border-gray-300">
+                  {totalDescontoItem > 0 ? `- ${formatCurrency(totalDescontoItem)}` : '—'}
+                </td>
+                <td className="px-3 py-3 text-xs font-bold text-amber-700 text-right border-t-2 border-gray-300">
+                  {totalSinal > 0 ? formatCurrency(totalSinal) : '—'}
                 </td>
                 <td className="px-3 py-3 text-sm font-bold text-right border-t-2 border-gray-300" style={{ color: '#B8924A' }}>
                   {formatCurrency(totalFaturamento)}

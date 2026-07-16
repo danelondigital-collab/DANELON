@@ -88,7 +88,7 @@ interface ComandaDetalhe {
 }
 
 const formaPagamentoLabel: Record<string, string> = {
-  dinheiro: 'Dinheiro', cartao_debito: 'Débito', cartao_credito: 'Crédito', pix: 'PIX', misto: 'Misto',
+  dinheiro: 'Dinheiro', cartao_debito: 'Débito', cartao_credito: 'Crédito', pix: 'PIX', misto: 'Misto', retrabalho: 'Retrabalho', avaliacao: 'Avaliação',
 }
 
 interface Props {

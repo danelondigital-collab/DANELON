@@ -28,6 +28,8 @@ const FORMAS_PAGAMENTO = [
   { value: 'cartao_credito', label: 'Cartão Crédito' },
   { value: 'pix', label: 'Pix' },
   { value: 'misto', label: 'Misto' },
+  { value: 'retrabalho', label: 'Retrabalho' },
+  { value: 'avaliacao', label: 'Avaliação' },
 ]
 
 export default function ComandaModal({ comanda: comandaInicial, profissionais, servicos, produtos, comissoesProfissional, unidadeId, perfil, onClose, onSalva, onExcluida }: Props) {

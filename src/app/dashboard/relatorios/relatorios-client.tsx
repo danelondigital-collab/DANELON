@@ -13,6 +13,8 @@ const formaPagamentoLabel: Record<string, string> = {
   cartao_credito: 'Crédito',
   pix: 'PIX',
   misto: 'Misto',
+  retrabalho: 'Retrabalho',
+  avaliacao: 'Avaliação',
 }
 
 interface Props {
