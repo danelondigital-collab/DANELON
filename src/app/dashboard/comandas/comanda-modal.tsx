@@ -364,8 +364,14 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
   async function handleFechar() {
     if (!comanda?.id) { alert('Adicione pelo menos um item antes de fechar.'); return }
-    const pagamentosValidos = linhasPagamento.filter(l => l.forma && parseFloat(l.valor) > 0)
-    if (pagamentosValidos.length === 0) { alert('Adicione pelo menos uma forma de pagamento com valor.'); return }
+    const formasZeroPermitidas = ['avaliacao', 'retrabalho']
+    const pagamentosValidos = linhasPagamento.filter(l =>
+      l.forma && (parseFloat(l.valor) > 0 || formasZeroPermitidas.includes(l.forma))
+    )
+    if (pagamentosValidos.length === 0) { alert('Adicione pelo menos uma forma de pagamento.'); return }
+    if (totalFinal > 0 && !pagamentosValidos.some(l => parseFloat(l.valor) > 0 || formasZeroPermitidas.includes(l.forma))) {
+      alert('Informe o valor recebido.'); return
+    }
     if (creditoAplicado > saldoCredito + 0.01) { alert('Crédito aplicado maior que o saldo disponível.'); return }
     setFechando(true)
     const desc = parseFloat(desconto) || 0
@@ -875,10 +881,10 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                       )}
                     </div>
                   ))}
-                  {totalPago > 0 && (
+                  {(totalPago > 0 || linhasPagamento.some(l => l.forma)) && (
                     <div className="flex justify-between text-xs pt-1 border-t border-gray-100">
                       <span className="text-gray-500">Total pago</span>
-                      <span className={`font-medium ${totalPago < totalFinal - 0.01 ? 'text-red-600' : 'text-green-600'}`}>
+                      <span className={`font-medium ${totalFinal > 0 && totalPago < totalFinal - 0.01 ? 'text-red-600' : 'text-green-600'}`}>
                         {formatCurrency(totalPago)}
                       </span>
                     </div>
