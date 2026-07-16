@@ -305,24 +305,24 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
       .select('data_hora_inicio, data_hora_fim')
       .eq('agendamento_id', agId)
 
+    // Recalcula limites do agendamento pai baseado em todos os itens (incluindo o recém-movido)
+    let parentStart = newStart
+    let parentEnd = newEnd
     if (todosItens && todosItens.length > 0) {
       type ItemTempo = { data_hora_inicio: string | null; data_hora_fim: string | null }
       const comData = (todosItens as ItemTempo[]).filter(i => i.data_hora_inicio && i.data_hora_fim)
       if (comData.length > 0) {
         const starts = comData.map(i => parseISO(i.data_hora_inicio!).getTime())
         const ends = comData.map(i => parseISO(i.data_hora_fim!).getTime())
-        await supabase.from('agendamentos').update({
-          data_hora_inicio: new Date(Math.min(...starts)).toISOString(),
-          data_hora_fim: new Date(Math.max(...ends)).toISOString(),
-        }).eq('id', agId)
-      } else {
-        // Nenhum item tem data no DB ainda — usa os tempos do item recém-movido
-        await supabase.from('agendamentos').update({
-          data_hora_inicio: newStart.toISOString(),
-          data_hora_fim: newEnd.toISOString(),
-        }).eq('id', agId)
+        parentStart = new Date(Math.min(...starts))
+        parentEnd = new Date(Math.max(...ends))
       }
     }
+    const { error: errAg } = await supabase.from('agendamentos').update({
+      data_hora_inicio: parentStart.toISOString(),
+      data_hora_fim: parentEnd.toISOString(),
+    }).eq('id', agId)
+    if (errAg) { mostrarErroSlot('Erro ao atualizar agendamento: ' + errAg.message); onSalvo(); return }
 
     // Registra log da alteração
     const itemMovido = ag.itens?.find(i => i.id === itemId)
@@ -350,7 +350,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   }
 
   function handleDragOverCol(e: React.DragEvent, colKey: string) {
-    if (!arrastando || !dragRef.current) return
+    if (!dragRef.current) return  // ref é síncrona — funciona antes do re-render do React
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     const relY = calcRelY(e)
