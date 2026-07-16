@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Upload, Trash2, FileImage, Loader2, ImageIcon, Wallet, ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
+import { X, Upload, Trash2, FileImage, Loader2, ImageIcon, Wallet, ArrowDownCircle, ArrowUpCircle, Receipt, TrendingUp } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Cliente, CreditoCliente } from '@/types'
 import { formatCurrency } from '@/lib/utils'
@@ -21,7 +21,17 @@ interface Documento {
   created_at: string
 }
 
-type Aba = 'cadastro' | 'documentos' | 'credito' | 'configuracoes'
+type Aba = 'cadastro' | 'documentos' | 'credito' | 'historico' | 'configuracoes'
+
+interface VisitaHistorico {
+  id: string
+  numero: number | null
+  created_at: string
+  data_fechamento: string | null
+  valor_final: number
+  status: string
+  itens: { tipo: string; quantidade: number; servico: { nome: string } | null; produto: { nome: string } | null }[]
+}
 
 export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: Props) {
   const supabase = createClient()
@@ -54,6 +64,10 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
   const [creditos, setCreditos] = useState<CreditoCliente[]>([])
   const [carregandoCreditos, setCarregandoCreditos] = useState(false)
   const saldoCredito = creditos.reduce((s, c) => c.tipo === 'entrada' ? s + c.valor : s - c.valor, 0)
+  // Histórico de visitas
+  const [historico, setHistorico] = useState<VisitaHistorico[]>([])
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false)
+
   const [uploadando, setUploadando] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [deletando, setDeletando] = useState<string | null>(null)
@@ -91,7 +105,29 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
   useEffect(() => {
     if (aba === 'documentos' && cliente) carregarDocumentos()
     if (aba === 'credito' && cliente) carregarCreditos()
+    if (aba === 'historico' && cliente) carregarHistorico()
   }, [aba, cliente])
+
+  async function carregarHistorico() {
+    if (!cliente) return
+    setCarregandoHistorico(true)
+    const { data } = await supabase
+      .from('comandas')
+      .select(`
+        id, numero, created_at, data_fechamento, valor_final, status,
+        itens:comanda_itens(
+          tipo, quantidade,
+          servico:servicos(nome),
+          produto:produtos(nome)
+        )
+      `)
+      .eq('cliente_id', cliente.id)
+      .eq('unidade_id', unidadeId)
+      .neq('status', 'cancelada')
+      .order('created_at', { ascending: false })
+    setHistorico((data as unknown as VisitaHistorico[]) || [])
+    setCarregandoHistorico(false)
+  }
 
   async function carregarCreditos() {
     if (!cliente) return
@@ -233,6 +269,7 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
 
   const abas: [Aba, string][] = [
     ['cadastro', 'Cadastro'],
+    ['historico', 'Histórico'],
     ['documentos', 'Documentos'],
     ['credito', 'Crédito'],
     ['configuracoes', 'Configurações'],
@@ -595,6 +632,84 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
               </div>
             )}
 
+            {aba === 'historico' && (
+              <div className="space-y-4">
+                {carregandoHistorico ? (
+                  <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 text-gray-400 animate-spin" /></div>
+                ) : historico.length === 0 ? (
+                  <div className="text-center py-10">
+                    <Receipt className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-400">Nenhuma visita registrada ainda.</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Resumo */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-amber-50 rounded-xl p-4">
+                        <p className="text-xs text-amber-600 font-medium mb-1">Total de visitas</p>
+                        <p className="text-2xl font-bold text-amber-800">{historico.length}</p>
+                      </div>
+                      <div className="bg-green-50 rounded-xl p-4">
+                        <p className="text-xs text-green-600 font-medium mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Total gasto</p>
+                        <p className="text-2xl font-bold text-green-800">
+                          {formatCurrency(historico.filter(v => v.status === 'fechada').reduce((s, v) => s + v.valor_final, 0))}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Lista de visitas */}
+                    <div className="space-y-2">
+                      {historico.map(visita => {
+                        const data = new Date(visita.data_fechamento || visita.created_at)
+                        const dataFmt = data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                        const servicos = visita.itens
+                          .filter(i => i.tipo === 'servico' && i.servico)
+                          .map(i => i.servico!.nome)
+                        const produtos = visita.itens
+                          .filter(i => i.tipo === 'produto' && i.produto)
+                          .map(i => i.produto!.nome)
+                        const isFechada = visita.status === 'fechada'
+                        return (
+                          <div key={visita.id} className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition-colors">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-gray-800">{dataFmt}</span>
+                                {visita.numero && (
+                                  <span className="text-xs text-gray-400">#{visita.numero}</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isFechada ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {isFechada ? 'Fechada' : 'Aberta'}
+                                </span>
+                                {isFechada && (
+                                  <span className="text-sm font-semibold text-gray-900">{formatCurrency(visita.valor_final)}</span>
+                                )}
+                              </div>
+                            </div>
+                            {servicos.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-1">
+                                {servicos.map((s, i) => (
+                                  <span key={i} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">{s}</span>
+                                ))}
+                              </div>
+                            )}
+                            {produtos.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {produtos.map((p, i) => (
+                                  <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{p}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {aba === 'configuracoes' && (
               <div className="space-y-4">
                 <div className="flex items-start justify-between py-3 border-b border-gray-100">
@@ -628,7 +743,7 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
             >
               Cancelar
             </button>
-            {aba !== 'documentos' && aba !== 'credito' && (
+            {aba !== 'documentos' && aba !== 'credito' && aba !== 'historico' && (
               <button
                 onClick={handleSalvar}
                 disabled={loading}
