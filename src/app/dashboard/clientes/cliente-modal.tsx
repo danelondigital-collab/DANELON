@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Upload, Trash2, FileImage, Loader2, ImageIcon, Wallet, ArrowDownCircle, ArrowUpCircle, Receipt, TrendingUp } from 'lucide-react'
+import { X, Upload, Trash2, FileImage, Loader2, ImageIcon, Wallet, ArrowDownCircle, ArrowUpCircle, Receipt, TrendingUp, Scissors } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Cliente, CreditoCliente } from '@/types'
 import { formatCurrency } from '@/lib/utils'
@@ -29,6 +29,7 @@ interface VisitaHistorico {
   created_at: string
   data_fechamento: string | null
   valor_final: number
+  desconto: number
   status: string
   itens: { tipo: string; quantidade: number; servico: { nome: string } | null; produto: { nome: string } | null }[]
 }
@@ -114,7 +115,7 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
     const { data } = await supabase
       .from('comandas')
       .select(`
-        id, numero, created_at, data_fechamento, valor_final, status,
+        id, numero, created_at, data_fechamento, valor_final, desconto, status,
         itens:comanda_itens(
           tipo, quantidade,
           servico:servicos(nome),
@@ -644,18 +645,52 @@ export default function ClienteModal({ cliente, unidadeId, onClose, onSalvo }: P
                 ) : (
                   <>
                     {/* Resumo */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-amber-50 rounded-xl p-4">
-                        <p className="text-xs text-amber-600 font-medium mb-1">Total de visitas</p>
-                        <p className="text-2xl font-bold text-amber-800">{historico.length}</p>
-                      </div>
-                      <div className="bg-green-50 rounded-xl p-4">
-                        <p className="text-xs text-green-600 font-medium mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Total gasto</p>
-                        <p className="text-2xl font-bold text-green-800">
-                          {formatCurrency(historico.filter(v => v.status === 'fechada').reduce((s, v) => s + v.valor_final, 0))}
-                        </p>
-                      </div>
-                    </div>
+                    {(() => {
+                      const fechadas = historico.filter(v => v.status === 'fechada')
+                      const totalGasto = fechadas.reduce((s, v) => s + v.valor_final, 0)
+                      const totalDesconto = fechadas.reduce((s, v) => s + (v.desconto || 0), 0)
+                      const servicosFrequentes = Object.entries(
+                        historico.flatMap(v => v.itens.filter(i => i.tipo === 'servico' && i.servico).map(i => i.servico!.nome))
+                          .reduce<Record<string, number>>((acc, nome) => ({ ...acc, [nome]: (acc[nome] || 0) + 1 }), {})
+                      ).filter(([, c]) => c >= 3).sort(([, a], [, b]) => b - a)
+                      return (
+                        <>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-amber-50 rounded-xl p-4">
+                              <p className="text-xs text-amber-600 font-medium mb-1">Total de visitas</p>
+                              <p className="text-2xl font-bold text-amber-800">{historico.length}</p>
+                            </div>
+                            <div className="bg-green-50 rounded-xl p-4">
+                              <p className="text-xs text-green-600 font-medium mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Total gasto</p>
+                              <p className="text-2xl font-bold text-green-800">{formatCurrency(totalGasto)}</p>
+                            </div>
+                            {totalDesconto > 0 && (
+                              <div className="col-span-2 bg-rose-50 rounded-xl p-4">
+                                <p className="text-xs text-rose-600 font-medium mb-1">Total de desconto concedido</p>
+                                <p className="text-2xl font-bold text-rose-800">{formatCurrency(totalDesconto)}</p>
+                              </div>
+                            )}
+                          </div>
+                          {servicosFrequentes.length > 0 && (
+                            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+                              <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1.5 mb-3">
+                                <Scissors className="w-3.5 h-3.5" /> Serviços mais realizados
+                              </p>
+                              <div className="space-y-2">
+                                {servicosFrequentes.map(([nome, count]) => (
+                                  <div key={nome} className="flex items-center justify-between">
+                                    <span className="text-xs text-indigo-900 font-medium">{nome}</span>
+                                    <span className="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2 py-0.5 rounded-full">
+                                      {count}× realizado{count !== 1 ? 's' : ''}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )
+                    })()}
 
                     {/* Lista de visitas */}
                     <div className="space-y-2">
