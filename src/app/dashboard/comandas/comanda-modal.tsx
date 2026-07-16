@@ -932,6 +932,9 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
   const profsIniciais = itemExistente?.profissionais?.length
     ? itemExistente.profissionais.map(p => ({ profissional_id: p.profissional_id, participacao: p.percentual_participacao }))
     : [{ profissional_id: profissionais[0]?.id || '', participacao: 100 }]
+  const profProdutoInicial = tipoInicial === 'produto'
+    ? (itemExistente?.profissionais?.[0]?.profissional_id || '')
+    : ''
 
   const [tipo, setTipo] = useState<'servico' | 'produto'>(tipoInicial)
   const [itemId, setItemId] = useState(itemIdInicial)
@@ -940,6 +943,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
   const [tipoDesconto, setTipoDesconto] = useState<'percentual' | 'reais'>('percentual')
   const [descontoReais, setDescontoReais] = useState(0)
   const [profs, setProfs] = useState(profsIniciais)
+  const [profProduto, setProfProduto] = useState(profProdutoInicial)
   const [salvando, setSalvando] = useState(false)
   const [ultimoAdicionado, setUltimoAdicionado] = useState<string | null>(null)
 
@@ -997,6 +1001,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
     setItemId('')
     if (t === 'servico') {
       setProfs([{ profissional_id: profissionais[0]?.id || '', participacao: 100 }])
+      setProfProduto('')
     } else {
       setProfs([])
     }
@@ -1030,6 +1035,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
     setDescontoReais(0)
     setTipoDesconto('percentual')
     setProfs([{ profissional_id: profissionais[0]?.id || '', participacao: 100 }])
+    setProfProduto('')
   }
 
   async function handleSalvo(continuar: boolean) {
@@ -1042,7 +1048,10 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
     const pctFinal = tipoDesconto === 'reais'
       ? (totalBrutoItem > 0 ? parseFloat(((descontoReais / totalBrutoItem) * 100).toFixed(4)) : 0)
       : descontoPercentual
-    await onSalvo({ tipo, item_id: itemId, quantidade, desconto_percentual: pctFinal, profissionais: tipo === 'servico' ? profs : [], editandoId: itemExistente?.id }, continuar)
+    const profsFinal = tipo === 'servico'
+      ? profs
+      : profProduto ? [{ profissional_id: profProduto, participacao: 100 }] : []
+    await onSalvo({ tipo, item_id: itemId, quantidade, desconto_percentual: pctFinal, profissionais: profsFinal, editandoId: itemExistente?.id }, continuar)
     setSalvando(false)
     if (continuar) {
       setUltimoAdicionado(nomeItem)
@@ -1150,6 +1159,23 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
               </div>
             </div>
           </div>
+
+          {/* Profissional que vendeu (produto) */}
+          {tipo === 'produto' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Profissional que vendeu</label>
+              <select
+                value={profProduto}
+                onChange={e => setProfProduto(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+              >
+                <option value="">— Nenhum —</option>
+                {profissionais.map(p => (
+                  <option key={p.id} value={p.id}>{p.nome}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Profissionais (só serviço) */}
           {tipo === 'servico' && (
