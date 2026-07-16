@@ -11,6 +11,7 @@ interface Visita {
   created_at: string
   data_fechamento: string | null
   valor_final: number
+  desconto: number
   status: string
   itens: { tipo: string; servico: { nome: string } | null; produto: { nome: string } | null }[]
 }
@@ -32,7 +33,7 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
       const { data } = await supabase
         .from('comandas')
         .select(`
-          id, numero, created_at, data_fechamento, valor_final, status,
+          id, numero, created_at, data_fechamento, valor_final, desconto, status,
           itens:comanda_itens(
             tipo,
             servico:servicos(nome),
@@ -49,9 +50,9 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
     carregar()
   }, [clienteId, unidadeId])
 
-  const totalGasto = visitas
-    .filter(v => v.status === 'fechada')
-    .reduce((s, v) => s + v.valor_final, 0)
+  const visitasFechadas = visitas.filter(v => v.status === 'fechada')
+  const totalGasto = visitasFechadas.reduce((s, v) => s + v.valor_final, 0)
+  const totalDesconto = visitasFechadas.reduce((s, v) => s + (v.desconto || 0), 0)
 
   const servicosFrequentes = Object.entries(
     visitas.flatMap(v => v.itens.filter(i => i.tipo === 'servico' && i.servico).map(i => i.servico!.nome))
@@ -102,6 +103,12 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
                   </p>
                   <p className="text-2xl font-bold text-green-800">{formatCurrency(totalGasto)}</p>
                 </div>
+                {totalDesconto > 0 && (
+                  <div className="col-span-2 bg-rose-50 rounded-xl p-4">
+                    <p className="text-xs text-rose-600 font-medium mb-1">Total de desconto concedido</p>
+                    <p className="text-2xl font-bold text-rose-800">{formatCurrency(totalDesconto)}</p>
+                  </div>
+                )}
               </div>
 
               {/* Serviços preferidos (≥ 3 vezes) */}
