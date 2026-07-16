@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, Search, ClipboardList, Layers } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Comanda, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem } from '@/types'
@@ -39,6 +39,25 @@ export default function ComandasClient({ comandas: initial, clientes, profission
 
   // Atualiza lista quando initial muda (nova busca server-side)
   useEffect(() => { setComandas(initial) }, [initial])
+
+  // Abre comanda pelo ?id= na URL (vindo do histórico da cliente)
+  const abrirPorId = useCallback(async (id: string) => {
+    const { createClient } = await import('@/lib/supabase/client')
+    const supabase = createClient()
+    const naLista = initial.find(c => c.id === id)
+    if (naLista) { abrirExistente(naLista); return }
+    const { data } = await supabase
+      .from('comandas')
+      .select('*, cliente:clientes(id, nome, telefone, data_nascimento)')
+      .eq('id', id)
+      .single()
+    if (data) abrirExistente(data as unknown as Comanda)
+  }, [initial]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const id = searchParams.get('id')
+    if (id) abrirPorId(id)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleBusca(valor: string) {
     setBusca(valor)

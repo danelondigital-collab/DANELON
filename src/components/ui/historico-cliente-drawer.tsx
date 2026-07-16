@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, Loader2, Receipt, TrendingUp, Scissors } from 'lucide-react'
+import { X, Loader2, Receipt, TrendingUp, Scissors, ExternalLink } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 
@@ -25,6 +26,7 @@ interface Props {
 
 export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidadeId, onClose }: Props) {
   const supabase = createClient()
+  const router = useRouter()
   const [visitas, setVisitas] = useState<Visita[]>([])
   const [carregando, setCarregando] = useState(true)
 
@@ -138,33 +140,41 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
                 const produtos = visita.itens.filter(i => i.tipo === 'produto' && i.produto).map(i => i.produto!.nome)
                 const isFechada = visita.status === 'fechada'
                 return (
-                  <div key={visita.id} className="border border-gray-100 rounded-xl p-4">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-800">{dataFmt}</span>
-                        {visita.numero && <span className="text-xs text-gray-400">#{visita.numero}</span>}
+                  <div key={visita.id} className="border border-gray-100 rounded-xl overflow-hidden">
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-800">{dataFmt}</span>
+                          {visita.numero && <span className="text-xs text-gray-400">#{visita.numero}</span>}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isFechada ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {isFechada ? 'Fechada' : 'Aberta'}
+                          </span>
+                          {isFechada && <span className="text-sm font-semibold text-gray-900">{formatCurrency(visita.valor_final)}</span>}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isFechada ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {isFechada ? 'Fechada' : 'Aberta'}
-                        </span>
-                        {isFechada && <span className="text-sm font-semibold text-gray-900">{formatCurrency(visita.valor_final)}</span>}
-                      </div>
+                      {servicos.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-1">
+                          {servicos.map((s, i) => (
+                            <span key={i} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">{s}</span>
+                          ))}
+                        </div>
+                      )}
+                      {produtos.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {produtos.map((p, i) => (
+                            <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{p}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {servicos.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-1">
-                        {servicos.map((s, i) => (
-                          <span key={i} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">{s}</span>
-                        ))}
-                      </div>
-                    )}
-                    {produtos.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {produtos.map((p, i) => (
-                          <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{p}</span>
-                        ))}
-                      </div>
-                    )}
+                    <button
+                      onClick={() => { onClose(); router.push(`/dashboard/comandas?id=${visita.id}`) }}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 border-t border-gray-100 bg-gray-50 hover:bg-gray-100 text-xs font-medium text-gray-600 transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" /> Abrir comanda
+                    </button>
                   </div>
                 )
               })}
