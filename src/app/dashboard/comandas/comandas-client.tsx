@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, Search, ClipboardList, Layers } from 'lucide-react'
+import { Plus, Search, ClipboardList, Layers, CalendarDays, X } from 'lucide-react'
+import { format } from 'date-fns'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Comanda, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem } from '@/types'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
@@ -32,6 +33,7 @@ export default function ComandasClient({ comandas: initial, clientes, profission
   const [comandas, setComandas] = useState(initial)
   const [busca, setBusca] = useState(searchParams.get('q') || '')
   const [filtroStatus, setFiltroStatus] = useState<string>('todos')
+  const [filtroData, setFiltroData] = useState(searchParams.get('data') || '')
   const [modalAberto, setModalAberto] = useState(false)
   const [modalGenericaAberto, setModalGenericaAberto] = useState(false)
   const [comandaSelecionada, setComandaSelecionada] = useState<Comanda | null>(null)
@@ -71,6 +73,18 @@ export default function ComandasClient({ comandas: initial, clientes, profission
       }
     }, 500)
   }
+
+  function handleFiltroData(data: string) {
+    setFiltroData(data)
+    if (data) {
+      router.push(`/dashboard/comandas?data=${data}`)
+    } else {
+      router.push('/dashboard/comandas')
+    }
+  }
+
+  const hoje = format(new Date(), 'yyyy-MM-dd')
+  const ontem = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')
 
   const filtradas = comandas.filter(c => {
     const matchBusca = c.cliente?.nome.toLowerCase().includes(busca.toLowerCase()) || String(c.id).includes(busca) || (c.numero || '').toLowerCase().includes(busca.toLowerCase())
@@ -134,19 +148,46 @@ export default function ComandasClient({ comandas: initial, clientes, profission
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200">
-        <div className="p-4 border-b border-gray-100 flex gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" placeholder="Buscar por cliente ou C#número..." value={busca} onChange={e => handleBusca(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600" />
+        <div className="p-4 border-b border-gray-100 space-y-3">
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input type="text" placeholder="Buscar por cliente ou C#número..." value={busca} onChange={e => handleBusca(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600" />
+            </div>
+            <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600">
+              <option value="todos">Todos</option>
+              <option value="aberta">Abertas</option>
+              <option value="fechada">Fechadas</option>
+              <option value="cancelada">Canceladas</option>
+            </select>
           </div>
-          <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600">
-            <option value="todos">Todos</option>
-            <option value="aberta">Abertas</option>
-            <option value="fechada">Fechadas</option>
-            <option value="cancelada">Canceladas</option>
-          </select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <CalendarDays className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <button
+              onClick={() => handleFiltroData(hoje)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${filtroData === hoje ? 'bg-amber-700 text-white border-amber-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >Hoje</button>
+            <button
+              onClick={() => handleFiltroData(ontem)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${filtroData === ontem ? 'bg-amber-700 text-white border-amber-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >Ontem</button>
+            <input
+              type="date"
+              value={filtroData}
+              onChange={e => handleFiltroData(e.target.value)}
+              className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 text-gray-700"
+            />
+            {filtroData && (
+              <button
+                onClick={() => handleFiltroData('')}
+                className="flex items-center gap-1 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <X className="w-3 h-3" /> Limpar
+              </button>
+            )}
+          </div>
         </div>
 
         {filtradas.length === 0 ? (

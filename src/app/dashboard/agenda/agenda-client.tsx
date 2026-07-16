@@ -86,6 +86,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   const [usuarioId, setUsuarioId] = useState<string | null>(null)
   const [usuarioNome, setUsuarioNome] = useState<string | null>(null)
 
+  const [arrastando, setArrastando] = useState(false)
   const fetchingRef = useRef(false)
   const dragRef = useRef<{ agId: string; itemId: string; oldInicio: string; oldFim: string; offsetY: number } | null>(null)
   const wasDraggingRef = useRef(false)
@@ -224,6 +225,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   function handleDragStart(e: React.DragEvent, ag: Agendamento, itemId: string, oldInicio: string, oldFim: string) {
     dragRef.current = { agId: ag.id, itemId, oldInicio, oldFim, offsetY: e.nativeEvent.offsetY }
     wasDraggingRef.current = false
+    setArrastando(true)
     e.dataTransfer.effectAllowed = 'move'
   }
 
@@ -283,24 +285,35 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
     }
 
     // Atualiza só este item de serviço
-    await supabase.from('agendamento_itens').update({
+    const { error: errItem } = await supabase.from('agendamento_itens').update({
       data_hora_inicio: newStart.toISOString(),
       data_hora_fim: newEnd.toISOString(),
     }).eq('id', itemId)
+    if (errItem) { mostrarErroSlot('Erro ao mover serviço: ' + errItem.message); onSalvo(); return }
 
-    // Recalcula horário do agendamento pai com base em todos os itens
+    // Recalcula horário do agendamento pai ignorando itens sem data definida
     const { data: todosItens } = await supabase
       .from('agendamento_itens')
       .select('data_hora_inicio, data_hora_fim')
       .eq('agendamento_id', agId)
 
     if (todosItens && todosItens.length > 0) {
-      const starts = todosItens.map((i: { data_hora_inicio: string }) => parseISO(i.data_hora_inicio).getTime())
-      const ends = todosItens.map((i: { data_hora_fim: string }) => parseISO(i.data_hora_fim).getTime())
-      await supabase.from('agendamentos').update({
-        data_hora_inicio: new Date(Math.min(...starts)).toISOString(),
-        data_hora_fim: new Date(Math.max(...ends)).toISOString(),
-      }).eq('id', agId)
+      type ItemTempo = { data_hora_inicio: string | null; data_hora_fim: string | null }
+      const comData = (todosItens as ItemTempo[]).filter(i => i.data_hora_inicio && i.data_hora_fim)
+      if (comData.length > 0) {
+        const starts = comData.map(i => parseISO(i.data_hora_inicio!).getTime())
+        const ends = comData.map(i => parseISO(i.data_hora_fim!).getTime())
+        await supabase.from('agendamentos').update({
+          data_hora_inicio: new Date(Math.min(...starts)).toISOString(),
+          data_hora_fim: new Date(Math.max(...ends)).toISOString(),
+        }).eq('id', agId)
+      } else {
+        // Nenhum item tem data no DB ainda — usa os tempos do item recém-movido
+        await supabase.from('agendamentos').update({
+          data_hora_inicio: newStart.toISOString(),
+          data_hora_fim: newEnd.toISOString(),
+        }).eq('id', agId)
+      }
     }
 
     // Registra log da alteração
@@ -325,6 +338,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
 
   function handleDropProf(e: React.DragEvent, hora: number, profId: string) {
     e.preventDefault()
+    setArrastando(false)
     if (!dragRef.current) return
     if (isProfDiaTodoBloqueado(profId, diaAtual)) return
     moverItem(diaAtual, hora, e.nativeEvent.offsetY)
@@ -332,6 +346,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
 
   function handleDropDia(e: React.DragEvent, dia: Date, hora: number) {
     e.preventDefault()
+    setArrastando(false)
     if (!dragRef.current) return
     moverItem(dia, hora, e.nativeEvent.offsetY)
   }
@@ -466,7 +481,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                         key={hora}
                         className={`absolute left-0 right-0 border-t border-gray-100 transition-colors ${
                           bloqueadaHoje ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-amber-50/50'
-                        }`}
+                        } ${arrastando ? 'z-20' : 'z-0'}`}
                         style={{ top: (hora - HORAS[0]) * SLOT_HEIGHT, height: SLOT_HEIGHT }}
                         onClick={bloqueadaHoje ? undefined : () => {
                           if (isProfHorarioBloqueado(prof.id, diaAtual, hora)) {
@@ -477,7 +492,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                           d.setHours(hora, 0, 0, 0)
                           abrirNovo(d, prof.id)
                         }}
-                        onDragOver={bloqueadaHoje ? undefined : (e) => e.preventDefault()}
+                        onDragOver={bloqueadaHoje ? undefined : (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
                         onDrop={bloqueadaHoje ? undefined : (e) => handleDropProf(e, hora, prof.id)}
                       />
                     ))}
@@ -530,6 +545,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                             key={item.id}
                             draggable
                             onDragStart={(e) => handleDragStart(e, ag, item.id, item._inicio, item._fim)}
+                            onDragEnd={() => setArrastando(false)}
                             onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
                             className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
                             style={{ top: top + 1, height: height - 2, borderLeftColor: prof.cor_agenda || '#6366f1' }}
@@ -606,14 +622,14 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                     {HORAS.map(hora => (
                       <div
                         key={hora}
-                        className="absolute left-0 right-0 border-t border-gray-100 cursor-pointer hover:bg-gray-50/60 transition-colors"
+                        className={`absolute left-0 right-0 border-t border-gray-100 cursor-pointer hover:bg-gray-50/60 transition-colors ${arrastando ? 'z-20' : 'z-0'}`}
                         style={{ top: (hora - HORAS[0]) * SLOT_HEIGHT, height: SLOT_HEIGHT }}
                         onClick={() => {
                           const data = new Date(dia)
                           data.setHours(hora, 0, 0, 0)
                           abrirNovo(data)
                         }}
-                        onDragOver={(e) => e.preventDefault()}
+                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
                         onDrop={(e) => handleDropDia(e, dia, hora)}
                       />
                     ))}
@@ -643,6 +659,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                             key={item.id}
                             draggable
                             onDragStart={(e) => handleDragStart(e, ag, item.id, item._inicio, item._fim)}
+                            onDragEnd={() => setArrastando(false)}
                             onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
                             className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
                             style={{ top: top + 1, height: height - 2, borderLeftColor: cor }}

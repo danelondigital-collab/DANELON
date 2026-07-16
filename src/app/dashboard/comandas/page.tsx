@@ -5,11 +5,11 @@ import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import ComandasClient from './comandas-client'
 
-export default async function ComandasPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function ComandasPage({ searchParams }: { searchParams: Promise<{ q?: string; data?: string }> }) {
   const supabase = await createClient()
   const cookieStore = await cookies()
   const unidadeId = cookieStore.get('unidade_id')?.value!
-  const { q } = await searchParams
+  const { q, data: dataFiltro } = await searchParams
 
   const { data: { user } } = await supabase.auth.getUser()
   const { data: usuario } = user
@@ -23,17 +23,27 @@ export default async function ComandasPage({ searchParams }: { searchParams: Pro
     ? (q.trim().toUpperCase().startsWith('C#') ? q.trim().toUpperCase() : `C#${q.trim().replace(/\D/g, '')}`)
     : null
 
+  // Monta a query de comandas de acordo com os filtros ativos
+  const baseQuery = supabase.from('comandas')
+    .select('*, cliente:clientes(id, nome, telefone, data_nascimento)')
+    .eq('unidade_id', unidadeId)
+
+  const comandasQuery = (() => {
+    if (numeroFormatado) {
+      return baseQuery.eq('numero', numeroFormatado)
+    }
+    if (dataFiltro) {
+      // Filtra pelo dia completo no fuso horário do Brasil (UTC-3)
+      return baseQuery
+        .gte('data_abertura', `${dataFiltro}T00:00:00-03:00`)
+        .lt('data_abertura', `${dataFiltro}T23:59:59-03:00`)
+        .order('created_at', { ascending: false })
+    }
+    return baseQuery.order('created_at', { ascending: false }).limit(100)
+  })()
+
   const [{ data: comandas }, { data: clientes }, { data: profissionais }, { data: servicos }, { data: produtos }, { data: comissoesProfissional }] = await Promise.all([
-    numeroFormatado
-      ? supabase.from('comandas')
-          .select('*, cliente:clientes(id, nome, telefone, data_nascimento)')
-          .eq('unidade_id', unidadeId)
-          .eq('numero', numeroFormatado)
-      : supabase.from('comandas')
-          .select('*, cliente:clientes(id, nome, telefone, data_nascimento)')
-          .eq('unidade_id', unidadeId)
-          .order('created_at', { ascending: false })
-          .limit(100),
+    comandasQuery,
     supabase.from('clientes').select('id, nome, telefone, data_nascimento').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
     supabase.from('profissionais').select('*').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
     supabase.from('servicos').select('*').eq('ativo', true).order('nome'),
