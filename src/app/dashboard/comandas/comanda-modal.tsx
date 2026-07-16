@@ -255,16 +255,15 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     const { data: novoItem, error } = await supabase.from('comanda_itens').insert(payload).select().single()
     if (error || !novoItem) { alert(error?.message); return }
 
-    if (item.tipo === 'servico' && item.profissionais.length > 0) {
-      const servico = servicos.find(s => s.id === item.item_id)
-      const comissaoServico = servico?.comissao_servico || 0
+    if (item.profissionais.length > 0) {
+      const comissaoBase = item.tipo === 'servico' ? (servicos.find(s => s.id === item.item_id)?.comissao_servico || 0) : 0
       const rateios = item.profissionais.filter(p => p.profissional_id).map(p => {
-        const prof = profissionais.find(x => x.id === p.profissional_id)
         const valorBase = subtotalComDesconto * (p.participacao / 100)
         const especifica = comissoesProfissional.find(c =>
-          c.profissional_id === p.profissional_id && c.tipo === 'servico' && c.servico_id === item.item_id
+          c.profissional_id === p.profissional_id && c.tipo === item.tipo &&
+          (item.tipo === 'servico' ? c.servico_id === item.item_id : c.produto_id === item.item_id)
         )
-        const pctComissao = especifica ? especifica.percentual : (comissaoServico > 0 ? comissaoServico : 0)
+        const pctComissao = especifica ? especifica.percentual : comissaoBase
         return {
           comanda_item_id: novoItem.id,
           profissional_id: p.profissional_id,
@@ -296,16 +295,15 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
     await supabase.from('comanda_item_profissionais').delete().eq('comanda_item_id', item.editandoId)
 
-    if (item.tipo === 'servico' && item.profissionais.length > 0) {
-      const servico = servicos.find(s => s.id === item.item_id)
-      const comissaoServico = servico?.comissao_servico || 0
+    if (item.profissionais.length > 0) {
+      const comissaoBase = item.tipo === 'servico' ? (servicos.find(s => s.id === item.item_id)?.comissao_servico || 0) : 0
       const rateios = item.profissionais.filter(p => p.profissional_id).map(p => {
-        const prof = profissionais.find(x => x.id === p.profissional_id)
         const valorBase = subtotalComDesconto * (p.participacao / 100)
         const especifica = comissoesProfissional.find(c =>
-          c.profissional_id === p.profissional_id && c.tipo === 'servico' && c.servico_id === item.item_id
+          c.profissional_id === p.profissional_id && c.tipo === item.tipo &&
+          (item.tipo === 'servico' ? c.servico_id === item.item_id : c.produto_id === item.item_id)
         )
-        const pctComissao = especifica ? especifica.percentual : (comissaoServico > 0 ? comissaoServico : 0)
+        const pctComissao = especifica ? especifica.percentual : comissaoBase
         return {
           comanda_item_id: item.editandoId!,
           profissional_id: p.profissional_id,
