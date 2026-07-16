@@ -349,8 +349,9 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   }
 
   function calcRelY(e: React.DragEvent): number {
-    const rect = e.currentTarget.getBoundingClientRect()
-    return e.clientY - rect.top
+    const el = e.currentTarget as HTMLElement | null
+    if (!el) return 0
+    return e.clientY - el.getBoundingClientRect().top
   }
 
   function handleDragOverCol(e: React.DragEvent, colKey: string) {
@@ -496,10 +497,11 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                     onDragLeave={handleDragLeaveCol}
                     onDrop={bloqueadaHoje ? undefined : (e) => {
                       e.preventDefault()
+                      const relY = calcRelY(e)
                       setArrastando(false)
                       setDragHover(null)
                       if (!dragRef.current) return
-                      moverItem(diaAtual, calcRelY(e))
+                      moverItem(diaAtual, relY)
                     }}
                   >
                     {/* Indicador visual de destino */}
@@ -654,10 +656,11 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                     onDragLeave={handleDragLeaveCol}
                     onDrop={(e) => {
                       e.preventDefault()
+                      const relY = calcRelY(e)
                       setArrastando(false)
                       setDragHover(null)
                       if (!dragRef.current) return
-                      moverItem(dia, calcRelY(e))
+                      moverItem(dia, relY)
                     }}
                   >
                     {/* Indicador visual de destino */}
