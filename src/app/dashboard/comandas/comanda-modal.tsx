@@ -926,6 +926,8 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
   const [itemId, setItemId] = useState(itemIdInicial)
   const [quantidade, setQuantidade] = useState(itemExistente?.quantidade ?? 1)
   const [descontoPercentual, setDescontoPercentual] = useState(itemExistente?.desconto_percentual ?? 0)
+  const [tipoDesconto, setTipoDesconto] = useState<'percentual' | 'reais'>('percentual')
+  const [descontoReais, setDescontoReais] = useState(0)
   const [profs, setProfs] = useState(profsIniciais)
   const [salvando, setSalvando] = useState(false)
   const [ultimoAdicionado, setUltimoAdicionado] = useState<string | null>(null)
@@ -934,7 +936,25 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
   const item = lista.find(i => i.id === itemId)
   const servicoSel = tipo === 'servico' ? servicos.find(s => s.id === itemId) : null
   const preco = item ? (tipo === 'servico' ? (item as Servico).preco : (item as Produto).preco_venda) : 0
-  const subtotal = preco * quantidade * (1 - descontoPercentual / 100)
+  const totalBrutoItem = preco * quantidade
+  const descontoValorEfetivo = tipoDesconto === 'reais'
+    ? Math.min(descontoReais, totalBrutoItem)
+    : totalBrutoItem * (descontoPercentual / 100)
+  const subtotal = Math.max(0, totalBrutoItem - descontoValorEfetivo)
+
+  function trocarTipoDesconto(novo: 'percentual' | 'reais') {
+    if (novo === tipoDesconto) return
+    if (novo === 'reais') {
+      // converte % atual para R$
+      setDescontoReais(parseFloat((totalBrutoItem * descontoPercentual / 100).toFixed(2)))
+    } else {
+      // converte R$ atual para %
+      setDescontoPercentual(totalBrutoItem > 0
+        ? parseFloat(((descontoReais / totalBrutoItem) * 100).toFixed(2))
+        : 0)
+    }
+    setTipoDesconto(novo)
+  }
   const totalPart = profs.reduce((s, p) => s + p.participacao, 0)
   // Prioridade: comissão específica do profissional > comissão do serviço > comissão padrão
   const comissaoServico = servicoSel?.comissao_servico || 0
@@ -996,6 +1016,8 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
     setItemId('')
     setQuantidade(1)
     setDescontoPercentual(0)
+    setDescontoReais(0)
+    setTipoDesconto('percentual')
     setProfs([{ profissional_id: profissionais[0]?.id || '', participacao: 100 }])
   }
 
@@ -1006,7 +1028,10 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
     }
     setSalvando(true)
     const nomeItem = lista.find(i => i.id === itemId)?.nome || ''
-    await onSalvo({ tipo, item_id: itemId, quantidade, desconto_percentual: descontoPercentual, profissionais: tipo === 'servico' ? profs : [], editandoId: itemExistente?.id }, continuar)
+    const pctFinal = tipoDesconto === 'reais'
+      ? (totalBrutoItem > 0 ? parseFloat(((descontoReais / totalBrutoItem) * 100).toFixed(4)) : 0)
+      : descontoPercentual
+    await onSalvo({ tipo, item_id: itemId, quantidade, desconto_percentual: pctFinal, profissionais: tipo === 'servico' ? profs : [], editandoId: itemExistente?.id }, continuar)
     setSalvando(false)
     if (continuar) {
       setUltimoAdicionado(nomeItem)
@@ -1074,12 +1099,37 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Desconto (%)</label>
-              <div className="relative">
-                <input type="number" min="0" max="100" step="1" value={descontoPercentual}
-                  onChange={e => setDescontoPercentual(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
-                  className="w-full pr-6 pl-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">%</span>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Desconto</label>
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  {tipoDesconto === 'percentual' ? (
+                    <>
+                      <input type="number" min="0" max="100" step="0.01" value={descontoPercentual}
+                        onChange={e => setDescontoPercentual(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                        className="w-full pr-6 pl-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">%</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">R$</span>
+                      <input type="number" min="0" step="0.01" value={descontoReais}
+                        onChange={e => setDescontoReais(Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600" />
+                    </>
+                  )}
+                </div>
+                <div className="flex border border-gray-300 rounded-lg overflow-hidden text-xs font-medium flex-shrink-0">
+                  <button type="button"
+                    onClick={() => trocarTipoDesconto('reais')}
+                    className={`px-2.5 py-2 transition-colors ${tipoDesconto === 'reais' ? 'bg-amber-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                    R$
+                  </button>
+                  <button type="button"
+                    onClick={() => trocarTipoDesconto('percentual')}
+                    className={`px-2.5 py-2 transition-colors ${tipoDesconto === 'percentual' ? 'bg-amber-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                    %
+                  </button>
+                </div>
               </div>
             </div>
             <div>
