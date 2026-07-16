@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, Loader2, Receipt, TrendingUp } from 'lucide-react'
+import { X, Loader2, Receipt, TrendingUp, Scissors } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 
@@ -53,6 +53,13 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
     .filter(v => v.status === 'fechada')
     .reduce((s, v) => s + v.valor_final, 0)
 
+  const servicosFrequentes = Object.entries(
+    visitas.flatMap(v => v.itens.filter(i => i.tipo === 'servico' && i.servico).map(i => i.servico!.nome))
+      .reduce<Record<string, number>>((acc, nome) => ({ ...acc, [nome]: (acc[nome] || 0) + 1 }), {})
+  )
+    .filter(([, count]) => count >= 3)
+    .sort(([, a], [, b]) => b - a)
+
   return (
     <div className="fixed inset-0 z-[60] flex">
       {/* Overlay */}
@@ -96,6 +103,25 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
                   <p className="text-2xl font-bold text-green-800">{formatCurrency(totalGasto)}</p>
                 </div>
               </div>
+
+              {/* Serviços preferidos (≥ 3 vezes) */}
+              {servicosFrequentes.length > 0 && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1.5 mb-3">
+                    <Scissors className="w-3.5 h-3.5" /> Serviços mais realizados
+                  </p>
+                  <div className="space-y-2">
+                    {servicosFrequentes.map(([nome, count]) => (
+                      <div key={nome} className="flex items-center justify-between">
+                        <span className="text-xs text-indigo-900 font-medium">{nome}</span>
+                        <span className="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2 py-0.5 rounded-full">
+                          {count}× realizado{count !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Lista de visitas */}
               {visitas.map(visita => {
