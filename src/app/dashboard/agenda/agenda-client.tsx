@@ -87,6 +87,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   const [usuarioNome, setUsuarioNome] = useState<string | null>(null)
 
   const [arrastando, setArrastando] = useState(false)
+  const [dragHover, setDragHover] = useState<{ colKey: string; top: number; altura: number } | null>(null)
   const fetchingRef = useRef(false)
   const dragRef = useRef<{ agId: string; itemId: string; oldInicio: string; oldFim: string; offsetY: number } | null>(null)
   const wasDraggingRef = useRef(false)
@@ -229,17 +230,24 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
     e.dataTransfer.effectAllowed = 'move'
   }
 
-  async function moverItem(novaDia: Date, hora: number, dropOffsetY: number) {
+  function calcDragSnap(relY: number, offsetY: number) {
+    const adjustedY = Math.max(0, relY - offsetY)
+    const totalMinutes = Math.round(((adjustedY / SLOT_HEIGHT) * 60) / 15) * 15
+    const clampedMinutes = Math.max(0, Math.min(totalMinutes, (HORAS.length - 1) * 60 + 45))
+    return {
+      newHour: HORAS[0] + Math.floor(clampedMinutes / 60),
+      newMinute: clampedMinutes % 60,
+      snappedTop: (clampedMinutes / 60) * SLOT_HEIGHT,
+    }
+  }
+
+  async function moverItem(novaDia: Date, relY: number) {
     if (!dragRef.current) return
     wasDraggingRef.current = true
     const { agId, itemId, oldInicio, oldFim, offsetY } = dragRef.current
     dragRef.current = null
 
-    const effectiveY = (hora - HORAS[0]) * SLOT_HEIGHT + Math.max(0, dropOffsetY - offsetY)
-    const totalMinutes = Math.round(((effectiveY / SLOT_HEIGHT) * 60) / 15) * 15
-    const clampedMinutes = Math.max(0, Math.min(totalMinutes, (HORAS.length - 1) * 60 + 45))
-    const newHour = HORAS[0] + Math.floor(clampedMinutes / 60)
-    const newMinute = clampedMinutes % 60
+    const { newHour, newMinute } = calcDragSnap(relY, offsetY)
 
     const ag = agendamentos.find(a => a.id === agId)
     if (!ag) return
@@ -336,19 +344,24 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
     onSalvo()
   }
 
-  function handleDropProf(e: React.DragEvent, hora: number, profId: string) {
-    e.preventDefault()
-    setArrastando(false)
-    if (!dragRef.current) return
-    if (isProfDiaTodoBloqueado(profId, diaAtual)) return
-    moverItem(diaAtual, hora, e.nativeEvent.offsetY)
+  function calcRelY(e: React.DragEvent): number {
+    const rect = e.currentTarget.getBoundingClientRect()
+    return e.clientY - rect.top
   }
 
-  function handleDropDia(e: React.DragEvent, dia: Date, hora: number) {
+  function handleDragOverCol(e: React.DragEvent, colKey: string) {
+    if (!arrastando || !dragRef.current) return
     e.preventDefault()
-    setArrastando(false)
-    if (!dragRef.current) return
-    moverItem(dia, hora, e.nativeEvent.offsetY)
+    e.dataTransfer.dropEffect = 'move'
+    const relY = calcRelY(e)
+    const { snappedTop } = calcDragSnap(relY, dragRef.current.offsetY)
+    const duracaoMs = parseISO(dragRef.current.oldFim).getTime() - parseISO(dragRef.current.oldInicio).getTime()
+    const altura = Math.max(32, (duracaoMs / 3600000) * SLOT_HEIGHT)
+    setDragHover({ colKey, top: snappedTop, altura })
+  }
+
+  function handleDragLeaveCol(e: React.DragEvent) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragHover(null)
   }
 
   const diasVisiveis = visualizacao === 'semana' ? diasSemana : [diaAtual]
@@ -474,14 +487,31 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                     key={prof.id}
                     className={`w-44 flex-shrink-0 border-l border-gray-200 relative ${bloqueadaHoje ? 'bg-gray-100' : ''}`}
                     style={{ height: totalAltura }}
+                    onDragOver={bloqueadaHoje ? undefined : (e) => handleDragOverCol(e, prof.id)}
+                    onDragLeave={handleDragLeaveCol}
+                    onDrop={bloqueadaHoje ? undefined : (e) => {
+                      e.preventDefault()
+                      setArrastando(false)
+                      setDragHover(null)
+                      if (!dragRef.current) return
+                      moverItem(diaAtual, calcRelY(e))
+                    }}
                   >
-                    {/* Linhas de hora */}
+                    {/* Indicador visual de destino */}
+                    {arrastando && dragHover?.colKey === prof.id && (
+                      <div
+                        className="absolute left-1 right-1 bg-amber-400/30 border-2 border-amber-500 border-dashed rounded-md pointer-events-none z-30"
+                        style={{ top: dragHover.top, height: dragHover.altura }}
+                      />
+                    )}
+
+                    {/* Linhas de hora — só para clique */}
                     {HORAS.map(hora => (
                       <div
                         key={hora}
-                        className={`absolute left-0 right-0 border-t border-gray-100 transition-colors ${
+                        className={`absolute left-0 right-0 border-t border-gray-100 transition-colors z-0 ${
                           bloqueadaHoje ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-amber-50/50'
-                        } ${arrastando ? 'z-20' : 'z-0'}`}
+                        }`}
                         style={{ top: (hora - HORAS[0]) * SLOT_HEIGHT, height: SLOT_HEIGHT }}
                         onClick={bloqueadaHoje ? undefined : () => {
                           if (isProfHorarioBloqueado(prof.id, diaAtual, hora)) {
@@ -492,8 +522,6 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                           d.setHours(hora, 0, 0, 0)
                           abrirNovo(d, prof.id)
                         }}
-                        onDragOver={bloqueadaHoje ? undefined : (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
-                        onDrop={bloqueadaHoje ? undefined : (e) => handleDropProf(e, hora, prof.id)}
                       />
                     ))}
 
@@ -617,20 +645,35 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                       isSameDay(dia, new Date()) ? 'bg-amber-50/20' : ''
                     }`}
                     style={{ height: totalAltura }}
+                    onDragOver={(e) => handleDragOverCol(e, dia.toISOString())}
+                    onDragLeave={handleDragLeaveCol}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      setArrastando(false)
+                      setDragHover(null)
+                      if (!dragRef.current) return
+                      moverItem(dia, calcRelY(e))
+                    }}
                   >
-                    {/* Linhas de hora clicáveis */}
+                    {/* Indicador visual de destino */}
+                    {arrastando && dragHover?.colKey === dia.toISOString() && (
+                      <div
+                        className="absolute left-1 right-1 bg-amber-400/30 border-2 border-amber-500 border-dashed rounded-md pointer-events-none z-30"
+                        style={{ top: dragHover.top, height: dragHover.altura }}
+                      />
+                    )}
+
+                    {/* Linhas de hora — só para clique (criar novo agendamento) */}
                     {HORAS.map(hora => (
                       <div
                         key={hora}
-                        className={`absolute left-0 right-0 border-t border-gray-100 cursor-pointer hover:bg-gray-50/60 transition-colors ${arrastando ? 'z-20' : 'z-0'}`}
+                        className="absolute left-0 right-0 border-t border-gray-100 cursor-pointer hover:bg-gray-50/60 transition-colors z-0"
                         style={{ top: (hora - HORAS[0]) * SLOT_HEIGHT, height: SLOT_HEIGHT }}
                         onClick={() => {
                           const data = new Date(dia)
                           data.setHours(hora, 0, 0, 0)
                           abrirNovo(data)
                         }}
-                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
-                        onDrop={(e) => handleDropDia(e, dia, hora)}
                       />
                     ))}
 
