@@ -26,6 +26,8 @@ const FORMAS_PAGAMENTO = [
   { value: 'dinheiro', label: 'Dinheiro' },
   { value: 'cartao_debito', label: 'Cartão Débito' },
   { value: 'cartao_credito', label: 'Cartão Crédito' },
+  { value: 'credito_avista', label: 'Crédito à Vista' },
+  { value: 'credito_parcelado', label: 'Crédito Parcelado' },
   { value: 'pix', label: 'Pix' },
   { value: 'misto', label: 'Misto' },
   { value: 'retrabalho', label: 'Retrabalho' },
@@ -42,7 +44,11 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [clienteId, setClienteId] = useState(comandaInicial?.cliente_id || '')
   const [mostrarClientes, setMostrarClientes] = useState(false)
   const [desconto, setDesconto] = useState(comandaInicial?.desconto?.toString() || '0')
-  const [formaPagamento, setFormaPagamento] = useState(comandaInicial?.forma_pagamento || '')
+  const [linhasPagamento, setLinhasPagamento] = useState<{ forma: string; valor: string }[]>(
+    comandaInicial?.pagamentos?.length
+      ? comandaInicial.pagamentos.map(p => ({ forma: p.forma, valor: p.valor.toString() }))
+      : [{ forma: '', valor: '' }]
+  )
   const [adicionandoItem, setAdicionandoItem] = useState(false)
   const [itemEditando, setItemEditando] = useState<ComandaItem | null>(null)
   const [fechando, setFechando] = useState(false)
@@ -54,7 +60,6 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [saldoCredito, setSaldoCredito] = useState(0)
   const [creditoAplicado, setCreditoAplicado] = useState(comandaInicial?.credito_utilizado || 0)
   const [sinalComanda, setSinalComanda] = useState(comandaInicial?.sinal || 0)
-  const [valorRecebido, setValorRecebido] = useState('')
   const [observacoes, setObservacoes] = useState(comandaInicial?.observacoes || '')
   const [salvandoObs, setSalvandoObs] = useState(false)
   const [pacotesCliente, setPacotesCliente] = useState<Pacote[]>([])
@@ -125,8 +130,8 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const descontoItensNum = itens.reduce((s, i) => s + Math.max(0, i.preco_unitario * i.quantidade - i.subtotal), 0)
   const descontoNum = parseFloat(desconto) || 0
   const totalFinal = Math.max(0, totalBruto - descontoNum - creditoAplicado - sinalComanda)
-  const valorRecebidoNum = parseFloat(valorRecebido) || 0
-  const creditoGerado = valorRecebidoNum > totalFinal ? parseFloat((valorRecebidoNum - totalFinal).toFixed(2)) : 0
+  const totalPago = linhasPagamento.reduce((s, l) => s + (parseFloat(l.valor) || 0), 0)
+  const creditoGerado = totalPago > totalFinal ? parseFloat((totalPago - totalFinal).toFixed(2)) : 0
   const isFechada = comanda?.status !== 'aberta' && comanda?.status !== undefined
   const clienteExibido = comanda?.cliente || clienteSelecionado
 
@@ -357,10 +362,13 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
   async function handleFechar() {
     if (!comanda?.id) { alert('Adicione pelo menos um item antes de fechar.'); return }
-    if (!formaPagamento) { alert('Selecione a forma de pagamento.'); return }
+    const pagamentosValidos = linhasPagamento.filter(l => l.forma && parseFloat(l.valor) > 0)
+    if (pagamentosValidos.length === 0) { alert('Adicione pelo menos uma forma de pagamento com valor.'); return }
     if (creditoAplicado > saldoCredito + 0.01) { alert('Crédito aplicado maior que o saldo disponível.'); return }
     setFechando(true)
     const desc = parseFloat(desconto) || 0
+    const pagamentosJson = pagamentosValidos.map(l => ({ forma: l.forma, valor: parseFloat(l.valor) }))
+    const formaFinal = pagamentosValidos.length === 1 ? pagamentosValidos[0].forma : 'misto'
     const { data } = await supabase.from('comandas')
       .update({
         status: 'fechada',
@@ -370,7 +378,8 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
         sinal: sinalComanda,
         valor_total: totalBruto,
         valor_final: totalFinal,
-        forma_pagamento: formaPagamento,
+        forma_pagamento: formaFinal,
+        pagamentos: pagamentosJson,
       })
       .eq('id', comanda.id)
       .select('*, cliente:clientes(id, nome, telefone, data_nascimento)').single()
@@ -819,40 +828,80 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
               </div>
 
               {!isFechada && (
-                <>
-                  <div className="pt-1">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Forma de pagamento</label>
-                    <select value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}
-                      className="w-full px-2 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-600">
-                      <option value="">Selecionar...</option>
-                      {FORMAS_PAGAMENTO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                    </select>
+                <div className="pt-1 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-medium text-gray-600">Pagamentos</label>
+                    <button
+                      onClick={() => setLinhasPagamento(prev => [...prev, { forma: '', valor: '' }])}
+                      className="text-xs text-amber-700 hover:text-amber-900 font-medium flex items-center gap-0.5"
+                    >
+                      <Plus className="w-3 h-3" /> Adicionar
+                    </button>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Valor recebido</label>
-                    <div className="relative">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">R$</span>
-                      <input type="number" min="0" step="0.01" value={valorRecebido}
-                        onChange={e => setValorRecebido(e.target.value)}
-                        placeholder={totalFinal.toFixed(2)}
-                        className="w-full pl-7 pr-2 py-1.5 border border-gray-200 rounded text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-600" />
+                  {linhasPagamento.map((linha, idx) => (
+                    <div key={idx} className="flex gap-1.5 items-center">
+                      <select
+                        value={linha.forma}
+                        onChange={e => setLinhasPagamento(prev => prev.map((l, i) => i === idx ? { ...l, forma: e.target.value } : l))}
+                        className="flex-1 min-w-0 px-1.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-600"
+                      >
+                        <option value="">Forma...</option>
+                        {FORMAS_PAGAMENTO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                      </select>
+                      <div className="relative w-20 flex-shrink-0">
+                        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">R$</span>
+                        <input
+                          type="number" min="0" step="0.01"
+                          value={linha.valor}
+                          onChange={e => setLinhasPagamento(prev => prev.map((l, i) => i === idx ? { ...l, valor: e.target.value } : l))}
+                          placeholder="0,00"
+                          className="w-full pl-6 pr-1 py-1.5 border border-gray-200 rounded-lg text-xs text-right focus:outline-none focus:ring-1 focus:ring-amber-600"
+                        />
+                      </div>
+                      {linhasPagamento.length > 1 && (
+                        <button
+                          onClick={() => setLinhasPagamento(prev => prev.filter((_, i) => i !== idx))}
+                          className="flex-shrink-0 text-gray-400 hover:text-red-500"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
-                    {creditoGerado > 0 && (
-                      <p className="text-xs text-green-600 font-medium mt-1 flex items-center gap-1">
-                        <Wallet className="w-3 h-3" /> Gera {formatCurrency(creditoGerado)} de crédito
-                      </p>
-                    )}
-                  </div>
-                </>
+                  ))}
+                  {totalPago > 0 && (
+                    <div className="flex justify-between text-xs pt-1 border-t border-gray-100">
+                      <span className="text-gray-500">Total pago</span>
+                      <span className={`font-medium ${totalPago < totalFinal - 0.01 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(totalPago)}
+                      </span>
+                    </div>
+                  )}
+                  {creditoGerado > 0 && (
+                    <p className="text-xs text-green-600 font-medium flex items-center gap-1">
+                      <Wallet className="w-3 h-3" /> Gera {formatCurrency(creditoGerado)} de crédito
+                    </p>
+                  )}
+                </div>
               )}
 
-              {isFechada && comanda?.forma_pagamento && (
-                <p className="text-xs text-gray-500">
-                  Pagamento: <span className="font-medium text-gray-700">
-                    {FORMAS_PAGAMENTO.find(f => f.value === comanda.forma_pagamento)?.label}
-                  </span>
-                </p>
+              {isFechada && (
+                <div className="text-xs text-gray-500 space-y-1">
+                  {comanda?.pagamentos?.length ? (
+                    comanda.pagamentos.map((p, i) => (
+                      <div key={i} className="flex justify-between">
+                        <span>{FORMAS_PAGAMENTO.find(f => f.value === p.forma)?.label || p.forma}</span>
+                        <span className="font-medium text-gray-700">{formatCurrency(p.valor)}</span>
+                      </div>
+                    ))
+                  ) : comanda?.forma_pagamento ? (
+                    <div className="flex justify-between">
+                      <span>Pagamento</span>
+                      <span className="font-medium text-gray-700">
+                        {FORMAS_PAGAMENTO.find(f => f.value === comanda.forma_pagamento)?.label || comanda.forma_pagamento}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
               )}
             </div>
 
@@ -930,9 +979,6 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
   const profsIniciais = itemExistente?.profissionais?.length
     ? itemExistente.profissionais.map(p => ({ profissional_id: p.profissional_id, participacao: p.percentual_participacao }))
     : [{ profissional_id: profissionais[0]?.id || '', participacao: 100 }]
-  const profProdutoInicial = tipoInicial === 'produto'
-    ? (itemExistente?.profissionais?.[0]?.profissional_id || '')
-    : ''
 
   const [tipo, setTipo] = useState<'servico' | 'produto'>(tipoInicial)
   const [itemId, setItemId] = useState(itemIdInicial)
@@ -941,7 +987,6 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
   const [tipoDesconto, setTipoDesconto] = useState<'percentual' | 'reais'>('percentual')
   const [descontoReais, setDescontoReais] = useState(0)
   const [profs, setProfs] = useState(profsIniciais)
-  const [profProduto, setProfProduto] = useState(profProdutoInicial)
   const [salvando, setSalvando] = useState(false)
   const [ultimoAdicionado, setUltimoAdicionado] = useState<string | null>(null)
 
@@ -997,12 +1042,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
   function trocarTipo(t: 'servico' | 'produto') {
     setTipo(t)
     setItemId('')
-    if (t === 'servico') {
-      setProfs([{ profissional_id: profissionais[0]?.id || '', participacao: 100 }])
-      setProfProduto('')
-    } else {
-      setProfs([])
-    }
+    setProfs([{ profissional_id: profissionais[0]?.id || '', participacao: 100 }])
   }
 
   function setProfField(idx: number, field: string, value: string | number) {
@@ -1033,12 +1073,11 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
     setDescontoReais(0)
     setTipoDesconto('percentual')
     setProfs([{ profissional_id: profissionais[0]?.id || '', participacao: 100 }])
-    setProfProduto('')
   }
 
   async function handleSalvo(continuar: boolean) {
     if (!itemId) { alert('Selecione um item.'); return }
-    if (tipo === 'servico' && profs.length > 0 && Math.abs(totalPart - 100) > 0.01) {
+    if (profs.length > 0 && Math.abs(totalPart - 100) > 0.01) {
       alert('A soma das participações deve ser 100%.'); return
     }
     setSalvando(true)
@@ -1046,10 +1085,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
     const pctFinal = tipoDesconto === 'reais'
       ? (totalBrutoItem > 0 ? parseFloat(((descontoReais / totalBrutoItem) * 100).toFixed(4)) : 0)
       : descontoPercentual
-    const profsFinal = tipo === 'servico'
-      ? profs
-      : profProduto ? [{ profissional_id: profProduto, participacao: 100 }] : []
-    await onSalvo({ tipo, item_id: itemId, quantidade, desconto_percentual: pctFinal, profissionais: profsFinal, editandoId: itemExistente?.id }, continuar)
+    await onSalvo({ tipo, item_id: itemId, quantidade, desconto_percentual: pctFinal, profissionais: profs, editandoId: itemExistente?.id }, continuar)
     setSalvando(false)
     if (continuar) {
       setUltimoAdicionado(nomeItem)
@@ -1158,29 +1194,13 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
             </div>
           </div>
 
-          {/* Profissional que vendeu (produto) */}
-          {tipo === 'produto' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Profissional que vendeu</label>
-              <select
-                value={profProduto}
-                onChange={e => setProfProduto(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
-              >
-                <option value="">— Nenhum —</option>
-                {profissionais.map(p => (
-                  <option key={p.id} value={p.id}>{p.nome}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Profissionais (só serviço) */}
-          {tipo === 'servico' && (
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
+          {/* Profissionais e rateio — serviço e produto */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
                 <div>
-                  <p className="text-sm font-semibold text-gray-700">Profissionais e rateio de comissão</p>
+                  <p className="text-sm font-semibold text-gray-700">
+                    {tipo === 'servico' ? 'Profissionais e rateio de comissão' : 'Profissional que vendeu'}
+                  </p>
                   <p className="text-xs text-gray-400 mt-0.5">A comissão é calculada sobre o valor proporcional de cada profissional</p>
                 </div>
                 <button onClick={addProfissional}
@@ -1258,7 +1278,6 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
                 Total participação: {totalPart}% {Math.abs(totalPart - 100) > 0.01 ? '— deve somar 100%' : '✓'}
               </p>
             </div>
-          )}
 
           {itemId && (
             <div className="flex justify-between items-center text-sm font-semibold pt-2 border-t border-gray-100">

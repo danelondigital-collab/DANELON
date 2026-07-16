@@ -11,6 +11,8 @@ const formaPagamentoLabel: Record<string, string> = {
   dinheiro: 'Dinheiro',
   cartao_debito: 'Débito',
   cartao_credito: 'Crédito',
+  credito_avista: 'Crédito à Vista',
+  credito_parcelado: 'Crédito Parcelado',
   pix: 'PIX',
   misto: 'Misto',
   retrabalho: 'Retrabalho',
