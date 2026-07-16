@@ -83,9 +83,23 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
 
   const [erroSlot, setErroSlot] = useState('')
 
+  const [usuarioId, setUsuarioId] = useState<string | null>(null)
+  const [usuarioNome, setUsuarioNome] = useState<string | null>(null)
+
   const fetchingRef = useRef(false)
-  const dragRef = useRef<{ agId: string; offsetY: number } | null>(null)
+  const dragRef = useRef<{ agId: string; itemId: string; oldInicio: string; oldFim: string; offsetY: number } | null>(null)
   const wasDraggingRef = useRef(false)
+
+  useEffect(() => {
+    async function fetchUsuario() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      setUsuarioId(user.id)
+      const { data } = await supabase.from('usuarios').select('nome').eq('id', user.id).single()
+      setUsuarioNome((data as { nome?: string } | null)?.nome || null)
+    }
+    fetchUsuario()
+  }, [])
 
   async function buscarAgendamentos(inicio: Date, dias = 7) {
     if (fetchingRef.current) return
@@ -207,16 +221,16 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
 
   // ===== DRAG AND DROP =====
 
-  function handleDragStart(e: React.DragEvent, ag: Agendamento) {
-    dragRef.current = { agId: ag.id, offsetY: e.nativeEvent.offsetY }
+  function handleDragStart(e: React.DragEvent, ag: Agendamento, itemId: string, oldInicio: string, oldFim: string) {
+    dragRef.current = { agId: ag.id, itemId, oldInicio, oldFim, offsetY: e.nativeEvent.offsetY }
     wasDraggingRef.current = false
     e.dataTransfer.effectAllowed = 'move'
   }
 
-  async function moverAgendamento(agId: string, novaDia: Date, hora: number, dropOffsetY: number) {
+  async function moverItem(novaDia: Date, hora: number, dropOffsetY: number) {
     if (!dragRef.current) return
     wasDraggingRef.current = true
-    const { offsetY } = dragRef.current
+    const { agId, itemId, oldInicio, oldFim, offsetY } = dragRef.current
     dragRef.current = null
 
     const effectiveY = (hora - HORAS[0]) * SLOT_HEIGHT + Math.max(0, dropOffsetY - offsetY)
@@ -231,11 +245,12 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
     const newStart = new Date(novaDia)
     newStart.setHours(newHour, newMinute, 0, 0)
 
-    const duracao = ag.data_hora_fim
-      ? parseISO(ag.data_hora_fim).getTime() - parseISO(ag.data_hora_inicio).getTime()
-      : (ag.itens?.[0]?.servico?.duracao_minutos || 60) * 60000
-    const newEnd = new Date(newStart.getTime() + duracao)
+    const duracaoMs = parseISO(oldFim).getTime() - parseISO(oldInicio).getTime()
+    const newEnd = new Date(newStart.getTime() + duracaoMs)
     const dataStr = format(novaDia, 'yyyy-MM-dd')
+
+    // Não mover se não houve alteração
+    if (newStart.toISOString() === parseISO(oldInicio).toISOString()) return
 
     // Validar bloqueios antes de mover
     const profIds = [...new Set((ag.itens || []).map(i => i.profissional_id).filter(Boolean))]
@@ -267,12 +282,44 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
       }
     }
 
-    const updates: Record<string, string> = { data_hora_inicio: newStart.toISOString() }
-    if (ag.data_hora_fim) {
-      updates.data_hora_fim = newEnd.toISOString()
+    // Atualiza só este item de serviço
+    await supabase.from('agendamento_itens').update({
+      data_hora_inicio: newStart.toISOString(),
+      data_hora_fim: newEnd.toISOString(),
+    }).eq('id', itemId)
+
+    // Recalcula horário do agendamento pai com base em todos os itens
+    const { data: todosItens } = await supabase
+      .from('agendamento_itens')
+      .select('data_hora_inicio, data_hora_fim')
+      .eq('agendamento_id', agId)
+
+    if (todosItens && todosItens.length > 0) {
+      const starts = todosItens.map((i: { data_hora_inicio: string }) => parseISO(i.data_hora_inicio).getTime())
+      const ends = todosItens.map((i: { data_hora_fim: string }) => parseISO(i.data_hora_fim).getTime())
+      await supabase.from('agendamentos').update({
+        data_hora_inicio: new Date(Math.min(...starts)).toISOString(),
+        data_hora_fim: new Date(Math.max(...ends)).toISOString(),
+      }).eq('id', agId)
     }
 
-    await supabase.from('agendamentos').update(updates).eq('id', agId)
+    // Registra log da alteração
+    const itemMovido = ag.itens?.find(i => i.id === itemId)
+    const servicoNome = itemMovido?.servico?.nome || 'Serviço'
+    const oldFmt = format(parseISO(oldInicio), "dd/MM/yyyy 'às' HH:mm")
+    const newFmt = format(newStart, "dd/MM/yyyy 'às' HH:mm")
+    await supabase.from('log_atividades').insert({
+      tabela: 'agendamento',
+      registro_id: agId,
+      acao: 'editar',
+      usuario_id: usuarioId,
+      usuario_nome: usuarioNome,
+      unidade_id: unidadeId,
+      profissional_ids: profIds,
+      cliente_nome: ag.cliente?.nome || null,
+      dados: { item: servicoNome, de: oldFmt, para: newFmt, hora_alterada: true },
+    })
+
     onSalvo()
   }
 
@@ -280,15 +327,13 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
     e.preventDefault()
     if (!dragRef.current) return
     if (isProfDiaTodoBloqueado(profId, diaAtual)) return
-    const agId = dragRef.current.agId
-    moverAgendamento(agId, diaAtual, hora, e.nativeEvent.offsetY)
+    moverItem(diaAtual, hora, e.nativeEvent.offsetY)
   }
 
   function handleDropDia(e: React.DragEvent, dia: Date, hora: number) {
     e.preventDefault()
     if (!dragRef.current) return
-    const agId = dragRef.current.agId
-    moverAgendamento(agId, dia, hora, e.nativeEvent.offsetY)
+    moverItem(dia, hora, e.nativeEvent.offsetY)
   }
 
   const diasVisiveis = visualizacao === 'semana' ? diasSemana : [diaAtual]
@@ -484,7 +529,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                           <div
                             key={item.id}
                             draggable
-                            onDragStart={(e) => handleDragStart(e, ag)}
+                            onDragStart={(e) => handleDragStart(e, ag, item.id, item._inicio, item._fim)}
                             onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
                             className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
                             style={{ top: top + 1, height: height - 2, borderLeftColor: prof.cor_agenda || '#6366f1' }}
@@ -597,7 +642,7 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                           <div
                             key={item.id}
                             draggable
-                            onDragStart={(e) => handleDragStart(e, ag)}
+                            onDragStart={(e) => handleDragStart(e, ag, item.id, item._inicio, item._fim)}
                             onClick={(e) => { e.stopPropagation(); abrirEdicao(ag) }}
                             className={`absolute left-1 right-1 z-10 rounded-md px-2 py-1 border-l-[3px] cursor-grab active:cursor-grabbing hover:opacity-80 transition-opacity overflow-hidden select-none ${statusClass}`}
                             style={{ top: top + 1, height: height - 2, borderLeftColor: cor }}
