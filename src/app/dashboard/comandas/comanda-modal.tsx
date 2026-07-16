@@ -120,6 +120,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   }, [comanda?.cliente_id, clienteId])
 
   const totalBruto = itens.reduce((s, i) => s + i.subtotal, 0)
+  const descontoItensNum = itens.reduce((s, i) => s + Math.max(0, i.preco_unitario * i.quantidade - i.subtotal), 0)
   const descontoNum = parseFloat(desconto) || 0
   const totalFinal = Math.max(0, totalBruto - descontoNum - creditoAplicado - sinalComanda)
   const valorRecebidoNum = parseFloat(valorRecebido) || 0
@@ -732,6 +733,14 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                   </div>
                 )}
               </div>
+
+              {/* Desconto por item */}
+              {descontoItensNum > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400 text-xs pl-2 border-l-2 border-red-200">↳ por item</span>
+                  <span className="text-red-500 font-medium text-xs">- {formatCurrency(descontoItensNum)}</span>
+                </div>
+              )}
 
               {/* Crédito */}
               {!isFechada && saldoCredito > 0 && (
