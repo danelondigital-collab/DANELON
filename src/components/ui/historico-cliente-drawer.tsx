@@ -6,6 +6,15 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 
+interface ItemVisita {
+  tipo: string
+  preco_unitario: number
+  quantidade: number
+  subtotal: number
+  servico: { nome: string } | null
+  produto: { nome: string } | null
+}
+
 interface Visita {
   id: string
   numero: number | null
@@ -13,8 +22,9 @@ interface Visita {
   data_fechamento: string | null
   valor_final: number
   desconto: number
+  sinal: number
   status: string
-  itens: { tipo: string; servico: { nome: string } | null; produto: { nome: string } | null }[]
+  itens: ItemVisita[]
 }
 
 interface Props {
@@ -22,6 +32,10 @@ interface Props {
   clienteNome: string
   unidadeId: string
   onClose: () => void
+}
+
+function descontoItens(itens: ItemVisita[]) {
+  return itens.reduce((s, i) => s + Math.max(0, i.preco_unitario * i.quantidade - i.subtotal), 0)
 }
 
 export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidadeId, onClose }: Props) {
@@ -35,9 +49,9 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
       const { data } = await supabase
         .from('comandas')
         .select(`
-          id, numero, created_at, data_fechamento, valor_final, desconto, status,
+          id, numero, created_at, data_fechamento, valor_final, desconto, sinal, status,
           itens:comanda_itens(
-            tipo,
+            tipo, preco_unitario, quantidade, subtotal,
             servico:servicos(nome),
             produto:produtos(nome)
           )
@@ -54,7 +68,10 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
 
   const visitasFechadas = visitas.filter(v => v.status === 'fechada')
   const totalGasto = visitasFechadas.reduce((s, v) => s + v.valor_final, 0)
-  const totalDesconto = visitasFechadas.reduce((s, v) => s + (v.desconto || 0), 0)
+  const totalDescontoGeral = visitasFechadas.reduce((s, v) => s + (v.desconto || 0), 0)
+  const totalDescontoItem = visitasFechadas.reduce((s, v) => s + descontoItens(v.itens), 0)
+  const totalDesconto = totalDescontoGeral + totalDescontoItem
+  const totalSinal = visitasFechadas.reduce((s, v) => s + (v.sinal || 0), 0)
 
   const servicosFrequentes = Object.entries(
     visitas.flatMap(v => v.itens.filter(i => i.tipo === 'servico' && i.servico).map(i => i.servico!.nome))
@@ -65,12 +82,9 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
 
   return (
     <div className="fixed inset-0 z-[60] flex">
-      {/* Overlay */}
       <div className="flex-1 bg-black/40" onClick={onClose} />
 
-      {/* Drawer */}
       <div className="w-full max-w-md bg-white shadow-2xl flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="font-semibold text-gray-900">Histórico da cliente</h2>
@@ -105,10 +119,32 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
                   </p>
                   <p className="text-2xl font-bold text-green-800">{formatCurrency(totalGasto)}</p>
                 </div>
+
                 {totalDesconto > 0 && (
                   <div className="col-span-2 bg-rose-50 rounded-xl p-4">
-                    <p className="text-xs text-rose-600 font-medium mb-1">Total de desconto concedido</p>
-                    <p className="text-2xl font-bold text-rose-800">{formatCurrency(totalDesconto)}</p>
+                    <p className="text-xs text-rose-600 font-medium mb-2">Total de desconto concedido</p>
+                    <p className="text-2xl font-bold text-rose-800 mb-2">{formatCurrency(totalDesconto)}</p>
+                    <div className="space-y-1 border-t border-rose-100 pt-2">
+                      {totalDescontoGeral > 0 && (
+                        <div className="flex justify-between text-xs text-rose-600">
+                          <span>Desconto geral nas comandas</span>
+                          <span className="font-medium">{formatCurrency(totalDescontoGeral)}</span>
+                        </div>
+                      )}
+                      {totalDescontoItem > 0 && (
+                        <div className="flex justify-between text-xs text-rose-600">
+                          <span>Desconto por item</span>
+                          <span className="font-medium">{formatCurrency(totalDescontoItem)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {totalSinal > 0 && (
+                  <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <p className="text-xs text-amber-600 font-medium mb-1">Total em sinais pagos</p>
+                    <p className="text-2xl font-bold text-amber-800">{formatCurrency(totalSinal)}</p>
                   </div>
                 )}
               </div>
@@ -139,6 +175,8 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
                 const servicos = visita.itens.filter(i => i.tipo === 'servico' && i.servico).map(i => i.servico!.nome)
                 const produtos = visita.itens.filter(i => i.tipo === 'produto' && i.produto).map(i => i.produto!.nome)
                 const isFechada = visita.status === 'fechada'
+                const descItem = descontoItens(visita.itens)
+                const temDeducoes = isFechada && ((visita.desconto || 0) > 0 || descItem > 0 || (visita.sinal || 0) > 0)
                 return (
                   <div key={visita.id} className="border border-gray-100 rounded-xl overflow-hidden">
                     <div className="p-4">
@@ -154,6 +192,7 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
                           {isFechada && <span className="text-sm font-semibold text-gray-900">{formatCurrency(visita.valor_final)}</span>}
                         </div>
                       </div>
+
                       {servicos.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-1">
                           {servicos.map((s, i) => (
@@ -162,13 +201,37 @@ export default function HistoricoClienteDrawer({ clienteId, clienteNome, unidade
                         </div>
                       )}
                       {produtos.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1 mb-1">
                           {produtos.map((p, i) => (
                             <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{p}</span>
                           ))}
                         </div>
                       )}
+
+                      {temDeducoes && (
+                        <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
+                          {(visita.desconto || 0) > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Desconto geral</span>
+                              <span className="text-rose-600 font-medium">- {formatCurrency(visita.desconto)}</span>
+                            </div>
+                          )}
+                          {descItem > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Desconto por item</span>
+                              <span className="text-rose-600 font-medium">- {formatCurrency(descItem)}</span>
+                            </div>
+                          )}
+                          {(visita.sinal || 0) > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Sinal pago</span>
+                              <span className="text-amber-600 font-medium">- {formatCurrency(visita.sinal)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
+
                     <button
                       onClick={() => { onClose(); router.push(`/dashboard/comandas?id=${visita.id}`) }}
                       className="w-full flex items-center justify-center gap-1.5 py-2 border-t border-gray-100 bg-gray-50 hover:bg-gray-100 text-xs font-medium text-gray-600 transition-colors"
