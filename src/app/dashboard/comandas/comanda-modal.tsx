@@ -51,6 +51,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [buscandoCliente, setBuscandoCliente] = useState(false)
   const [saldoCredito, setSaldoCredito] = useState(0)
   const [creditoAplicado, setCreditoAplicado] = useState(comandaInicial?.credito_utilizado || 0)
+  const [sinalComanda, setSinalComanda] = useState(comandaInicial?.sinal || 0)
   const [valorRecebido, setValorRecebido] = useState('')
   const [observacoes, setObservacoes] = useState(comandaInicial?.observacoes || '')
   const [salvandoObs, setSalvandoObs] = useState(false)
@@ -120,7 +121,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
   const totalBruto = itens.reduce((s, i) => s + i.subtotal, 0)
   const descontoNum = parseFloat(desconto) || 0
-  const totalFinal = Math.max(0, totalBruto - descontoNum - creditoAplicado)
+  const totalFinal = Math.max(0, totalBruto - descontoNum - creditoAplicado - sinalComanda)
   const valorRecebidoNum = parseFloat(valorRecebido) || 0
   const creditoGerado = valorRecebidoNum > totalFinal ? parseFloat((valorRecebidoNum - totalFinal).toFixed(2)) : 0
   const isFechada = comanda?.status !== 'aberta' && comanda?.status !== undefined
@@ -348,7 +349,8 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     const desc = parseFloat(desconto) || 0
     await supabase.from('comandas').update({
       valor_total: total, desconto: desc, credito_utilizado: creditoAplicado,
-      valor_final: Math.max(0, total - desc - creditoAplicado),
+      sinal: sinalComanda,
+      valor_final: Math.max(0, total - desc - creditoAplicado - sinalComanda),
     }).eq('id', comandaId)
   }
 
@@ -364,6 +366,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
         data_fechamento: new Date().toISOString(),
         desconto: desc,
         credito_utilizado: creditoAplicado,
+        sinal: sinalComanda,
         valor_total: totalBruto,
         valor_final: totalFinal,
         forma_pagamento: formaPagamento,
@@ -766,6 +769,38 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Crédito usado</span>
                   <span className="text-green-600 font-medium">- {formatCurrency(creditoAplicado)}</span>
+                </div>
+              )}
+
+              {/* Sinal */}
+              {isFechada ? (
+                (comanda?.sinal || 0) > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Sinal</span>
+                    <span className="text-amber-600 font-medium">- {formatCurrency(comanda?.sinal || 0)}</span>
+                  </div>
+                )
+              ) : (
+                <div className="border border-amber-200 rounded-lg p-2.5 bg-amber-50 space-y-1.5">
+                  <span className="text-xs font-medium text-amber-700">Sinal (valor pago antecipado)</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative flex-1">
+                      <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">R$</span>
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={sinalComanda || ''}
+                        onChange={e => setSinalComanda(Math.max(0, parseFloat(e.target.value) || 0))}
+                        placeholder="0,00"
+                        className="w-full pl-6 pr-2 py-1 border border-amber-200 rounded text-xs text-right bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                    {sinalComanda > 0 && (
+                      <button onClick={() => setSinalComanda(0)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+                    )}
+                  </div>
+                  {sinalComanda > 0 && (
+                    <p className="text-xs text-amber-700">- {formatCurrency(sinalComanda)} abatido do total</p>
+                  )}
                 </div>
               )}
 

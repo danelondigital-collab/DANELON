@@ -143,6 +143,7 @@ export interface Agendamento {
   data_hora_fim: string
   status: StatusAgendamento
   observacoes?: string
+  sinal?: number
   itens?: AgendamentoItem[]
   created_at: string
   updated_at: string
@@ -191,6 +192,7 @@ export interface Comanda {
   valor_total: number
   desconto: number
   credito_utilizado: number
+  sinal: number
   valor_final: number
   forma_pagamento?: FormaPagamento
   observacoes?: string

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Plus, Trash2, Search, ClipboardList, History } from 'lucide-react'
+import { X, Plus, Trash2, Search, ClipboardList, History, Wallet } from 'lucide-react'
 import { format, addMinutes, parse } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useRouter } from 'next/navigation'
@@ -125,6 +125,7 @@ export default function AgendamentoModal({
   const [buscandoCliente, setBuscandoCliente] = useState(false)
   const [mostrarDropdown, setMostrarDropdown] = useState(false)
   const [historicoAberto, setHistoricoAberto] = useState(false)
+  const [sinal, setSinal] = useState<string>((agendamento?.sinal || 0) > 0 ? String(agendamento!.sinal) : '')
 
   useEffect(() => {
     if (!clienteBusca.trim() || clienteSelecionado) { setClientesFiltrados([]); setBuscandoCliente(false); return }
@@ -274,6 +275,7 @@ export default function AgendamentoModal({
         data_hora_fim: fimGeral.toISOString(),
         status: form.status,
         observacoes: form.observacoes || null,
+        sinal: parseFloat(sinal) || 0,
       }).eq('id', agendamento.id)
 
       if (error) { setErro(error.message); setLoading(false); return }
@@ -290,6 +292,7 @@ export default function AgendamentoModal({
         data_hora_fim: fimGeral.toISOString(),
         status: form.status,
         observacoes: form.observacoes || null,
+        sinal: parseFloat(sinal) || 0,
       }).select().single()
 
       if (error || !novoAg) { setErro(error?.message || 'Erro ao salvar'); setLoading(false); return }
@@ -317,6 +320,8 @@ export default function AgendamentoModal({
 
     setCriandoComanda(true); setErro('')
 
+    const sinalNum = parseFloat(sinal) || 0
+
     // Criar a comanda ligada ao agendamento
     const { data: novaComanda, error: erroComanda } = await supabase
       .from('comandas')
@@ -325,6 +330,11 @@ export default function AgendamentoModal({
         unidade_id: unidadeId,
         agendamento_id: agId,
         status: 'aberta',
+        sinal: sinalNum,
+        desconto: 0,
+        credito_utilizado: 0,
+        valor_total: 0,
+        valor_final: 0,
       })
       .select('id, numero')
       .single()
@@ -525,6 +535,28 @@ export default function AgendamentoModal({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Sinal */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sinal (valor pago antecipado)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">R$</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={sinal}
+                onChange={e => setSinal(e.target.value)}
+                placeholder="0,00"
+                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+              />
+            </div>
+            {parseFloat(sinal) > 0 && (
+              <p className="text-xs text-amber-700 mt-1 flex items-center gap-1">
+                <Wallet className="w-3 h-3" /> Será abatido automaticamente da comanda.
+              </p>
+            )}
           </div>
 
           {/* Observações */}
