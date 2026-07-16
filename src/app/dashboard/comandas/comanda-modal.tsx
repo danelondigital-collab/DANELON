@@ -7,6 +7,7 @@ import type { Comanda, ComandaItem, Cliente, Profissional, Servico, Produto, Com
 import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
 import HistoricoLog from '@/components/ui/historico-log'
 import HistoricoClienteDrawer from '@/components/ui/historico-cliente-drawer'
+import ClienteModal from '@/app/dashboard/clientes/cliente-modal'
 
 interface Props {
   comanda: Comanda | null
@@ -67,6 +68,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [profissionalPacotePorItem, setProfissionalPacotePorItem] = useState<Record<string, string>>({})
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(comandaInicial?.cliente || null)
   const [comandasAbertasCount, setComandasAbertasCount] = useState(0)
+  const [clienteModalAberto, setClienteModalAberto] = useState(false)
 
   useEffect(() => {
     if (!clienteBusca.trim() || comanda?.id) { setClientesFiltrados([]); return }
@@ -469,7 +471,12 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                 <div className="w-16 h-16 rounded-full bg-gray-100 mx-auto flex items-center justify-center text-xl font-semibold text-gray-400">
                   {clienteExibido.nome.charAt(0).toUpperCase()}
                 </div>
-                <p className="text-sm font-semibold text-gray-900 mt-2">{clienteExibido.nome}</p>
+                <button
+                  onClick={() => setClienteModalAberto(true)}
+                  className="text-sm font-semibold text-gray-900 mt-2 hover:text-amber-700 hover:underline transition-colors"
+                >
+                  {clienteExibido.nome}
+                </button>
                 {clienteExibido.telefone && <p className="text-xs text-gray-500">{clienteExibido.telefone}</p>}
                 {clienteExibido.telefone && (
                   <a
@@ -946,6 +953,18 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
           clienteNome={clienteExibido.nome}
           unidadeId={unidadeId}
           onClose={() => setHistoricoAberto(false)}
+        />
+      )}
+
+      {clienteModalAberto && clienteExibido && (
+        <ClienteModal
+          cliente={clienteExibido}
+          unidadeId={unidadeId}
+          onClose={() => setClienteModalAberto(false)}
+          onSalvo={clienteAtualizado => {
+            setClienteSelecionado(clienteAtualizado)
+            setClienteModalAberto(false)
+          }}
         />
       )}
 
