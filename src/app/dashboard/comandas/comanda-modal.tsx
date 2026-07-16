@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, Plus, Trash2, Search, Scissors, ShoppingBag, Pencil, Wallet, Gift, MessageCircle } from 'lucide-react'
+import { X, Plus, Trash2, Search, Scissors, ShoppingBag, Pencil, Wallet, Gift, MessageCircle, History } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Comanda, ComandaItem, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem, Pacote } from '@/types'
 import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
 import HistoricoLog from '@/components/ui/historico-log'
+import HistoricoClienteDrawer from '@/components/ui/historico-cliente-drawer'
 
 interface Props {
   comanda: Comanda | null
@@ -45,6 +46,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [fechando, setFechando] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [historicoAberto, setHistoricoAberto] = useState(false)
   const [clientesFiltrados, setClientesFiltrados] = useState<Cliente[]>([])
   const [buscandoCliente, setBuscandoCliente] = useState(false)
   const [saldoCredito, setSaldoCredito] = useState(0)
@@ -480,6 +482,12 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
                   <ShoppingBag className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                   <span>{comandasAbertasCount} comanda{comandasAbertasCount !== 1 ? 's' : ''} em aberto</span>
                 </div>
+                <button
+                  onClick={() => setHistoricoAberto(true)}
+                  className="w-full mt-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-colors"
+                >
+                  <History className="w-3.5 h-3.5" /> Histórico da cliente
+                </button>
               </div>
 
               <div className="border-t border-gray-100 pt-4">
@@ -836,6 +844,15 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
           itemExistente={itemEditando}
           onClose={() => { setAdicionandoItem(false); setItemEditando(null) }}
           onSalvo={itemEditando ? handleEditarItem : handleAdicionarItem}
+        />
+      )}
+
+      {historicoAberto && clienteExibido && (
+        <HistoricoClienteDrawer
+          clienteId={clienteExibido.id}
+          clienteNome={clienteExibido.nome}
+          unidadeId={unidadeId}
+          onClose={() => setHistoricoAberto(false)}
         />
       )}
 

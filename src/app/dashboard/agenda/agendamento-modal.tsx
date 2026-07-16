@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Plus, Trash2, Search, ClipboardList } from 'lucide-react'
+import { X, Plus, Trash2, Search, ClipboardList, History } from 'lucide-react'
 import { format, addMinutes, parse } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Agendamento, Profissional, Servico, Cliente } from '@/types'
 import HistoricoLog from '@/components/ui/historico-log'
+import HistoricoClienteDrawer from '@/components/ui/historico-cliente-drawer'
 
 interface ItemAgendamento {
   profissional_id: string
@@ -123,6 +124,7 @@ export default function AgendamentoModal({
   const [clientesFiltrados, setClientesFiltrados] = useState<Cliente[]>([])
   const [buscandoCliente, setBuscandoCliente] = useState(false)
   const [mostrarDropdown, setMostrarDropdown] = useState(false)
+  const [historicoAberto, setHistoricoAberto] = useState(false)
 
   useEffect(() => {
     if (!clienteBusca.trim() || clienteSelecionado) { setClientesFiltrados([]); setBuscandoCliente(false); return }
@@ -391,20 +393,29 @@ export default function AgendamentoModal({
           <div>
             <label className={`block text-sm font-medium mb-1 ${erroCliente ? 'text-red-600' : 'text-gray-700'}`}>Cliente <span className="text-red-500">*</span></label>
             {clienteSelecionado ? (
-              <div className="flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{clienteSelecionado.nome}</p>
-                  {clienteSelecionado.telefone && <p className="text-xs text-gray-500">{clienteSelecionado.telefone}</p>}
+              <div className="border border-gray-200 rounded-lg bg-gray-50 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{clienteSelecionado.nome}</p>
+                    {clienteSelecionado.telefone && <p className="text-xs text-gray-500">{clienteSelecionado.telefone}</p>}
+                  </div>
+                  {!agendamento && (
+                    <button type="button" onClick={() => {
+                      setClienteSelecionado(null)
+                      setClienteBusca('')
+                      setField('cliente_id', '')
+                    }} className="text-xs text-red-500 hover:underline ml-3 flex-shrink-0">
+                      Trocar
+                    </button>
+                  )}
                 </div>
-                {!agendamento && (
-                  <button type="button" onClick={() => {
-                    setClienteSelecionado(null)
-                    setClienteBusca('')
-                    setField('cliente_id', '')
-                  }} className="text-xs text-red-500 hover:underline ml-3 flex-shrink-0">
-                    Trocar
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setHistoricoAberto(true)}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 border-t border-gray-100 bg-white hover:bg-gray-50 text-xs font-medium text-gray-600 transition-colors"
+                >
+                  <History className="w-3.5 h-3.5" /> Histórico da cliente
+                </button>
               </div>
             ) : (
               <div className="relative">
@@ -577,6 +588,16 @@ export default function AgendamentoModal({
           </div>
         </div>
       </div>
+
+      {historicoAberto && clienteSelecionado && (
+        <HistoricoClienteDrawer
+          clienteId={clienteSelecionado.id}
+          clienteNome={clienteSelecionado.nome}
+          unidadeId={unidadeId}
+          onClose={() => setHistoricoAberto(false)}
+        />
+      )}
+
     </div>
   )
 }
