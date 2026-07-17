@@ -375,9 +375,10 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     if (creditoAplicado > saldoCredito + 0.01) { alert('Crédito aplicado maior que o saldo disponível.'); return }
     setFechando(true)
     const desc = parseFloat(desconto) || 0
-    const pagamentosJson = pagamentosValidos.map(l => ({ forma: l.forma, valor: parseFloat(l.valor) }))
+    // parseFloat('') = NaN — forçar 0 para formas que não têm valor (Avaliação, Retrabalho)
+    const pagamentosJson = pagamentosValidos.map(l => ({ forma: l.forma, valor: parseFloat(l.valor) || 0 }))
     const formaFinal = pagamentosValidos.length === 1 ? pagamentosValidos[0].forma : 'misto'
-    const { data } = await supabase.from('comandas')
+    const { data, error: errFechar } = await supabase.from('comandas')
       .update({
         status: 'fechada',
         data_fechamento: new Date().toISOString(),
@@ -391,6 +392,12 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
       })
       .eq('id', comanda.id)
       .select('*, cliente:clientes(id, nome, telefone, data_nascimento)').single()
+
+    if (errFechar) {
+      setFechando(false)
+      alert('Erro ao fechar comanda: ' + errFechar.message)
+      return
+    }
 
     if (creditoAplicado > 0) {
       await supabase.from('creditos_clientes').insert({
@@ -413,7 +420,8 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     }
 
     setFechando(false)
-    if (data) { onSalva(data as unknown as Comanda); onClose() }
+    if (data) onSalva(data as unknown as Comanda)
+    onClose()
   }
 
   async function salvarObservacoes() {
