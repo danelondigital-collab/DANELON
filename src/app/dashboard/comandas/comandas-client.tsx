@@ -87,7 +87,7 @@ export default function ComandasClient({ comandas: initial, clientes, profission
   const ontem = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')
 
   const filtradas = comandas.filter(c => {
-    const matchBusca = c.cliente?.nome.toLowerCase().includes(busca.toLowerCase()) || String(c.id).includes(busca) || (c.numero || '').toLowerCase().includes(busca.toLowerCase())
+    const matchBusca = (c.cliente?.nome ?? '').toLowerCase().includes(busca.toLowerCase()) || String(c.id).includes(busca) || (c.numero || '').toLowerCase().includes(busca.toLowerCase())
     const matchStatus = filtroStatus === 'todos' || c.status === filtroStatus
     return matchBusca && matchStatus
   })

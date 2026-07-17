@@ -42,7 +42,14 @@ export default async function ComandasPage({ searchParams }: { searchParams: Pro
     return baseQuery.order('created_at', { ascending: false }).limit(100)
   })()
 
-  const [{ data: comandas }, { data: clientes }, { data: profissionais }, { data: servicos }, { data: produtos }, { data: comissoesProfissional }] = await Promise.all([
+  const [
+    { data: comandasRaw, error: errComandas },
+    { data: clientes },
+    { data: profissionais },
+    { data: servicos },
+    { data: produtos },
+    { data: comissoesProfissional },
+  ] = await Promise.all([
     comandasQuery,
     supabase.from('clientes').select('id, nome, telefone, data_nascimento').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
     supabase.from('profissionais').select('*').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
@@ -50,6 +57,19 @@ export default async function ComandasPage({ searchParams }: { searchParams: Pro
     supabase.from('produtos').select('*').eq('unidade_id', unidadeId).eq('ativo', true).order('nome'),
     supabase.from('comissoes_profissional_item').select('id, profissional_id, tipo, servico_id, produto_id, percentual'),
   ])
+
+  if (errComandas) {
+    throw new Error(`Supabase query error: ${errComandas.message} | code: ${errComandas.code}`)
+  }
+
+  // Sanitiza o campo pagamentos para garantir que valor nunca seja null
+  type RawComanda = import('@/types').Comanda & { pagamentos?: ({ forma: string; valor: number | null })[] | null }
+  const comandas = ((comandasRaw as RawComanda[]) || []).map(c => ({
+    ...c,
+    pagamentos: Array.isArray(c.pagamentos)
+      ? c.pagamentos.map(p => ({ ...p, valor: p.valor ?? 0 }))
+      : c.pagamentos,
+  }))
 
   return (
     <Suspense>

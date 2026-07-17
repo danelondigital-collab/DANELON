@@ -48,7 +48,7 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [desconto, setDesconto] = useState(comandaInicial?.desconto?.toString() || '0')
   const [linhasPagamento, setLinhasPagamento] = useState<{ forma: string; valor: string }[]>(
     comandaInicial?.pagamentos?.length
-      ? comandaInicial.pagamentos.map(p => ({ forma: p.forma, valor: p.valor.toString() }))
+      ? comandaInicial.pagamentos.map(p => ({ forma: p.forma, valor: (p.valor ?? 0).toString() }))
       : [{ forma: '', valor: '' }]
   )
   const [adicionandoItem, setAdicionandoItem] = useState(false)
