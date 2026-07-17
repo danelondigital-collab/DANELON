@@ -242,17 +242,15 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   }
 
   async function moverItem(novaDia: Date, relY: number) {
-    console.log('[DnD] moverItem chamado →', format(novaDia, 'yyyy-MM-dd EEE', { locale: ptBR }), 'relY:', relY)
-    if (!dragRef.current) { console.log('[DnD] ABORTADO: dragRef.current é null'); return }
+    if (!dragRef.current) return
     wasDraggingRef.current = true
     const { agId, itemId, oldInicio, oldFim, offsetY } = dragRef.current
     dragRef.current = null
 
     const { newHour, newMinute } = calcDragSnap(relY, offsetY)
-    console.log('[DnD] novo horário calculado:', newHour + ':' + String(newMinute).padStart(2, '0'))
 
     const ag = agendamentos.find(a => a.id === agId)
-    if (!ag) { console.log('[DnD] ABORTADO: agendamento não encontrado, agId:', agId); return }
+    if (!ag) return
 
     const newStart = new Date(novaDia)
     newStart.setHours(newHour, newMinute, 0, 0)
@@ -273,14 +271,12 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
         .in('profissional_id', profIds)
         .eq('data', dataStr)
 
-      console.log('[DnD] bloqueios encontrados para', dataStr, ':', blqs?.length ?? 0)
       if (blqs && blqs.length > 0) {
         for (const b of blqs) {
           const nomePro = (b.profissional as { nome?: string })?.nome || 'Profissional'
           const dataFmt = format(novaDia, "dd/MM/yyyy", { locale: ptBR })
 
           if (!b.hora_inicio && !b.hora_fim) {
-            console.log('[DnD] BLOQUEADO: dia inteiro bloqueado para', nomePro)
             mostrarErroSlot(`${nomePro} não está disponível em ${dataFmt} (dia inteiro bloqueado).`)
             return
           }
@@ -355,10 +351,9 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
   }
 
   function handleDragOverCol(e: React.DragEvent, colKey: string) {
-    if (!dragRef.current) { console.log('[DnD] dragOver bloqueado: dragRef.current é null', colKey); return }
+    if (!dragRef.current) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    console.log('[DnD] dragOver ok →', colKey.slice(0, 10))
     const relY = calcRelY(e)
     const { snappedTop } = calcDragSnap(relY, dragRef.current.offsetY)
     const duracaoMs = parseISO(dragRef.current.oldFim).getTime() - parseISO(dragRef.current.oldInicio).getTime()
@@ -493,9 +488,9 @@ export default function AgendaClient({ unidadeId, profissionais, servicos, clien
                     key={prof.id}
                     className={`w-44 flex-shrink-0 border-l border-gray-200 relative ${bloqueadaHoje ? 'bg-gray-100' : ''}`}
                     style={{ height: totalAltura }}
-                    onDragOver={bloqueadaHoje ? undefined : (e) => handleDragOverCol(e, prof.id)}
+                    onDragOver={(e) => handleDragOverCol(e, prof.id)}
                     onDragLeave={handleDragLeaveCol}
-                    onDrop={bloqueadaHoje ? undefined : (e) => {
+                    onDrop={(e) => {
                       e.preventDefault()
                       const relY = calcRelY(e)
                       setArrastando(false)
