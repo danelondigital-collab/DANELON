@@ -66,13 +66,20 @@ export default function HistoricoLog({ tabela, registroId }: Props) {
           ) : (
             logs.map(log => {
               const acao = ACAO_LABEL[log.acao]
+              const dados = log.dados as Record<string, unknown> | null
+              const descricao = dados && typeof dados.descricao === 'string' ? dados.descricao : null
               return (
-                <div key={log.id} className="px-4 py-2.5 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded flex-shrink-0 ${acao.cor}`}>{acao.texto}</span>
-                    <span className="text-xs text-gray-600 truncate">{log.usuario_nome || 'Usuário desconhecido'}</span>
+                <div key={log.id} className="px-4 py-2.5 flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium px-1.5 py-0.5 rounded flex-shrink-0 ${acao.cor}`}>{acao.texto}</span>
+                      <span className="text-xs text-gray-700 font-medium truncate">{log.usuario_nome || 'Usuário desconhecido'}</span>
+                    </div>
+                    {descricao && (
+                      <span className="text-xs text-gray-500 leading-snug">{descricao}</span>
+                    )}
                   </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0">{fmtData(log.created_at)}</span>
+                  <span className="text-xs text-gray-400 flex-shrink-0 pt-0.5">{fmtData(log.created_at)}</span>
                 </div>
               )
             })

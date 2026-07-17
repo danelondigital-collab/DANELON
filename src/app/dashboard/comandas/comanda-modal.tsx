@@ -8,6 +8,7 @@ import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
 import HistoricoLog from '@/components/ui/historico-log'
 import HistoricoClienteDrawer from '@/components/ui/historico-cliente-drawer'
 import ClienteModal from '@/app/dashboard/clientes/cliente-modal'
+import { registrarLog } from '@/lib/registrar-log'
 
 interface Props {
   comanda: Comanda | null
@@ -285,6 +286,16 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
     await atualizarTotaisDb(comandaId)
     buscarItens(comandaId)
+
+    const nomeItem = item.tipo === 'servico'
+      ? servicos.find(s => s.id === item.item_id)?.nome
+      : produtos.find(p => p.id === item.item_id)?.nome
+    const profNomes = item.profissionais.filter(p => p.profissional_id).map(p => profissionais.find(pr => pr.id === p.profissional_id)?.nome?.split(' ')[0]).filter(Boolean).join(', ')
+    await registrarLog(supabase, {
+      tabela: 'comanda', registroId: comandaId, acao: 'editar', unidadeId,
+      dados: { descricao: `Adicionou ${item.tipo === 'servico' ? 'serviço' : 'produto'}: ${nomeItem}${profNomes ? ` (${profNomes})` : ''}` },
+    })
+
     if (!continuar) { setAdicionandoItem(false); setItemEditando(null) }
   }
 
@@ -325,12 +336,22 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
     await atualizarTotaisDb(comanda.id)
     buscarItens(comanda.id)
+
+    const nomeItemEdit = item.tipo === 'servico'
+      ? servicos.find(s => s.id === item.item_id)?.nome
+      : produtos.find(p => p.id === item.item_id)?.nome
+    await registrarLog(supabase, {
+      tabela: 'comanda', registroId: comanda.id, acao: 'editar', unidadeId,
+      dados: { descricao: `Editou ${item.tipo === 'servico' ? 'serviço' : 'produto'}: ${nomeItemEdit}` },
+    })
+
     if (!continuar) { setAdicionandoItem(false); setItemEditando(null) }
   }
 
   async function removerItem(itemId: string) {
     if (!comanda?.id) return
     const item = itens.find(i => i.id === itemId)
+    const nomeRemovido = item?.servico?.nome || item?.produto?.nome || 'Item'
     await supabase.from('comanda_itens').delete().eq('id', itemId)
 
     if (item?.pacote_item_id) {
@@ -349,6 +370,10 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
 
     await atualizarTotaisDb(comanda.id)
     buscarItens(comanda.id)
+    await registrarLog(supabase, {
+      tabela: 'comanda', registroId: comanda.id, acao: 'excluir', unidadeId,
+      dados: { descricao: `Removeu item: ${nomeRemovido}` },
+    })
   }
 
   async function atualizarTotaisDb(comandaId: string) {
@@ -418,6 +443,12 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
         descricao: `Crédito gerado por excesso de pagamento`,
       })
     }
+
+    const formaLabel = FORMAS_PAGAMENTO.find(f => f.value === formaFinal)?.label || formaFinal
+    await registrarLog(supabase, {
+      tabela: 'comanda', registroId: comanda.id, acao: 'editar', unidadeId,
+      dados: { descricao: `Fechou comanda — ${formaLabel}, total R$${totalFinal.toFixed(2).replace('.', ',')}` },
+    })
 
     setFechando(false)
     if (data) onSalva(data as unknown as Comanda)
