@@ -335,6 +335,7 @@ export default function AgendamentoModal({
         credito_utilizado: 0,
         valor_total: 0,
         valor_final: 0,
+        data_abertura: agendamento?.data_hora_inicio || new Date(`${form.data}T12:00:00`).toISOString(),
       })
       .select('id, numero')
       .single()
