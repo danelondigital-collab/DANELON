@@ -70,6 +70,19 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(comandaInicial?.cliente || null)
   const [comandasAbertasCount, setComandasAbertasCount] = useState(0)
   const [clienteModalAberto, setClienteModalAberto] = useState(false)
+  const [dataAbertura, setDataAbertura] = useState(() => {
+    if (!comandaInicial?.data_abertura) return ''
+    const d = new Date(comandaInicial.data_abertura)
+    const pad = (n: number) => n.toString().padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  })
+
+  async function handleSalvarDataAbertura(valor: string) {
+    if (!comanda?.id || !valor) return
+    const nova = new Date(valor).toISOString()
+    await supabase.from('comandas').update({ data_abertura: nova }).eq('id', comanda.id)
+    setComanda(prev => prev ? { ...prev, data_abertura: nova } : prev)
+  }
 
   useEffect(() => {
     if (!clienteBusca.trim() || comanda?.id) { setClientesFiltrados([]); return }
@@ -497,12 +510,23 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
               {isNova ? 'Nova comanda' : `Comanda — ${comanda?.cliente?.nome}`}
             </h2>
             {comanda && (
-              <p className="text-xs text-gray-500 mt-0.5">
-                {formatDateTime(comanda.data_abertura)} ·{' '}
-                <span className={`font-medium ${comanda.status === 'aberta' ? 'text-green-600' : comanda.status === 'cancelada' ? 'text-red-600' : 'text-gray-600'}`}>
+              <div className="flex items-center gap-2 mt-0.5">
+                {perfil === 'admin' ? (
+                  <input
+                    type="datetime-local"
+                    value={dataAbertura}
+                    onChange={e => setDataAbertura(e.target.value)}
+                    onBlur={e => handleSalvarDataAbertura(e.target.value)}
+                    className="text-xs text-gray-500 border-none bg-transparent outline-none cursor-pointer hover:text-amber-700 p-0"
+                  />
+                ) : (
+                  <span className="text-xs text-gray-500">{formatDateTime(comanda.data_abertura)}</span>
+                )}
+                <span className="text-xs text-gray-400">·</span>
+                <span className={`text-xs font-medium ${comanda.status === 'aberta' ? 'text-green-600' : comanda.status === 'cancelada' ? 'text-red-600' : 'text-gray-600'}`}>
                   {comanda.status === 'aberta' ? 'Aberta' : comanda.status === 'fechada' ? 'Fechada' : 'Cancelada'}
                 </span>
-              </p>
+              </div>
             )}
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
