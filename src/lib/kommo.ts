@@ -60,8 +60,11 @@ export function countNewContacts(fromUnix: number, toUnix: number) {
 }
 
 // Volume de "unsorted" (conversas recebidas ainda não triadas) é alto demais pra
-// paginar tudo dentro de um período — aqui pegamos só uma amostra recente.
-const UNSORTED_SAMPLE_PAGES = 3 // 3 x 250 = até 750 conversas mais recentes (mantém dentro do tempo da função serverless)
+// paginar tudo em períodos largos — mantemos um teto baixo (a função serverless no
+// plano atual da Vercel corta em ~10s) e sinalizamos "capped" quando bate nele.
+// Cada página desse endpoint específico do Kommo é lenta (~5-7s, mesmo sozinha),
+// bem diferente de /leads e /contacts — por isso o teto aqui é bem mais conservador.
+const UNSORTED_MAX_PAGES = 3 // 3 x 250 = até 750 conversas no período, tudo em 1 rodada paralela
 
 const CHANNEL_BY_SERVICE: Record<string, string> = {
   waba: 'WhatsApp',
@@ -86,56 +89,86 @@ interface UnsortedItem {
   metadata?: { service?: string; source_name?: string }
 }
 
-async function fetchUnsortedPage(page: number) {
-  const url = `${baseUrl()}/leads/unsorted?limit=${PAGE_LIMIT}&page=${page}`
+async function fetchUnsortedPage(page: number, fromUnix: number, toUnix: number) {
+  const url = `${baseUrl()}/leads/unsorted?limit=${PAGE_LIMIT}&page=${page}&filter[created_at][from]=${fromUnix}&filter[created_at][to]=${toUnix}`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
     next: { revalidate: 300 },
   })
-  if (res.status === 204) return [] as UnsortedItem[]
+  if (res.status === 204) return { items: [] as UnsortedItem[], hasNext: false }
   if (!res.ok) throw new Error(`Erro na API do Kommo (${res.status}): ${await res.text()}`)
   const data = await res.json()
-  return (data._embedded?.unsorted || []) as UnsortedItem[]
+  const items = (data._embedded?.unsorted || []) as UnsortedItem[]
+  return { items, hasNext: Boolean(data._links?.next) && items.length === PAGE_LIMIT }
 }
 
-/** Distribuição canal x unidade das conversas recebidas mais recentes (amostra, não é por período). */
-export async function channelsByUnidade(): Promise<{
+/** Distribuição canal x unidade das conversas recebidas no período (com teto de segurança). */
+export async function channelsByUnidade(fromUnix: number, toUnix: number): Promise<{
   matrix: Record<string, Record<string, number>>
   channels: string[]
   unidades: string[]
   sampled: number
+  capped: boolean
 }> {
   if (!SUBDOMAIN || !ACCESS_TOKEN) {
     throw new Error('KOMMO_SUBDOMAIN e KOMMO_ACCESS_TOKEN são obrigatórios')
   }
-
-  const pages = await Promise.all(
-    Array.from({ length: UNSORTED_SAMPLE_PAGES }, (_, i) => fetchUnsortedPage(i + 1))
-  )
-  const items = pages.flat()
 
   const unidades = [...UNIDADES, OUTRA_UNIDADE]
   const channels = ['WhatsApp', 'Instagram', 'TikTok', 'Facebook', 'Outro']
   const matrix: Record<string, Record<string, number>> = {}
   for (const u of unidades) matrix[u] = Object.fromEntries(channels.map(c => [c, 0]))
 
-  for (const item of items) {
-    const unidade = unidadeFromSourceName(item.metadata?.source_name)
-    const canal = CHANNEL_BY_SERVICE[item.metadata?.service || ''] || 'Outro'
-    matrix[unidade][canal] += 1
+  let sampled = 0
+  let page = 1
+  const BATCH = 4
+
+  while (page <= UNSORTED_MAX_PAGES) {
+    const pagesToFetch = Array.from({ length: Math.min(BATCH, UNSORTED_MAX_PAGES - page + 1) }, (_, i) => page + i)
+    const results = await Promise.all(pagesToFetch.map(p => fetchUnsortedPage(p, fromUnix, toUnix)))
+
+    for (const r of results) {
+      for (const item of r.items) {
+        const unidade = unidadeFromSourceName(item.metadata?.source_name)
+        const canal = CHANNEL_BY_SERVICE[item.metadata?.service || ''] || 'Outro'
+        matrix[unidade][canal] += 1
+        sampled += 1
+      }
+    }
+
+    const lastFullBatch = results.every(r => r.items.length === PAGE_LIMIT)
+    const anyHasNext = results[results.length - 1]?.hasNext
+
+    if (!lastFullBatch || !anyHasNext) {
+      return { matrix, channels, unidades, sampled, capped: false }
+    }
+
+    page += pagesToFetch.length
   }
 
-  return { matrix, channels, unidades, sampled: items.length }
+  return { matrix, channels, unidades, sampled, capped: true }
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-/** Valida start/end (yyyy-mm-dd) e conta o tipo de registro pedido no período. */
-export async function countForRoute(entity: Entity, start: string | null, end: string | null) {
+function parseDateRange(start: string | null, end: string | null) {
   if (!start || !end || !DATE_RE.test(start) || !DATE_RE.test(end)) {
     throw new Error('BAD_REQUEST: Parâmetros start/end (yyyy-mm-dd) são obrigatórios.')
   }
-  const fromUnix = Math.floor(new Date(`${start}T00:00:00-03:00`).getTime() / 1000)
-  const toUnix = Math.floor(new Date(`${end}T23:59:59-03:00`).getTime() / 1000)
+  return {
+    fromUnix: Math.floor(new Date(`${start}T00:00:00-03:00`).getTime() / 1000),
+    toUnix: Math.floor(new Date(`${end}T23:59:59-03:00`).getTime() / 1000),
+  }
+}
+
+/** Valida start/end (yyyy-mm-dd) e conta o tipo de registro pedido no período. */
+export async function countForRoute(entity: Entity, start: string | null, end: string | null) {
+  const { fromUnix, toUnix } = parseDateRange(start, end)
   return countNewInRange(entity, fromUnix, toUnix)
+}
+
+/** Valida start/end (yyyy-mm-dd) e monta a distribuição canal x unidade nesse período. */
+export async function channelsForRoute(start: string | null, end: string | null) {
+  const { fromUnix, toUnix } = parseDateRange(start, end)
+  return channelsByUnidade(fromUnix, toUnix)
 }

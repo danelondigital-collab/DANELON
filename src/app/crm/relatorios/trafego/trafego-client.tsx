@@ -79,7 +79,7 @@ export default function TrafegoClient() {
   const [kommoError, setKommoError] = useState<string | null>(null)
   const [kommoLoading, setKommoLoading] = useState(true)
 
-  const [canais, setCanais] = useState<{ matrix: Record<string, Record<string, number>>; channels: string[]; unidades: string[]; sampled: number } | null>(null)
+  const [canais, setCanais] = useState<{ matrix: Record<string, Record<string, number>>; channels: string[]; unidades: string[]; sampled: number; capped: boolean } | null>(null)
   const [canaisError, setCanaisError] = useState<string | null>(null)
   const [canaisLoading, setCanaisLoading] = useState(true)
 
@@ -122,10 +122,10 @@ export default function TrafegoClient() {
     }
   }, [])
 
-  const carregarCanais = useCallback(async () => {
+  const carregarCanais = useCallback(async (r: { start: string; end: string }) => {
     setCanaisLoading(true)
     try {
-      const res = await fetch('/api/kommo/canais', { cache: 'no-store' })
+      const res = await fetch(`/api/kommo/canais?start=${r.start}&end=${r.end}`, { cache: 'no-store' })
       const json = await res.json()
       if (!res.ok) throw new Error(`${json.error || 'Erro'} · ${json.detail || ''}`)
       setCanais(json)
@@ -137,19 +137,19 @@ export default function TrafegoClient() {
     }
   }, [])
 
+  const carregarTudo = useCallback((r: { start: string; end: string }) => {
+    carregar(r)
+    carregarKommo(r)
+    carregarCanais(r)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
-    carregar(range)
-    carregarKommo(range)
-    const id = setInterval(() => { carregar(range); carregarKommo(range) }, 5 * 60 * 1000)
+    carregarTudo(range)
+    const id = setInterval(() => carregarTudo(range), 5 * 60 * 1000)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range.start, range.end])
-
-  useEffect(() => {
-    carregarCanais()
-    const id = setInterval(carregarCanais, 5 * 60 * 1000)
-    return () => clearInterval(id)
-  }, [carregarCanais])
 
   const periodoFormatado = useMemo(() => {
     try {
@@ -175,7 +175,7 @@ export default function TrafegoClient() {
           <p className="text-sm text-slate-500">Visitas, cliques em botões e origem de tráfego de elainedanelon.com.br.</p>
         </div>
         <button
-          onClick={() => { carregar(range); carregarKommo(range) }}
+          onClick={() => carregarTudo(range)}
           className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 px-3 py-2 rounded-lg border border-gray-200 bg-white"
         >
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -262,7 +262,7 @@ export default function TrafegoClient() {
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs text-gray-500">Canal por unidade</p>
             <button
-              onClick={carregarCanais}
+              onClick={() => carregarCanais(range)}
               className="text-gray-400 hover:text-gray-700"
               title="Atualizar"
             >
@@ -270,7 +270,8 @@ export default function TrafegoClient() {
             </button>
           </div>
           <p className="text-xs text-gray-400 mb-3">
-            Amostra das {canais?.sampled ? fmt(canais.sampled) : '...'} conversas mais recentes recebidas (não usa o filtro de período acima — o volume de mensagens é grande demais pra calcular por data em tempo real).
+            Conversas recebidas no período selecionado ({canais?.sampled ? fmt(canais.sampled) : '...'}{canais?.capped ? '+' : ''}).
+            {canais?.capped && ' Período com muito volume — número pode estar abaixo do real; escolha um intervalo menor pra ver o total exato.'}
           </p>
           {canaisError ? (
             <p className="text-sm text-red-600">{canaisError}</p>
