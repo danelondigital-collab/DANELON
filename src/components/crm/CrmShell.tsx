@@ -30,6 +30,7 @@ const NAV = [
   { href: '/crm/desempenho',    label: 'Desempenho',     icon: TrendingUp },
   { href: '/crm/relatorios',    label: 'Relatórios',     icon: BarChart3 },
   { href: '/crm/relatorios/logs', label: 'Logs',         icon: History },
+  { href: '/crm/relatorios/trafego', label: 'Tráfego do Site', icon: Globe },
   { href: '/crm/app-mobile',    label: 'App Mobile',     icon: Smartphone },
   { href: '/crm/configuracoes', label: 'Configurações',  icon: Settings },
 ]
