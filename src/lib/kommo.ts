@@ -59,6 +59,75 @@ export function countNewContacts(fromUnix: number, toUnix: number) {
   return countNewInRange('contacts', fromUnix, toUnix)
 }
 
+// Volume de "unsorted" (conversas recebidas ainda não triadas) é alto demais pra
+// paginar tudo dentro de um período — aqui pegamos só uma amostra recente.
+const UNSORTED_SAMPLE_PAGES = 3 // 3 x 250 = até 750 conversas mais recentes (mantém dentro do tempo da função serverless)
+
+const CHANNEL_BY_SERVICE: Record<string, string> = {
+  waba: 'WhatsApp',
+  instagram_business: 'Instagram',
+  tiktok_kommo: 'TikTok',
+  facebook: 'Facebook',
+}
+
+const UNIDADES = ['Santo André', 'Morumbi', 'Alphaville', 'Goiânia'] as const
+const OUTRA_UNIDADE = 'Geral / outros'
+
+function unidadeFromSourceName(sourceName: string | undefined): string {
+  const s = (sourceName || '').toLowerCase()
+  if (s.includes('santo')) return 'Santo André'
+  if (s.includes('morumbi')) return 'Morumbi'
+  if (s.includes('alphaville')) return 'Alphaville'
+  if (s.includes('goi')) return 'Goiânia'
+  return OUTRA_UNIDADE
+}
+
+interface UnsortedItem {
+  metadata?: { service?: string; source_name?: string }
+}
+
+async function fetchUnsortedPage(page: number) {
+  const url = `${baseUrl()}/leads/unsorted?limit=${PAGE_LIMIT}&page=${page}`
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+    next: { revalidate: 300 },
+  })
+  if (res.status === 204) return [] as UnsortedItem[]
+  if (!res.ok) throw new Error(`Erro na API do Kommo (${res.status}): ${await res.text()}`)
+  const data = await res.json()
+  return (data._embedded?.unsorted || []) as UnsortedItem[]
+}
+
+/** Distribuição canal x unidade das conversas recebidas mais recentes (amostra, não é por período). */
+export async function channelsByUnidade(): Promise<{
+  matrix: Record<string, Record<string, number>>
+  channels: string[]
+  unidades: string[]
+  sampled: number
+}> {
+  if (!SUBDOMAIN || !ACCESS_TOKEN) {
+    throw new Error('KOMMO_SUBDOMAIN e KOMMO_ACCESS_TOKEN são obrigatórios')
+  }
+
+  const pages = await Promise.all(
+    Array.from({ length: UNSORTED_SAMPLE_PAGES }, (_, i) => fetchUnsortedPage(i + 1))
+  )
+  const items = pages.flat()
+
+  const unidades = [...UNIDADES, OUTRA_UNIDADE]
+  const channels = ['WhatsApp', 'Instagram', 'TikTok', 'Facebook', 'Outro']
+  const matrix: Record<string, Record<string, number>> = {}
+  for (const u of unidades) matrix[u] = Object.fromEntries(channels.map(c => [c, 0]))
+
+  for (const item of items) {
+    const unidade = unidadeFromSourceName(item.metadata?.source_name)
+    const canal = CHANNEL_BY_SERVICE[item.metadata?.service || ''] || 'Outro'
+    matrix[unidade][canal] += 1
+  }
+
+  return { matrix, channels, unidades, sampled: items.length }
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 /** Valida start/end (yyyy-mm-dd) e conta o tipo de registro pedido no período. */

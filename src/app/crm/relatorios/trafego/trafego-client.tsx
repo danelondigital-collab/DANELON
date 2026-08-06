@@ -79,6 +79,10 @@ export default function TrafegoClient() {
   const [kommoError, setKommoError] = useState<string | null>(null)
   const [kommoLoading, setKommoLoading] = useState(true)
 
+  const [canais, setCanais] = useState<{ matrix: Record<string, Record<string, number>>; channels: string[]; unidades: string[]; sampled: number } | null>(null)
+  const [canaisError, setCanaisError] = useState<string | null>(null)
+  const [canaisLoading, setCanaisLoading] = useState(true)
+
   const carregar = useCallback(async (r: { start: string; end: string }) => {
     setLoading(true)
     try {
@@ -118,6 +122,21 @@ export default function TrafegoClient() {
     }
   }, [])
 
+  const carregarCanais = useCallback(async () => {
+    setCanaisLoading(true)
+    try {
+      const res = await fetch('/api/kommo/canais', { cache: 'no-store' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(`${json.error || 'Erro'} · ${json.detail || ''}`)
+      setCanais(json)
+      setCanaisError(null)
+    } catch (e) {
+      setCanaisError(e instanceof Error ? e.message : 'Não foi possível carregar os canais do Kommo agora.')
+    } finally {
+      setCanaisLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     carregar(range)
     carregarKommo(range)
@@ -125,6 +144,12 @@ export default function TrafegoClient() {
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range.start, range.end])
+
+  useEffect(() => {
+    carregarCanais()
+    const id = setInterval(carregarCanais, 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [carregarCanais])
 
   const periodoFormatado = useMemo(() => {
     try {
@@ -231,6 +256,51 @@ export default function TrafegoClient() {
             </div>
           </div>
         )}
+
+        {/* Canal x unidade (amostra recente, não usa o filtro de período acima) */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mt-4">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-500">Canal por unidade</p>
+            <button
+              onClick={carregarCanais}
+              className="text-gray-400 hover:text-gray-700"
+              title="Atualizar"
+            >
+              {canaisLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            Amostra das {canais?.sampled ? fmt(canais.sampled) : '...'} conversas mais recentes recebidas (não usa o filtro de período acima — o volume de mensagens é grande demais pra calcular por data em tempo real).
+          </p>
+          {canaisError ? (
+            <p className="text-sm text-red-600">{canaisError}</p>
+          ) : !canais ? (
+            <div className="flex items-center gap-2 text-sm text-gray-500 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b border-gray-100">
+                    <th className="py-2 pr-4 font-medium">Unidade</th>
+                    {canais.channels.map(c => (
+                      <th key={c} className="py-2 px-3 font-medium text-right">{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {canais.unidades.map(u => (
+                    <tr key={u} className="border-b border-gray-50 last:border-0">
+                      <td className="py-2 pr-4 text-gray-700">{u}</td>
+                      {canais.channels.map(c => (
+                        <td key={c} className="py-2 px-3 text-right text-gray-900 font-medium">{fmt(canais.matrix[u]?.[c] || 0)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (
