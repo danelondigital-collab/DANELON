@@ -1,0 +1,182 @@
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import { Globe, Loader2, RefreshCw, MousePointerClick, Users, Eye, Activity } from 'lucide-react'
+
+const GOLD = '#B8924A'
+
+interface Totals {
+  pageViews: number
+  activeUsers: number
+  engagementRate: number
+  sessions: number
+  buttonClicks: number
+}
+
+interface TrafegoData {
+  updatedAt: string
+  totals: Totals
+  timeseries: { date: string; activeUsers: number }[]
+  events: { name: string; count: number }[]
+  topPages: { path: string; views: number }[]
+  trafficSource: { source: string; sessions: number }[]
+}
+
+function fmt(n: number) {
+  return n.toLocaleString('pt-BR')
+}
+
+function fmtPct(n: number) {
+  return `${(n * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+}
+
+function Sparkline({ points }: { points: { date: string; activeUsers: number }[] }) {
+  if (points.length === 0) return null
+  const max = Math.max(...points.map(p => p.activeUsers), 1)
+  const w = 100
+  const h = 32
+  const step = w / Math.max(points.length - 1, 1)
+  const path = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${(i * step).toFixed(2)} ${(h - (p.activeUsers / max) * h).toFixed(2)}`)
+    .join(' ')
+  const area = `${path} L ${w} ${h} L 0 ${h} Z`
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-20">
+      <path d={area} fill={GOLD} opacity={0.12} />
+      <path d={path} fill="none" stroke={GOLD} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
+
+function KpiCard({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string; accent?: boolean }) {
+  return (
+    <div className={`bg-white rounded-xl border p-4 ${accent ? 'border-amber-200' : 'border-gray-200'}`}>
+      <p className="text-xs text-gray-500 mb-1 flex items-center gap-1.5">
+        <Icon className="w-3.5 h-3.5" /> {label}
+      </p>
+      <p className="text-2xl font-bold" style={accent ? { color: GOLD } : undefined}>
+        {value}
+      </p>
+    </div>
+  )
+}
+
+export default function TrafegoClient() {
+  const [data, setData] = useState<TrafegoData | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const carregar = useCallback(async () => {
+    try {
+      const res = await fetch('/api/analytics/trafego', { cache: 'no-store' })
+      if (!res.ok) throw new Error()
+      setData(await res.json())
+      setError(null)
+    } catch {
+      setError('Não foi possível carregar os dados do Google Analytics agora.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    carregar()
+    const id = setInterval(carregar, 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [carregar])
+
+  const botoes = data?.events.filter(e => e.name.startsWith('Botão')) || []
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <Globe className="w-5 h-5 text-violet-600" /> Tráfego do Site
+          </h1>
+          <p className="text-sm text-slate-500">Visitas, cliques em botões e origem de tráfego de elainedanelon.com.br — últimos 28 dias.</p>
+        </div>
+        <button
+          onClick={() => { setLoading(true); carregar() }}
+          className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 px-3 py-2 rounded-lg border border-gray-200 bg-white"
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          Atualizar
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{error}</div>
+      )}
+
+      {!data && loading && (
+        <div className="flex items-center gap-2 text-sm text-gray-500 py-10 justify-center">
+          <Loader2 className="w-4 h-4 animate-spin" /> Carregando dados do Analytics…
+        </div>
+      )}
+
+      {data && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <KpiCard icon={Eye} label="Visualizações" value={fmt(data.totals.pageViews)} />
+            <KpiCard icon={Users} label="Usuários ativos" value={fmt(data.totals.activeUsers)} />
+            <KpiCard icon={Activity} label="Sessões" value={fmt(data.totals.sessions)} />
+            <KpiCard icon={Activity} label="Taxa de engajamento" value={fmtPct(data.totals.engagementRate)} />
+            <KpiCard icon={MousePointerClick} label="Cliques em botões" value={fmt(data.totals.buttonClicks)} accent />
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-xs text-gray-500 mb-2">Usuários ativos por dia</p>
+            <Sparkline points={data.timeseries} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl border border-amber-200 p-4">
+              <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+                <MousePointerClick className="w-3.5 h-3.5" /> Cliques por botão
+              </p>
+              <ul className="space-y-2">
+                {botoes.length === 0 && <li className="text-sm text-gray-400">Nenhum clique registrado ainda.</li>}
+                {botoes.map(b => (
+                  <li key={b.name} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 truncate pr-2">{b.name.replace('Botão_', '').replace(/_/g, ' ')}</span>
+                    <span className="font-semibold" style={{ color: GOLD }}>{fmt(b.count)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-3">Páginas mais vistas</p>
+              <ul className="space-y-2">
+                {data.topPages.map(p => (
+                  <li key={p.path} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 truncate pr-2">{p.path}</span>
+                    <span className="font-semibold text-gray-900">{fmt(p.views)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-3">Origem do tráfego</p>
+              <ul className="space-y-2">
+                {data.trafficSource.map(s => (
+                  <li key={s.source} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 truncate pr-2">{s.source}</span>
+                    <span className="font-semibold text-gray-900">{fmt(s.sessions)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-400 text-right">
+            Atualizado em {new Date(data.updatedAt).toLocaleString('pt-BR')} · atualiza sozinho a cada 5 min
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
