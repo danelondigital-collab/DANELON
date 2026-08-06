@@ -96,11 +96,15 @@ export default function TrafegoClient() {
     setKommoLoading(true)
     try {
       const res = await fetch(`/api/kommo/leads?start=${r.start}&end=${r.end}`, { cache: 'no-store' })
-      if (!res.ok) throw new Error()
-      setKommoLeads(await res.json())
+      const json = await res.json()
+      if (!res.ok) {
+        // TODO: remover exibição de "detail"/"envCheck" depois de diagnosticar o problema em produção
+        throw new Error(`${json.error || 'Erro'} · ${json.detail || ''} · env=${JSON.stringify(json.envCheck)}`)
+      }
+      setKommoLeads(json)
       setKommoError(null)
-    } catch {
-      setKommoError('Não foi possível carregar os leads do Kommo agora.')
+    } catch (e) {
+      setKommoError(e instanceof Error ? e.message : 'Não foi possível carregar os leads do Kommo agora.')
     } finally {
       setKommoLoading(false)
     }

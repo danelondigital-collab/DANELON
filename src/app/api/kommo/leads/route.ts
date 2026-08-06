@@ -23,6 +23,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ count, capped })
   } catch (error) {
     console.error('Erro ao buscar leads do Kommo:', error)
-    return NextResponse.json({ error: 'Não foi possível carregar os dados do Kommo.' }, { status: 500 })
+    // TODO: remover "detail" depois de diagnosticar o problema em produção
+    return NextResponse.json({
+      error: 'Não foi possível carregar os dados do Kommo.',
+      detail: error instanceof Error ? error.message : String(error),
+      envCheck: {
+        subdomain: Boolean(process.env.KOMMO_SUBDOMAIN),
+        token: Boolean(process.env.KOMMO_ACCESS_TOKEN),
+        tokenLength: process.env.KOMMO_ACCESS_TOKEN?.length || 0,
+      },
+    }, { status: 500 })
   }
 }
