@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns'
-import { Globe, Loader2, RefreshCw, MousePointerClick, Users, Eye, Activity, UserPlus } from 'lucide-react'
+import { Globe, Loader2, RefreshCw, MousePointerClick, Users, Eye, Activity, UserPlus, Contact } from 'lucide-react'
 
 const GOLD = '#B8924A'
 const fmtDate = (d: Date) => format(d, 'yyyy-MM-dd')
@@ -75,6 +75,7 @@ export default function TrafegoClient() {
   const [loading, setLoading] = useState(true)
 
   const [kommoLeads, setKommoLeads] = useState<{ count: number; capped: boolean } | null>(null)
+  const [kommoContacts, setKommoContacts] = useState<{ count: number; capped: boolean } | null>(null)
   const [kommoError, setKommoError] = useState<string | null>(null)
   const [kommoLoading, setKommoLoading] = useState(true)
 
@@ -95,16 +96,23 @@ export default function TrafegoClient() {
   const carregarKommo = useCallback(async (r: { start: string; end: string }) => {
     setKommoLoading(true)
     try {
-      const res = await fetch(`/api/kommo/leads?start=${r.start}&end=${r.end}`, { cache: 'no-store' })
-      const json = await res.json()
-      if (!res.ok) {
+      const [leadsRes, contactsRes] = await Promise.all([
+        fetch(`/api/kommo/leads?start=${r.start}&end=${r.end}`, { cache: 'no-store' }),
+        fetch(`/api/kommo/contacts?start=${r.start}&end=${r.end}`, { cache: 'no-store' }),
+      ])
+      const [leadsJson, contactsJson] = await Promise.all([leadsRes.json(), contactsRes.json()])
+
+      if (!leadsRes.ok || !contactsRes.ok) {
+        const bad = !leadsRes.ok ? leadsJson : contactsJson
         // TODO: remover exibição de "detail"/"envCheck" depois de diagnosticar o problema em produção
-        throw new Error(`${json.error || 'Erro'} · ${json.detail || ''} · env=${JSON.stringify(json.envCheck)}`)
+        throw new Error(`${bad.error || 'Erro'} · ${bad.detail || ''} · env=${JSON.stringify(bad.envCheck)}`)
       }
-      setKommoLeads(json)
+
+      setKommoLeads(leadsJson)
+      setKommoContacts(contactsJson)
       setKommoError(null)
     } catch (e) {
-      setKommoError(e instanceof Error ? e.message : 'Não foi possível carregar os leads do Kommo agora.')
+      setKommoError(e instanceof Error ? e.message : 'Não foi possível carregar os dados do Kommo agora.')
     } finally {
       setKommoLoading(false)
     }
@@ -210,6 +218,15 @@ export default function TrafegoClient() {
               <p className="text-2xl font-bold text-violet-600">
                 {kommoLoading && !kommoLeads ? <Loader2 className="w-5 h-5 animate-spin text-violet-300" /> : fmt(kommoLeads?.count || 0)}
                 {kommoLeads?.capped && <span className="text-xs font-normal text-gray-400">+</span>}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl border border-violet-200 p-4">
+              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1.5">
+                <Contact className="w-3.5 h-3.5" /> Novos contatos no período
+              </p>
+              <p className="text-2xl font-bold text-violet-600">
+                {kommoLoading && !kommoContacts ? <Loader2 className="w-5 h-5 animate-spin text-violet-300" /> : fmt(kommoContacts?.count || 0)}
+                {kommoContacts?.capped && <span className="text-xs font-normal text-gray-400">+</span>}
               </p>
             </div>
           </div>
