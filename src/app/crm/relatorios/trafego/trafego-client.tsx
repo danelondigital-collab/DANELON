@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns'
-import { Globe, Loader2, RefreshCw, MousePointerClick, Users, Eye, Activity } from 'lucide-react'
+import { Globe, Loader2, RefreshCw, MousePointerClick, Users, Eye, Activity, UserPlus } from 'lucide-react'
 
 const GOLD = '#B8924A'
 const fmtDate = (d: Date) => format(d, 'yyyy-MM-dd')
@@ -74,6 +74,10 @@ export default function TrafegoClient() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const [kommoLeads, setKommoLeads] = useState<{ count: number; capped: boolean } | null>(null)
+  const [kommoError, setKommoError] = useState<string | null>(null)
+  const [kommoLoading, setKommoLoading] = useState(true)
+
   const carregar = useCallback(async (r: { start: string; end: string }) => {
     setLoading(true)
     try {
@@ -88,9 +92,24 @@ export default function TrafegoClient() {
     }
   }, [])
 
+  const carregarKommo = useCallback(async (r: { start: string; end: string }) => {
+    setKommoLoading(true)
+    try {
+      const res = await fetch(`/api/kommo/leads?start=${r.start}&end=${r.end}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error()
+      setKommoLeads(await res.json())
+      setKommoError(null)
+    } catch {
+      setKommoError('Não foi possível carregar os leads do Kommo agora.')
+    } finally {
+      setKommoLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     carregar(range)
-    const id = setInterval(() => carregar(range), 5 * 60 * 1000)
+    carregarKommo(range)
+    const id = setInterval(() => { carregar(range); carregarKommo(range) }, 5 * 60 * 1000)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range.start, range.end])
@@ -119,7 +138,7 @@ export default function TrafegoClient() {
           <p className="text-sm text-slate-500">Visitas, cliques em botões e origem de tráfego de elainedanelon.com.br.</p>
         </div>
         <button
-          onClick={() => carregar(range)}
+          onClick={() => { carregar(range); carregarKommo(range) }}
           className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 px-3 py-2 rounded-lg border border-gray-200 bg-white"
         >
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -171,6 +190,26 @@ export default function TrafegoClient() {
           </div>
         </div>
         <p className="text-xs text-gray-400 mt-2">Período: {periodoFormatado}</p>
+      </div>
+
+      {/* CRM Kommo */}
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">CRM Kommo</p>
+        {kommoError ? (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{kommoError}</div>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="bg-white rounded-xl border border-violet-200 p-4">
+              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1.5">
+                <UserPlus className="w-3.5 h-3.5" /> Novos leads no período
+              </p>
+              <p className="text-2xl font-bold text-violet-600">
+                {kommoLoading && !kommoLeads ? <Loader2 className="w-5 h-5 animate-spin text-violet-300" /> : fmt(kommoLeads?.count || 0)}
+                {kommoLeads?.capped && <span className="text-xs font-normal text-gray-400">+</span>}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
