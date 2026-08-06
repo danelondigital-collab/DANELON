@@ -71,4 +71,5 @@ export function hostAndButtonClicksFilter() {
   }
 }
 
-export const DATE_RANGE_28D = [{ startDate: '28daysAgo', endDate: 'yesterday' }]
+export const DEFAULT_START = '28daysAgo'
+export const DEFAULT_END = 'yesterday'

@@ -1,9 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { Globe, Loader2, RefreshCw, MousePointerClick, Users, Eye, Activity } from 'lucide-react'
 
 const GOLD = '#B8924A'
+const fmtDate = (d: Date) => format(d, 'yyyy-MM-dd')
 
 interface Totals {
   pageViews: number
@@ -15,6 +17,7 @@ interface Totals {
 
 interface TrafegoData {
   updatedAt: string
+  range: { startDate: string; endDate: string }
   totals: Totals
   timeseries: { date: string; activeUsers: number }[]
   events: { name: string; count: number }[]
@@ -63,13 +66,18 @@ function KpiCard({ icon: Icon, label, value, accent }: { icon: React.ElementType
 }
 
 export default function TrafegoClient() {
+  const [range, setRange] = useState(() => ({
+    start: fmtDate(subDays(new Date(), 28)),
+    end: fmtDate(subDays(new Date(), 1)),
+  }))
   const [data, setData] = useState<TrafegoData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const carregar = useCallback(async () => {
+  const carregar = useCallback(async (r: { start: string; end: string }) => {
+    setLoading(true)
     try {
-      const res = await fetch('/api/analytics/trafego', { cache: 'no-store' })
+      const res = await fetch(`/api/analytics/trafego?start=${r.start}&end=${r.end}`, { cache: 'no-store' })
       if (!res.ok) throw new Error()
       setData(await res.json())
       setError(null)
@@ -81,10 +89,23 @@ export default function TrafegoClient() {
   }, [])
 
   useEffect(() => {
-    carregar()
-    const id = setInterval(carregar, 5 * 60 * 1000)
+    carregar(range)
+    const id = setInterval(() => carregar(range), 5 * 60 * 1000)
     return () => clearInterval(id)
-  }, [carregar])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.start, range.end])
+
+  const periodoFormatado = useMemo(() => {
+    try {
+      return `${format(new Date(range.start + 'T12:00:00'), 'dd/MM/yyyy')} a ${format(new Date(range.end + 'T12:00:00'), 'dd/MM/yyyy')}`
+    } catch {
+      return ''
+    }
+  }, [range])
+
+  function preset(start: Date, end: Date) {
+    setRange({ start: fmtDate(start), end: fmtDate(end) })
+  }
 
   const botoes = data?.events.filter(e => e.name.startsWith('Botão')) || []
 
@@ -95,15 +116,61 @@ export default function TrafegoClient() {
           <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Globe className="w-5 h-5 text-violet-600" /> Tráfego do Site
           </h1>
-          <p className="text-sm text-slate-500">Visitas, cliques em botões e origem de tráfego de elainedanelon.com.br — últimos 28 dias.</p>
+          <p className="text-sm text-slate-500">Visitas, cliques em botões e origem de tráfego de elainedanelon.com.br.</p>
         </div>
         <button
-          onClick={() => { setLoading(true); carregar() }}
+          onClick={() => carregar(range)}
           className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 px-3 py-2 rounded-lg border border-gray-200 bg-white"
         >
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           Atualizar
         </button>
+      </div>
+
+      {/* Filtro de período */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 whitespace-nowrap">De:</label>
+            <input
+              type="date"
+              value={range.start}
+              max={range.end}
+              onChange={e => setRange(r => ({ ...r, start: e.target.value }))}
+              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 whitespace-nowrap">Até:</label>
+            <input
+              type="date"
+              value={range.end}
+              min={range.start}
+              max={fmtDate(new Date())}
+              onChange={e => setRange(r => ({ ...r, end: e.target.value }))}
+              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => preset(subDays(new Date(), 7), subDays(new Date(), 1))}
+              className="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+              Últimos 7 dias
+            </button>
+            <button onClick={() => preset(subDays(new Date(), 28), subDays(new Date(), 1))}
+              className="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+              Últimos 28 dias
+            </button>
+            <button onClick={() => preset(startOfMonth(new Date()), new Date())}
+              className="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+              Este mês
+            </button>
+            <button onClick={() => preset(startOfMonth(subMonths(new Date(), 1)), endOfMonth(subMonths(new Date(), 1)))}
+              className="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+              Mês passado
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">Período: {periodoFormatado}</p>
       </div>
 
       {error && (
@@ -137,7 +204,7 @@ export default function TrafegoClient() {
                 <MousePointerClick className="w-3.5 h-3.5" /> Cliques por botão
               </p>
               <ul className="space-y-2">
-                {botoes.length === 0 && <li className="text-sm text-gray-400">Nenhum clique registrado ainda.</li>}
+                {botoes.length === 0 && <li className="text-sm text-gray-400">Nenhum clique registrado no período.</li>}
                 {botoes.map(b => (
                   <li key={b.name} className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 truncate pr-2">{b.name.replace('Botão_', '').replace(/_/g, ' ')}</span>

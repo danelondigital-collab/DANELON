@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
-import { runReport, hostFilter, hostAndButtonClicksFilter, DATE_RANGE_28D } from '@/lib/ga4'
+import { NextRequest, NextResponse } from 'next/server'
+import { runReport, hostFilter, hostAndButtonClicksFilter, DEFAULT_START, DEFAULT_END } from '@/lib/ga4'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,23 +7,32 @@ function num(v: string | undefined) {
   return Number(v || 0)
 }
 
-export async function GET() {
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const startParam = searchParams.get('start')
+    const endParam = searchParams.get('end')
+    const startDate = startParam && DATE_RE.test(startParam) ? startParam : DEFAULT_START
+    const endDate = endParam && DATE_RE.test(endParam) ? endParam : DEFAULT_END
+    const dateRanges = [{ startDate, endDate }]
+
     const [totals, timeseries, events, topPages, trafficSource, buttonClicks] = await Promise.all([
       runReport({
-        dateRanges: DATE_RANGE_28D,
+        dateRanges,
         metrics: [{ name: 'screenPageViews' }, { name: 'activeUsers' }, { name: 'engagementRate' }, { name: 'sessions' }],
         dimensionFilter: hostFilter(),
       }),
       runReport({
-        dateRanges: DATE_RANGE_28D,
+        dateRanges,
         dimensions: [{ name: 'date' }],
         metrics: [{ name: 'activeUsers' }],
         dimensionFilter: hostFilter(),
         orderBys: [{ dimension: { dimensionName: 'date' } }],
       }),
       runReport({
-        dateRanges: DATE_RANGE_28D,
+        dateRanges,
         dimensions: [{ name: 'eventName' }],
         metrics: [{ name: 'eventCount' }],
         dimensionFilter: hostFilter(),
@@ -31,7 +40,7 @@ export async function GET() {
         limit: '15',
       }),
       runReport({
-        dateRanges: DATE_RANGE_28D,
+        dateRanges,
         dimensions: [{ name: 'pagePath' }],
         metrics: [{ name: 'screenPageViews' }],
         dimensionFilter: hostFilter(),
@@ -39,7 +48,7 @@ export async function GET() {
         limit: '8',
       }),
       runReport({
-        dateRanges: DATE_RANGE_28D,
+        dateRanges,
         dimensions: [{ name: 'sessionSourceMedium' }],
         metrics: [{ name: 'sessions' }],
         dimensionFilter: hostFilter(),
@@ -47,7 +56,7 @@ export async function GET() {
         limit: '8',
       }),
       runReport({
-        dateRanges: DATE_RANGE_28D,
+        dateRanges,
         metrics: [{ name: 'eventCount' }],
         dimensionFilter: hostAndButtonClicksFilter(),
       }),
@@ -58,6 +67,7 @@ export async function GET() {
 
     const payload = {
       updatedAt: new Date().toISOString(),
+      range: { startDate, endDate },
       totals: {
         pageViews: num(totalsRow?.[0]?.value),
         activeUsers: num(totalsRow?.[1]?.value),
