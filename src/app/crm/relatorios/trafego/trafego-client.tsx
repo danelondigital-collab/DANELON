@@ -231,11 +231,14 @@ export default function TrafegoClient() {
 
       {/* CRM Kommo */}
       <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">CRM Kommo</p>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-2">
+          CRM Kommo
+          {kommoLoading && kommoLeads && <span className="flex items-center gap-1 text-violet-400 normal-case font-normal"><Loader2 className="w-3 h-3 animate-spin" /> atualizando…</span>}
+        </p>
         {kommoError ? (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{kommoError}</div>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className={`grid grid-cols-2 lg:grid-cols-5 gap-4 transition-opacity ${kommoLoading && kommoLeads ? 'opacity-50' : ''}`}>
             <div className="bg-white rounded-xl border border-violet-200 p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1.5">
                 <UserPlus className="w-3.5 h-3.5" /> Novos leads no período
@@ -257,10 +260,13 @@ export default function TrafegoClient() {
           </div>
         )}
 
-        {/* Canal x unidade (amostra recente, não usa o filtro de período acima) */}
+        {/* Canal x unidade, mesmo período do filtro acima */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 mt-4">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-gray-500">Canal por unidade</p>
+            <p className="text-xs text-gray-500 flex items-center gap-2">
+              Canal por unidade
+              {canaisLoading && canais && <span className="flex items-center gap-1 text-violet-400 font-normal"><Loader2 className="w-3 h-3 animate-spin" /> atualizando…</span>}
+            </p>
             <button
               onClick={() => carregarCanais(range)}
               className="text-gray-400 hover:text-gray-700"
@@ -278,7 +284,7 @@ export default function TrafegoClient() {
           ) : !canais ? (
             <div className="flex items-center gap-2 text-sm text-gray-500 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className={`overflow-x-auto transition-opacity ${canaisLoading ? 'opacity-50' : ''}`}>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500 border-b border-gray-100">
@@ -316,7 +322,12 @@ export default function TrafegoClient() {
 
       {data && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {loading && (
+            <p className="text-xs text-violet-400 flex items-center gap-1 -mb-2">
+              <Loader2 className="w-3 h-3 animate-spin" /> atualizando dados do Analytics…
+            </p>
+          )}
+          <div className={`grid grid-cols-2 lg:grid-cols-5 gap-4 transition-opacity ${loading ? 'opacity-50' : ''}`}>
             <KpiCard icon={Eye} label="Visualizações" value={fmt(data.totals.pageViews)} />
             <KpiCard icon={Users} label="Usuários ativos" value={fmt(data.totals.activeUsers)} />
             <KpiCard icon={Activity} label="Sessões" value={fmt(data.totals.sessions)} />
