@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { Globe, Loader2, RefreshCw, MousePointerClick, Users, Eye, Activity, UserPlus, Contact } from 'lucide-react'
 
@@ -83,21 +83,34 @@ export default function TrafegoClient() {
   const [canaisError, setCanaisError] = useState<string | null>(null)
   const [canaisLoading, setCanaisLoading] = useState(true)
 
+  // Contadores de requisição: como algumas buscas (principalmente a de canais) podem
+  // demorar segundos, uma resposta antiga pode voltar depois de uma mais nova. Cada
+  // fetch guarda o número da sua própria "rodada" e só aplica o resultado se ainda
+  // for a rodada mais recente — evita que dados velhos sobrescrevam os atuais.
+  const dataReqId = useRef(0)
+  const kommoReqId = useRef(0)
+  const canaisReqId = useRef(0)
+
   const carregar = useCallback(async (r: { start: string; end: string }) => {
+    const reqId = ++dataReqId.current
     setLoading(true)
     try {
       const res = await fetch(`/api/analytics/trafego?start=${r.start}&end=${r.end}`, { cache: 'no-store' })
       if (!res.ok) throw new Error()
-      setData(await res.json())
+      const json = await res.json()
+      if (reqId !== dataReqId.current) return
+      setData(json)
       setError(null)
     } catch {
+      if (reqId !== dataReqId.current) return
       setError('Não foi possível carregar os dados do Google Analytics agora.')
     } finally {
-      setLoading(false)
+      if (reqId === dataReqId.current) setLoading(false)
     }
   }, [])
 
   const carregarKommo = useCallback(async (r: { start: string; end: string }) => {
+    const reqId = ++kommoReqId.current
     setKommoLoading(true)
     try {
       const [leadsRes, contactsRes] = await Promise.all([
@@ -105,6 +118,7 @@ export default function TrafegoClient() {
         fetch(`/api/kommo/contacts?start=${r.start}&end=${r.end}`, { cache: 'no-store' }),
       ])
       const [leadsJson, contactsJson] = await Promise.all([leadsRes.json(), contactsRes.json()])
+      if (reqId !== kommoReqId.current) return
 
       if (!leadsRes.ok || !contactsRes.ok) {
         const bad = !leadsRes.ok ? leadsJson : contactsJson
@@ -116,24 +130,28 @@ export default function TrafegoClient() {
       setKommoContacts(contactsJson)
       setKommoError(null)
     } catch (e) {
+      if (reqId !== kommoReqId.current) return
       setKommoError(e instanceof Error ? e.message : 'Não foi possível carregar os dados do Kommo agora.')
     } finally {
-      setKommoLoading(false)
+      if (reqId === kommoReqId.current) setKommoLoading(false)
     }
   }, [])
 
   const carregarCanais = useCallback(async (r: { start: string; end: string }) => {
+    const reqId = ++canaisReqId.current
     setCanaisLoading(true)
     try {
       const res = await fetch(`/api/kommo/canais?start=${r.start}&end=${r.end}`, { cache: 'no-store' })
       const json = await res.json()
+      if (reqId !== canaisReqId.current) return
       if (!res.ok) throw new Error(`${json.error || 'Erro'} · ${json.detail || ''}`)
       setCanais(json)
       setCanaisError(null)
     } catch (e) {
+      if (reqId !== canaisReqId.current) return
       setCanaisError(e instanceof Error ? e.message : 'Não foi possível carregar os canais do Kommo agora.')
     } finally {
-      setCanaisLoading(false)
+      if (reqId === canaisReqId.current) setCanaisLoading(false)
     }
   }, [])
 
