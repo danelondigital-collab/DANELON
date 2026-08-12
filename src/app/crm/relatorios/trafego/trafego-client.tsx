@@ -349,19 +349,19 @@ export default function TrafegoClient() {
                 className="px-2.5 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
                 Ontem
               </button>
-              <button onClick={() => presetCanais(subDays(new Date(), 3), new Date())}
+              <button onClick={() => presetCanais(subDays(new Date(), 7), new Date())}
                 className="px-2.5 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
-                Últimos 3 dias
+                Últimos 7 dias
               </button>
             </div>
           </div>
 
           <p className="text-xs text-gray-400 mb-3">
-            Conversas recebidas em {canaisPeriodoFormatado || '...'}
-            {canais?.sampled ? ` (${fmt(canais.sampled)} conversas)` : ''}
+            Total de conversas recebidas em {canaisPeriodoFormatado || '...'}
+            {canais?.sampled ? `: ${fmt(canais.sampled)}` : ''}
             {canais?.capped && '+'}
-            . Esse quadro tem um filtro próprio, separado do filtro geral acima: o volume de mensagens (principalmente WhatsApp) é grande demais pra paginar períodos largos em tempo real, então mantivemos ele curto (poucos dias) pra continuar rápido.
-            {canais?.capped && ' O período escolhido tem mais conversas do que o quadro consegue somar de uma vez — os números mostram as mais recentes dentro dele, não o total exato.'}
+            . Esse quadro tem um filtro próprio, separado do filtro geral acima, porque o cálculo é feito conversa por conversa — quanto maior o período, mais tempo leva.
+            {canais?.capped && ' O período escolhido tem mais conversas do que o quadro consegue somar de uma vez — o número mostrado é parcial, não o total exato.'}
           </p>
           {canaisError ? (
             <p className="text-sm text-red-600">{canaisError}</p>

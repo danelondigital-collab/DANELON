@@ -59,15 +59,13 @@ export function countNewContacts(fromUnix: number, toUnix: number) {
   return countNewInRange('contacts', fromUnix, toUnix)
 }
 
-// Volume de "unsorted" (conversas recebidas ainda não triadas) é alto demais pra
-// paginar tudo em períodos largos — mantemos um teto baixo (a função serverless no
-// plano atual da Vercel corta em ~10s) e sinalizamos "capped" quando bate nele.
-// Cada página desse endpoint específico do Kommo é lenta (~5-7s, mesmo sozinha),
-// bem diferente de /leads e /contacts — por isso o teto aqui é bem mais conservador.
-// Confirmado por teste direto: mesmo filtrando só "hoje" já vêm 250+ conversas na
-// 1ª página (has_next=true) — ou seja, o volume é alto o bastante pra qualquer
-// período estourar o teto, não só períodos longos.
-const UNSORTED_MAX_PAGES = 3 // 3 x 250 = até 750 conversas por rodada, em paralelo
+// O endpoint /leads/unsorted da Kommo IGNORA filter[created_at] (confirmado testando
+// direto na API: pedir um período de 2025 continua devolvendo as conversas de hoje).
+// Não tem como filtrar por data no servidor aqui — a única forma correta é paginar a
+// lista (que vem sempre em ordem decrescente de criação) e parar manualmente quando
+// os itens caem abaixo do início do período pedido. Teto de segurança pra não rodar
+// pra sempre se o período pedido for muito largo.
+const UNSORTED_SAFETY_MAX_PAGES = 30
 
 const CHANNEL_BY_SERVICE: Record<string, string> = {
   waba: 'WhatsApp',
@@ -89,28 +87,37 @@ function unidadeFromSourceName(sourceName: string | undefined): string {
 }
 
 interface UnsortedItem {
+  created_at?: number
   metadata?: { service?: string; source_name?: string }
 }
 
-async function fetchUnsortedPage(page: number, fromUnix: number, toUnix: number) {
-  const url = `${baseUrl()}/leads/unsorted?limit=${PAGE_LIMIT}&page=${page}&filter[created_at][from]=${fromUnix}&filter[created_at][to]=${toUnix}`
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
-    next: { revalidate: 300 },
-  })
-  if (res.status === 204) return { items: [] as UnsortedItem[], hasNext: false }
-  if (!res.ok) throw new Error(`Erro na API do Kommo (${res.status}): ${await res.text()}`)
-  const data = await res.json()
-  const items = (data._embedded?.unsorted || []) as UnsortedItem[]
-  return { items, hasNext: Boolean(data._links?.next) && items.length === PAGE_LIMIT }
+/** Busca uma página "crua" da lista (sem filtro de data — a API ignora esse filtro nesse endpoint). */
+async function fetchUnsortedPage(page: number): Promise<{ items: UnsortedItem[]; hasNext: boolean }> {
+  const url = `${baseUrl()}/leads/unsorted?limit=${PAGE_LIMIT}&page=${page}`
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+      cache: 'no-store',
+    })
+    if (res.status === 429) {
+      await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
+      continue
+    }
+    if (res.status === 204) return { items: [], hasNext: false }
+    if (!res.ok) throw new Error(`Erro na API do Kommo (${res.status}): ${await res.text()}`)
+    const data = await res.json()
+    const items = (data._embedded?.unsorted || []) as UnsortedItem[]
+    return { items, hasNext: Boolean(data._links?.next) && items.length === PAGE_LIMIT }
+  }
+  throw new Error('Erro na API do Kommo: limite de requisições (429) excedido repetidamente')
 }
 
 /**
  * Distribuição canal x unidade das conversas recebidas no período informado.
- * Busca as mais recentes dentro do período (a API do Kommo retorna em ordem
- * decrescente de criação) até um teto de segurança — se o período tiver mais
- * conversas do que o teto cobre, o resultado vem marcado como "capped"
- * (mostra as mais recentes do período, não a distribuição completa).
+ * Como a API não filtra por data nesse endpoint, pagina a lista completa (mais
+ * recente primeiro) e para assim que os itens saem do período pedido — só soma
+ * o que realmente cai dentro de [fromUnix, toUnix]. Se bater no teto de segurança
+ * antes de sair do período, volta marcado como "capped" (contagem parcial).
  */
 export async function channelsByUnidade(fromUnix: number, toUnix: number): Promise<{
   matrix: Record<string, Record<string, number>>
@@ -128,19 +135,31 @@ export async function channelsByUnidade(fromUnix: number, toUnix: number): Promi
   const matrix: Record<string, Record<string, number>> = {}
   for (const u of unidades) matrix[u] = Object.fromEntries(channels.map(c => [c, 0]))
 
-  const pages = await Promise.all(
-    Array.from({ length: UNSORTED_MAX_PAGES }, (_, i) => fetchUnsortedPage(i + 1, fromUnix, toUnix))
-  )
-  const items = pages.flatMap(p => p.items)
-  const capped = pages.every(p => p.items.length === PAGE_LIMIT) && Boolean(pages[pages.length - 1]?.hasNext)
+  let sampled = 0
+  let capped = false
 
-  for (const item of items) {
-    const unidade = unidadeFromSourceName(item.metadata?.source_name)
-    const canal = CHANNEL_BY_SERVICE[item.metadata?.service || ''] || 'Outro'
-    matrix[unidade][canal] += 1
+  for (let page = 1; page <= UNSORTED_SAFETY_MAX_PAGES; page++) {
+    const { items, hasNext } = await fetchUnsortedPage(page)
+    if (items.length === 0) break
+
+    let crossedLowerBound = false
+    for (const item of items) {
+      const createdAt = item.created_at ?? 0
+      if (createdAt > toUnix) continue // ainda não entrou no período (mais recente que "até")
+      if (createdAt < fromUnix) { crossedLowerBound = true; break } // já passou do início do período
+
+      sampled += 1
+      const unidade = unidadeFromSourceName(item.metadata?.source_name)
+      const canal = CHANNEL_BY_SERVICE[item.metadata?.service || ''] || 'Outro'
+      matrix[unidade][canal] += 1
+    }
+
+    if (crossedLowerBound) break
+    if (!hasNext) break
+    if (page === UNSORTED_SAFETY_MAX_PAGES) capped = true
   }
 
-  return { matrix, channels, unidades, sampled: items.length, capped }
+  return { matrix, channels, unidades, sampled, capped }
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/

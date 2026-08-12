@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { canaisForRoute } from '@/lib/kommo'
 
 export const dynamic = 'force-dynamic'
+// Esse endpoint pagina a lista inteira até sair do período pedido (a API da Kommo
+// não filtra por data aqui), então pode levar mais que o padrão de 10s da Vercel.
+export const maxDuration = 60
 
 export async function GET(request: NextRequest) {
   try {
