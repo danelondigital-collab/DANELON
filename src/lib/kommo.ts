@@ -64,7 +64,10 @@ export function countNewContacts(fromUnix: number, toUnix: number) {
 // plano atual da Vercel corta em ~10s) e sinalizamos "capped" quando bate nele.
 // Cada página desse endpoint específico do Kommo é lenta (~5-7s, mesmo sozinha),
 // bem diferente de /leads e /contacts — por isso o teto aqui é bem mais conservador.
-const UNSORTED_MAX_PAGES = 3 // 3 x 250 = até 750 conversas no período, tudo em 1 rodada paralela
+// Confirmado por teste direto: mesmo filtrando só "hoje" já vêm 250+ conversas na
+// 1ª página (has_next=true) — ou seja, o volume é alto o bastante pra qualquer
+// período estourar o teto, não só períodos longos.
+const UNSORTED_MAX_PAGES = 3 // 3 x 250 = até 750 conversas por rodada, em paralelo
 
 const CHANNEL_BY_SERVICE: Record<string, string> = {
   waba: 'WhatsApp',
@@ -89,8 +92,8 @@ interface UnsortedItem {
   metadata?: { service?: string; source_name?: string }
 }
 
-async function fetchUnsortedPage(page: number) {
-  const url = `${baseUrl()}/leads/unsorted?limit=${PAGE_LIMIT}&page=${page}`
+async function fetchUnsortedPage(page: number, fromUnix: number, toUnix: number) {
+  const url = `${baseUrl()}/leads/unsorted?limit=${PAGE_LIMIT}&page=${page}&filter[created_at][from]=${fromUnix}&filter[created_at][to]=${toUnix}`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
     next: { revalidate: 300 },
@@ -103,17 +106,18 @@ async function fetchUnsortedPage(page: number) {
 }
 
 /**
- * Distribuição canal x unidade das conversas recebidas mais recentes.
- * NÃO usa o filtro de período da página: o volume de mensagens (principalmente
- * WhatsApp) é tão alto que ~750 conversas já cobrem só 1-2 dias — ou seja, pra
- * praticamente qualquer período escolhido o resultado seria o mesmo de qualquer
- * forma. Fica como "as mais recentes", deixado explícito na UI.
+ * Distribuição canal x unidade das conversas recebidas no período informado.
+ * Busca as mais recentes dentro do período (a API do Kommo retorna em ordem
+ * decrescente de criação) até um teto de segurança — se o período tiver mais
+ * conversas do que o teto cobre, o resultado vem marcado como "capped"
+ * (mostra as mais recentes do período, não a distribuição completa).
  */
-export async function channelsByUnidade(): Promise<{
+export async function channelsByUnidade(fromUnix: number, toUnix: number): Promise<{
   matrix: Record<string, Record<string, number>>
   channels: string[]
   unidades: string[]
   sampled: number
+  capped: boolean
 }> {
   if (!SUBDOMAIN || !ACCESS_TOKEN) {
     throw new Error('KOMMO_SUBDOMAIN e KOMMO_ACCESS_TOKEN são obrigatórios')
@@ -125,9 +129,10 @@ export async function channelsByUnidade(): Promise<{
   for (const u of unidades) matrix[u] = Object.fromEntries(channels.map(c => [c, 0]))
 
   const pages = await Promise.all(
-    Array.from({ length: UNSORTED_MAX_PAGES }, (_, i) => fetchUnsortedPage(i + 1))
+    Array.from({ length: UNSORTED_MAX_PAGES }, (_, i) => fetchUnsortedPage(i + 1, fromUnix, toUnix))
   )
   const items = pages.flatMap(p => p.items)
+  const capped = pages.every(p => p.items.length === PAGE_LIMIT) && Boolean(pages[pages.length - 1]?.hasNext)
 
   for (const item of items) {
     const unidade = unidadeFromSourceName(item.metadata?.source_name)
@@ -135,7 +140,7 @@ export async function channelsByUnidade(): Promise<{
     matrix[unidade][canal] += 1
   }
 
-  return { matrix, channels, unidades, sampled: items.length }
+  return { matrix, channels, unidades, sampled: items.length, capped }
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -154,4 +159,10 @@ function parseDateRange(start: string | null, end: string | null) {
 export async function countForRoute(entity: Entity, start: string | null, end: string | null) {
   const { fromUnix, toUnix } = parseDateRange(start, end)
   return countNewInRange(entity, fromUnix, toUnix)
+}
+
+/** Valida start/end (yyyy-mm-dd) e busca a distribuição canal x unidade no período. */
+export async function canaisForRoute(start: string | null, end: string | null) {
+  const { fromUnix, toUnix } = parseDateRange(start, end)
+  return channelsByUnidade(fromUnix, toUnix)
 }

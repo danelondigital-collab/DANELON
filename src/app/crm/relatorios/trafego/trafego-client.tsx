@@ -79,7 +79,11 @@ export default function TrafegoClient() {
   const [kommoError, setKommoError] = useState<string | null>(null)
   const [kommoLoading, setKommoLoading] = useState(true)
 
-  const [canais, setCanais] = useState<{ matrix: Record<string, Record<string, number>>; channels: string[]; unidades: string[]; sampled: number } | null>(null)
+  const [canaisRange, setCanaisRange] = useState(() => ({
+    start: fmtDate(new Date()),
+    end: fmtDate(new Date()),
+  }))
+  const [canais, setCanais] = useState<{ matrix: Record<string, Record<string, number>>; channels: string[]; unidades: string[]; sampled: number; capped: boolean } | null>(null)
   const [canaisError, setCanaisError] = useState<string | null>(null)
   const [canaisLoading, setCanaisLoading] = useState(true)
 
@@ -137,11 +141,11 @@ export default function TrafegoClient() {
     }
   }, [])
 
-  const carregarCanais = useCallback(async () => {
+  const carregarCanais = useCallback(async (r: { start: string; end: string }) => {
     const reqId = ++canaisReqId.current
     setCanaisLoading(true)
     try {
-      const res = await fetch('/api/kommo/canais', { cache: 'no-store' })
+      const res = await fetch(`/api/kommo/canais?start=${r.start}&end=${r.end}`, { cache: 'no-store' })
       const json = await res.json()
       if (reqId !== canaisReqId.current) return
       if (!res.ok) throw new Error(`${json.error || 'Erro'} · ${json.detail || ''}`)
@@ -168,12 +172,13 @@ export default function TrafegoClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range.start, range.end])
 
-  // Canal por unidade não usa o filtro de período — atualiza sozinho, independente.
+  // Canal por unidade tem seu próprio filtro de período (menor/independente do
+  // filtro geral) porque o volume de conversas é grande demais pra paginar tudo.
   useEffect(() => {
-    carregarCanais()
-    const id = setInterval(carregarCanais, 5 * 60 * 1000)
+    carregarCanais(canaisRange)
+    const id = setInterval(() => carregarCanais(canaisRange), 5 * 60 * 1000)
     return () => clearInterval(id)
-  }, [carregarCanais])
+  }, [carregarCanais, canaisRange.start, canaisRange.end])
 
   const periodoFormatado = useMemo(() => {
     try {
@@ -186,6 +191,19 @@ export default function TrafegoClient() {
   function preset(start: Date, end: Date) {
     setRange({ start: fmtDate(start), end: fmtDate(end) })
   }
+
+  function presetCanais(start: Date, end: Date) {
+    setCanaisRange({ start: fmtDate(start), end: fmtDate(end) })
+  }
+
+  const canaisPeriodoFormatado = useMemo(() => {
+    try {
+      if (canaisRange.start === canaisRange.end) return format(new Date(canaisRange.start + 'T12:00:00'), 'dd/MM/yyyy')
+      return `${format(new Date(canaisRange.start + 'T12:00:00'), 'dd/MM/yyyy')} a ${format(new Date(canaisRange.end + 'T12:00:00'), 'dd/MM/yyyy')}`
+    } catch {
+      return ''
+    }
+  }, [canaisRange])
 
   const botoes = data?.events.filter(e => e.name.startsWith('Botão')) || []
 
@@ -284,7 +302,7 @@ export default function TrafegoClient() {
           </div>
         )}
 
-        {/* Canal x unidade — conversas mais recentes, não usa o filtro de período acima */}
+        {/* Canal x unidade — tem filtro próprio, menor que o de cima */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 mt-4">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs text-gray-500 flex items-center gap-2">
@@ -292,15 +310,58 @@ export default function TrafegoClient() {
               {canaisLoading && canais && <span className="flex items-center gap-1 text-violet-400 font-normal"><Loader2 className="w-3 h-3 animate-spin" /> atualizando…</span>}
             </p>
             <button
-              onClick={() => carregarCanais()}
+              onClick={() => carregarCanais(canaisRange)}
               className="text-gray-400 hover:text-gray-700"
               title="Atualizar"
             >
               {canaisLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             </button>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2 mb-2 pb-3 border-b border-gray-100">
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500 whitespace-nowrap">De:</label>
+              <input
+                type="date"
+                value={canaisRange.start}
+                max={canaisRange.end}
+                onChange={e => setCanaisRange(r => ({ ...r, start: e.target.value }))}
+                className="px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500 whitespace-nowrap">Até:</label>
+              <input
+                type="date"
+                value={canaisRange.end}
+                min={canaisRange.start}
+                max={fmtDate(new Date())}
+                onChange={e => setCanaisRange(r => ({ ...r, end: e.target.value }))}
+                className="px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button onClick={() => presetCanais(new Date(), new Date())}
+                className="px-2.5 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+                Hoje
+              </button>
+              <button onClick={() => presetCanais(subDays(new Date(), 1), subDays(new Date(), 1))}
+                className="px-2.5 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+                Ontem
+              </button>
+              <button onClick={() => presetCanais(subDays(new Date(), 3), new Date())}
+                className="px-2.5 py-1 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+                Últimos 3 dias
+              </button>
+            </div>
+          </div>
+
           <p className="text-xs text-gray-400 mb-3">
-            Amostra das {canais?.sampled ? fmt(canais.sampled) : '...'} conversas mais recentes recebidas — não usa o filtro de período acima. O volume de mensagens (principalmente WhatsApp) é grande demais pra calcular por data em tempo real sem travar a página.
+            Conversas recebidas em {canaisPeriodoFormatado || '...'}
+            {canais?.sampled ? ` (${fmt(canais.sampled)} conversas)` : ''}
+            {canais?.capped && '+'}
+            . Esse quadro tem um filtro próprio, separado do filtro geral acima: o volume de mensagens (principalmente WhatsApp) é grande demais pra paginar períodos largos em tempo real, então mantivemos ele curto (poucos dias) pra continuar rápido.
+            {canais?.capped && ' O período escolhido tem mais conversas do que o quadro consegue somar de uma vez — os números mostram as mais recentes dentro dele, não o total exato.'}
           </p>
           {canaisError ? (
             <p className="text-sm text-red-600">{canaisError}</p>
