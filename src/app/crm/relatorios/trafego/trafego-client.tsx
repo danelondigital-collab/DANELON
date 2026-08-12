@@ -21,8 +21,6 @@ interface TrafegoData {
   totals: Totals
   timeseries: { date: string; activeUsers: number }[]
   events: { name: string; count: number }[]
-  topPages: { path: string; views: number }[]
-  trafficSource: { source: string; sessions: number }[]
 }
 
 function fmt(n: number) {
@@ -173,12 +171,14 @@ export default function TrafegoClient() {
   }, [range.start, range.end])
 
   // Canal por unidade tem seu próprio filtro de período (menor/independente do
-  // filtro geral) porque o volume de conversas é grande demais pra paginar tudo.
+  // filtro geral) porque o cálculo pagina conversa por conversa e fica mais lento
+  // quanto maior o período.
   useEffect(() => {
     carregarCanais(canaisRange)
     const id = setInterval(() => carregarCanais(canaisRange), 5 * 60 * 1000)
     return () => clearInterval(id)
-  }, [carregarCanais, canaisRange.start, canaisRange.end])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canaisRange.start, canaisRange.end])
 
   const periodoFormatado = useMemo(() => {
     try {
@@ -424,45 +424,19 @@ export default function TrafegoClient() {
             <Sparkline points={data.timeseries} />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl border border-amber-200 p-4">
-              <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
-                <MousePointerClick className="w-3.5 h-3.5" /> Cliques por botão
-              </p>
-              <ul className="space-y-2">
-                {botoes.length === 0 && <li className="text-sm text-gray-400">Nenhum clique registrado no período.</li>}
-                {botoes.map(b => (
-                  <li key={b.name} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 truncate pr-2">{b.name.replace('Botão_', '').replace(/_/g, ' ')}</span>
-                    <span className="font-semibold" style={{ color: GOLD }}>{fmt(b.count)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 mb-3">Páginas mais vistas</p>
-              <ul className="space-y-2">
-                {data.topPages.map(p => (
-                  <li key={p.path} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 truncate pr-2">{p.path}</span>
-                    <span className="font-semibold text-gray-900">{fmt(p.views)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 mb-3">Origem do tráfego</p>
-              <ul className="space-y-2">
-                {data.trafficSource.map(s => (
-                  <li key={s.source} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 truncate pr-2">{s.source}</span>
-                    <span className="font-semibold text-gray-900">{fmt(s.sessions)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          <div className="bg-white rounded-xl border border-amber-200 p-4">
+            <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+              <MousePointerClick className="w-3.5 h-3.5" /> Cliques por botão
+            </p>
+            <ul className="space-y-2">
+              {botoes.length === 0 && <li className="text-sm text-gray-400">Nenhum clique registrado no período.</li>}
+              {botoes.map(b => (
+                <li key={b.name} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 truncate pr-2">{b.name.replace('Botão_', '').replace(/_/g, ' ')}</span>
+                  <span className="font-semibold" style={{ color: GOLD }}>{fmt(b.count)}</span>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <p className="text-xs text-gray-400 text-right">
