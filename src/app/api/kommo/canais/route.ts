@@ -1,18 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { channelsForRoute } from '@/lib/kommo'
+import { NextResponse } from 'next/server'
+import { channelsByUnidade } from '@/lib/kommo'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url)
-    const result = await channelsForRoute(searchParams.get('start'), searchParams.get('end'))
+    const result = await channelsByUnidade()
     return NextResponse.json(result)
   } catch (error) {
     console.error('Erro ao buscar canais do Kommo:', error)
-    if (error instanceof Error && error.message.startsWith('BAD_REQUEST:')) {
-      return NextResponse.json({ error: error.message.replace('BAD_REQUEST: ', '') }, { status: 400 })
-    }
     // TODO: remover "detail" depois de diagnosticar o problema em produção
     return NextResponse.json({
       error: 'Não foi possível carregar os canais do Kommo.',

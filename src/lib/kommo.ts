@@ -89,8 +89,8 @@ interface UnsortedItem {
   metadata?: { service?: string; source_name?: string }
 }
 
-async function fetchUnsortedPage(page: number, fromUnix: number, toUnix: number) {
-  const url = `${baseUrl()}/leads/unsorted?limit=${PAGE_LIMIT}&page=${page}&filter[created_at][from]=${fromUnix}&filter[created_at][to]=${toUnix}`
+async function fetchUnsortedPage(page: number) {
+  const url = `${baseUrl()}/leads/unsorted?limit=${PAGE_LIMIT}&page=${page}`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
     next: { revalidate: 300 },
@@ -102,13 +102,18 @@ async function fetchUnsortedPage(page: number, fromUnix: number, toUnix: number)
   return { items, hasNext: Boolean(data._links?.next) && items.length === PAGE_LIMIT }
 }
 
-/** Distribuição canal x unidade das conversas recebidas no período (com teto de segurança). */
-export async function channelsByUnidade(fromUnix: number, toUnix: number): Promise<{
+/**
+ * Distribuição canal x unidade das conversas recebidas mais recentes.
+ * NÃO usa o filtro de período da página: o volume de mensagens (principalmente
+ * WhatsApp) é tão alto que ~750 conversas já cobrem só 1-2 dias — ou seja, pra
+ * praticamente qualquer período escolhido o resultado seria o mesmo de qualquer
+ * forma. Fica como "as mais recentes", deixado explícito na UI.
+ */
+export async function channelsByUnidade(): Promise<{
   matrix: Record<string, Record<string, number>>
   channels: string[]
   unidades: string[]
   sampled: number
-  capped: boolean
 }> {
   if (!SUBDOMAIN || !ACCESS_TOKEN) {
     throw new Error('KOMMO_SUBDOMAIN e KOMMO_ACCESS_TOKEN são obrigatórios')
@@ -119,34 +124,18 @@ export async function channelsByUnidade(fromUnix: number, toUnix: number): Promi
   const matrix: Record<string, Record<string, number>> = {}
   for (const u of unidades) matrix[u] = Object.fromEntries(channels.map(c => [c, 0]))
 
-  let sampled = 0
-  let page = 1
-  const BATCH = 4
+  const pages = await Promise.all(
+    Array.from({ length: UNSORTED_MAX_PAGES }, (_, i) => fetchUnsortedPage(i + 1))
+  )
+  const items = pages.flatMap(p => p.items)
 
-  while (page <= UNSORTED_MAX_PAGES) {
-    const pagesToFetch = Array.from({ length: Math.min(BATCH, UNSORTED_MAX_PAGES - page + 1) }, (_, i) => page + i)
-    const results = await Promise.all(pagesToFetch.map(p => fetchUnsortedPage(p, fromUnix, toUnix)))
-
-    for (const r of results) {
-      for (const item of r.items) {
-        const unidade = unidadeFromSourceName(item.metadata?.source_name)
-        const canal = CHANNEL_BY_SERVICE[item.metadata?.service || ''] || 'Outro'
-        matrix[unidade][canal] += 1
-        sampled += 1
-      }
-    }
-
-    const lastFullBatch = results.every(r => r.items.length === PAGE_LIMIT)
-    const anyHasNext = results[results.length - 1]?.hasNext
-
-    if (!lastFullBatch || !anyHasNext) {
-      return { matrix, channels, unidades, sampled, capped: false }
-    }
-
-    page += pagesToFetch.length
+  for (const item of items) {
+    const unidade = unidadeFromSourceName(item.metadata?.source_name)
+    const canal = CHANNEL_BY_SERVICE[item.metadata?.service || ''] || 'Outro'
+    matrix[unidade][canal] += 1
   }
 
-  return { matrix, channels, unidades, sampled, capped: true }
+  return { matrix, channels, unidades, sampled: items.length }
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -165,10 +154,4 @@ function parseDateRange(start: string | null, end: string | null) {
 export async function countForRoute(entity: Entity, start: string | null, end: string | null) {
   const { fromUnix, toUnix } = parseDateRange(start, end)
   return countNewInRange(entity, fromUnix, toUnix)
-}
-
-/** Valida start/end (yyyy-mm-dd) e monta a distribuição canal x unidade nesse período. */
-export async function channelsForRoute(start: string | null, end: string | null) {
-  const { fromUnix, toUnix } = parseDateRange(start, end)
-  return channelsByUnidade(fromUnix, toUnix)
 }
