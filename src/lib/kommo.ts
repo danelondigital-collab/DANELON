@@ -11,15 +11,22 @@ function baseUrl() {
 
 async function fetchPage(entity: Entity, page: number, fromUnix: number, toUnix: number) {
   const url = `${baseUrl()}/${entity}?limit=${PAGE_LIMIT}&page=${page}&filter[created_at][from]=${fromUnix}&filter[created_at][to]=${toUnix}`
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
-    next: { revalidate: 300 },
-  })
-  if (res.status === 204) return { count: 0, hasNext: false }
-  if (!res.ok) throw new Error(`Erro na API do Kommo (${res.status}): ${await res.text()}`)
-  const data = await res.json()
-  const items = data._embedded?.[entity] || []
-  return { count: items.length, hasNext: Boolean(data._links?.next) && items.length === PAGE_LIMIT }
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+      next: { revalidate: 300 },
+    })
+    if (res.status === 429) {
+      await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
+      continue
+    }
+    if (res.status === 204) return { count: 0, hasNext: false }
+    if (!res.ok) throw new Error(`Erro na API do Kommo (${res.status}): ${await res.text()}`)
+    const data = await res.json()
+    const items = data._embedded?.[entity] || []
+    return { count: items.length, hasNext: Boolean(data._links?.next) && items.length === PAGE_LIMIT }
+  }
+  throw new Error('Erro na API do Kommo: limite de requisições (429) excedido repetidamente')
 }
 
 /** Conta registros criados no período, paginando em lotes paralelos até um teto de segurança. */
@@ -137,6 +144,10 @@ export async function channelsByUnidade(fromUnix: number, toUnix: number): Promi
 
   let sampled = 0
   let capped = false
+  const t0 = Date.now()
+  // Teto de tempo (bem abaixo do maxDuration=60s da rota) pra sempre devolver uma
+  // resposta válida em vez de deixar a Vercel matar a função com timeout no meio.
+  const TIME_BUDGET_MS = 45_000
 
   for (let page = 1; page <= UNSORTED_SAFETY_MAX_PAGES; page++) {
     const { items, hasNext } = await fetchUnsortedPage(page)
@@ -156,7 +167,10 @@ export async function channelsByUnidade(fromUnix: number, toUnix: number): Promi
 
     if (crossedLowerBound) break
     if (!hasNext) break
-    if (page === UNSORTED_SAFETY_MAX_PAGES) capped = true
+    if (page === UNSORTED_SAFETY_MAX_PAGES || Date.now() - t0 > TIME_BUDGET_MS) {
+      capped = true
+      break
+    }
   }
 
   return { matrix, channels, unidades, sampled, capped }

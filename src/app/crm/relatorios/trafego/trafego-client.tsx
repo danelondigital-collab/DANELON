@@ -23,6 +23,15 @@ interface TrafegoData {
   events: { name: string; count: number }[]
 }
 
+/** Tenta ler o corpo como JSON; se vier algo diferente (ex: página de erro/timeout da Vercel), dá uma mensagem legível em vez do erro cru de parsing. */
+async function safeJson(res: Response) {
+  try {
+    return await res.json()
+  } catch {
+    throw new Error('O servidor demorou demais ou devolveu uma resposta inesperada — tente um período menor ou tente de novo.')
+  }
+}
+
 function fmt(n: number) {
   return n.toLocaleString('pt-BR')
 }
@@ -131,7 +140,7 @@ export default function TrafegoClient() {
         fetch(`/api/kommo/leads?start=${r.start}&end=${r.end}`, { cache: 'no-store' }),
         fetch(`/api/kommo/contacts?start=${r.start}&end=${r.end}`, { cache: 'no-store' }),
       ])
-      const [leadsJson, contactsJson] = await Promise.all([leadsRes.json(), contactsRes.json()])
+      const [leadsJson, contactsJson] = await Promise.all([safeJson(leadsRes), safeJson(contactsRes)])
       if (reqId !== kommoReqId.current) return
 
       if (!leadsRes.ok || !contactsRes.ok) {
@@ -156,7 +165,7 @@ export default function TrafegoClient() {
     setCanaisLoading(true)
     try {
       const res = await fetch(`/api/kommo/canais?start=${r.start}&end=${r.end}`, { cache: 'no-store' })
-      const json = await res.json()
+      const json = await safeJson(res)
       if (reqId !== canaisReqId.current) return
       if (!res.ok) throw new Error(`${json.error || 'Erro'} · ${json.detail || ''}`)
       setCanais(json)
