@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns'
-import { Globe, Loader2, RefreshCw, MousePointerClick, Users, Eye, Activity, UserPlus, Contact } from 'lucide-react'
+import { Globe, Loader2, RefreshCw, MousePointerClick, Users, Eye, Activity, UserPlus, Contact, HelpCircle } from 'lucide-react'
 
 const GOLD = '#B8924A'
 const fmtDate = (d: Date) => format(d, 'yyyy-MM-dd')
@@ -50,11 +50,23 @@ function Sparkline({ points }: { points: { date: string; activeUsers: number }[]
   )
 }
 
-function KpiCard({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string; accent?: boolean }) {
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative inline-flex group/tip">
+      <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-gray-500 cursor-help" />
+      <span className="pointer-events-none absolute z-20 hidden group-hover/tip:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 rounded-lg bg-gray-800 text-white text-xs leading-relaxed p-2.5 shadow-lg normal-case font-normal">
+        {text}
+      </span>
+    </span>
+  )
+}
+
+function KpiCard({ icon: Icon, label, value, accent, tooltip }: { icon: React.ElementType; label: string; value: string; accent?: boolean; tooltip?: string }) {
   return (
     <div className={`bg-white rounded-xl border p-4 ${accent ? 'border-amber-200' : 'border-gray-200'}`}>
       <p className="text-xs text-gray-500 mb-1 flex items-center gap-1.5">
         <Icon className="w-3.5 h-3.5" /> {label}
+        {tooltip && <InfoTooltip text={tooltip} />}
       </p>
       <p className="text-2xl font-bold" style={accent ? { color: GOLD } : undefined}>
         {value}
@@ -284,6 +296,7 @@ export default function TrafegoClient() {
             <div className="bg-white rounded-xl border border-violet-200 p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1.5">
                 <UserPlus className="w-3.5 h-3.5" /> Novos leads no período
+                <InfoTooltip text="Oportunidades de venda criadas no funil da Kommo no período, de qualquer origem (WhatsApp, Instagram, cadastro manual, formulário etc). Nem todo contato vira lead — por isso costuma ser menor que 'Novos contatos'." />
               </p>
               <p className="text-2xl font-bold text-violet-600">
                 {kommoLoading && !kommoLeads ? <Loader2 className="w-5 h-5 animate-spin text-violet-300" /> : fmt(kommoLeads?.count || 0)}
@@ -293,6 +306,7 @@ export default function TrafegoClient() {
             <div className="bg-white rounded-xl border border-violet-200 p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1.5">
                 <Contact className="w-3.5 h-3.5" /> Novos contatos no período
+                <InfoTooltip text="Pessoas (registros de contato) criadas na Kommo no período, de qualquer origem — não só mensageria. Diferente do quadro 'Canal por unidade' abaixo, que conta só conversas recebidas por chat." />
               </p>
               <p className="text-2xl font-bold text-violet-600">
                 {kommoLoading && !kommoContacts ? <Loader2 className="w-5 h-5 animate-spin text-violet-300" /> : fmt(kommoContacts?.count || 0)}
@@ -307,6 +321,7 @@ export default function TrafegoClient() {
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs text-gray-500 flex items-center gap-2">
               Canal por unidade
+              <InfoTooltip text="Conversas recebidas por mensageria (WhatsApp, Instagram, TikTok, Facebook) no período, separadas por unidade. Não inclui contatos/leads criados de outras formas (cadastro manual, formulário etc) — só o que veio por chat." />
               {canaisLoading && canais && <span className="flex items-center gap-1 text-violet-400 font-normal"><Loader2 className="w-3 h-3 animate-spin" /> atualizando…</span>}
             </p>
             <button
@@ -412,21 +427,30 @@ export default function TrafegoClient() {
             </p>
           )}
           <div className={`grid grid-cols-2 lg:grid-cols-5 gap-4 transition-opacity ${loading ? 'opacity-50' : ''}`}>
-            <KpiCard icon={Eye} label="Visualizações" value={fmt(data.totals.pageViews)} />
-            <KpiCard icon={Users} label="Usuários ativos" value={fmt(data.totals.activeUsers)} />
-            <KpiCard icon={Activity} label="Sessões" value={fmt(data.totals.sessions)} />
-            <KpiCard icon={Activity} label="Taxa de engajamento" value={fmtPct(data.totals.engagementRate)} />
-            <KpiCard icon={MousePointerClick} label="Cliques em botões" value={fmt(data.totals.buttonClicks)} accent />
+            <KpiCard icon={Eye} label="Visualizações" value={fmt(data.totals.pageViews)}
+              tooltip="Quantas vezes uma página do site foi carregada. Se a mesma pessoa vir 3 páginas, conta 3 — não é 'quantas pessoas', é 'quantas vezes uma página abriu'." />
+            <KpiCard icon={Users} label="Usuários ativos" value={fmt(data.totals.activeUsers)}
+              tooltip="Quantas pessoas diferentes (visitantes únicos) entraram no site no período. Cada pessoa conta 1 vez, não importa quantas páginas viu." />
+            <KpiCard icon={Activity} label="Sessões" value={fmt(data.totals.sessions)}
+              tooltip="Quantas 'visitas' o site recebeu. A mesma pessoa pode gerar mais de uma sessão se sair e voltar depois de ~30 min parado — por isso costuma ser um pouco maior que usuários ativos." />
+            <KpiCard icon={Activity} label="Taxa de engajamento" value={fmtPct(data.totals.engagementRate)}
+              tooltip="% das sessões consideradas 'de qualidade' pelo Google: a pessoa ficou pelo menos ~10s no site, viu 2+ páginas, ou fez alguma ação de conversão. Separa quem interagiu de quem abriu e saiu na hora." />
+            <KpiCard icon={MousePointerClick} label="Cliques em botões" value={fmt(data.totals.buttonClicks)} accent
+              tooltip="Soma de cliques nos botões do site configurados como eventos rastreáveis (os que aparecem no quadro 'Cliques por botão' abaixo, tipo Unidade Santo André, Curso Presencial etc)." />
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 mb-2">Usuários ativos por dia</p>
+            <p className="text-xs text-gray-500 mb-2 flex items-center gap-1.5">
+              Usuários ativos por dia
+              <InfoTooltip text="Evolução diária de visitantes únicos no período selecionado — mesma métrica do card 'Usuários ativos' acima, mas dia a dia." />
+            </p>
             <Sparkline points={data.timeseries} />
           </div>
 
           <div className="bg-white rounded-xl border border-amber-200 p-4">
             <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
               <MousePointerClick className="w-3.5 h-3.5" /> Cliques por botão
+              <InfoTooltip text="Cliques em botões específicos do site que foram configurados manualmente para disparar um evento no Google Analytics quando clicados. Só aparece aqui o que foi configurado — não é automático." />
             </p>
             <ul className="space-y-2">
               {botoes.length === 0 && <li className="text-sm text-gray-400">Nenhum clique registrado no período.</li>}
