@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const endDate = endParam && DATE_RE.test(endParam) ? endParam : DEFAULT_END
     const dateRanges = [{ startDate, endDate }]
 
-    const [totals, timeseries, events, buttonClicks] = await Promise.all([
+    const [totals, timeseries, events, topPages, trafficSource, buttonClicks] = await Promise.all([
       runReport({
         dateRanges,
         metrics: [{ name: 'screenPageViews' }, { name: 'activeUsers' }, { name: 'engagementRate' }, { name: 'sessions' }],
@@ -38,6 +38,22 @@ export async function GET(request: NextRequest) {
         dimensionFilter: hostFilter(),
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
         limit: '15',
+      }),
+      runReport({
+        dateRanges,
+        dimensions: [{ name: 'pagePath' }],
+        metrics: [{ name: 'screenPageViews' }],
+        dimensionFilter: hostFilter(),
+        orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+        limit: '8',
+      }),
+      runReport({
+        dateRanges,
+        dimensions: [{ name: 'sessionSourceMedium' }],
+        metrics: [{ name: 'sessions' }],
+        dimensionFilter: hostFilter(),
+        orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+        limit: '8',
       }),
       runReport({
         dateRanges,
@@ -66,6 +82,14 @@ export async function GET(request: NextRequest) {
       events: (events.rows || []).map((r: { dimensionValues: { value: string }[]; metricValues: { value: string }[] }) => ({
         name: r.dimensionValues[0].value,
         count: num(r.metricValues[0].value),
+      })),
+      topPages: (topPages.rows || []).map((r: { dimensionValues: { value: string }[]; metricValues: { value: string }[] }) => ({
+        path: r.dimensionValues[0].value,
+        views: num(r.metricValues[0].value),
+      })),
+      trafficSource: (trafficSource.rows || []).map((r: { dimensionValues: { value: string }[]; metricValues: { value: string }[] }) => ({
+        source: r.dimensionValues[0].value,
+        sessions: num(r.metricValues[0].value),
       })),
     }
 

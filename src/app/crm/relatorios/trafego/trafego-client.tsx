@@ -21,6 +21,8 @@ interface TrafegoData {
   totals: Totals
   timeseries: { date: string; activeUsers: number }[]
   events: { name: string; count: number }[]
+  topPages: { path: string; views: number }[]
+  trafficSource: { source: string; sessions: number }[]
 }
 
 /** Tenta ler o corpo como JSON; se vier algo diferente (ex: página de erro/timeout da Vercel), dá uma mensagem legível em vez do erro cru de parsing. */
@@ -456,20 +458,52 @@ export default function TrafegoClient() {
             <Sparkline points={data.timeseries} />
           </div>
 
-          <div className="bg-white rounded-xl border border-amber-200 p-4">
-            <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
-              <MousePointerClick className="w-3.5 h-3.5" /> Cliques por botão
-              <InfoTooltip text="Cliques em botões específicos do site que foram configurados manualmente para disparar um evento no Google Analytics quando clicados. Só aparece aqui o que foi configurado — não é automático." />
-            </p>
-            <ul className="space-y-2">
-              {botoes.length === 0 && <li className="text-sm text-gray-400">Nenhum clique registrado no período.</li>}
-              {botoes.map(b => (
-                <li key={b.name} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 truncate pr-2">{b.name.replace('Botão_', '').replace(/_/g, ' ')}</span>
-                  <span className="font-semibold" style={{ color: GOLD }}>{fmt(b.count)}</span>
-                </li>
-              ))}
-            </ul>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl border border-amber-200 p-4">
+              <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+                <MousePointerClick className="w-3.5 h-3.5" /> Cliques por botão
+                <InfoTooltip text="Cliques em botões específicos do site que foram configurados manualmente para disparar um evento no Google Analytics quando clicados. Só aparece aqui o que foi configurado — não é automático." />
+              </p>
+              <ul className="space-y-2">
+                {botoes.length === 0 && <li className="text-sm text-gray-400">Nenhum clique registrado no período.</li>}
+                {botoes.map(b => (
+                  <li key={b.name} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 truncate pr-2">{b.name.replace('Botão_', '').replace(/_/g, ' ')}</span>
+                    <span className="font-semibold" style={{ color: GOLD }}>{fmt(b.count)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+                Páginas mais vistas
+                <InfoTooltip text="As páginas do site com mais visualizações no período (equivalente ao card 'Visualizações' acima, mas separado por página)." />
+              </p>
+              <ul className="space-y-2">
+                {data.topPages.map(p => (
+                  <li key={p.path} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 truncate pr-2">{p.path}</span>
+                    <span className="font-semibold text-gray-900">{fmt(p.views)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+                Origem do tráfego
+                <InfoTooltip text="De onde vieram as sessões: por qual canal/plataforma a pessoa chegou ao site (ex: tiktok/paid, google/cpc, ig/social, direct)." />
+              </p>
+              <ul className="space-y-2">
+                {data.trafficSource.map(s => (
+                  <li key={s.source} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 truncate pr-2">{s.source}</span>
+                    <span className="font-semibold text-gray-900">{fmt(s.sessions)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
           <p className="text-xs text-gray-400 text-right">
