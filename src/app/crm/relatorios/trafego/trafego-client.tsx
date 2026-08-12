@@ -42,6 +42,41 @@ function fmtPct(n: number) {
   return `${(n * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 }
 
+const ORIGEM_LABELS: Record<string, string> = {
+  tiktok: 'TikTok',
+  'tiktok.com': 'TikTok',
+  google: 'Google',
+  ig: 'Instagram',
+  instagram: 'Instagram',
+  'l.instagram.com': 'Instagram',
+  facebook: 'Facebook',
+  fb: 'Facebook',
+  'm.facebook.com': 'Facebook',
+}
+
+const MEIO_LABELS: Record<string, string> = {
+  paid: 'anúncio pago',
+  cpc: 'anúncio pago',
+  ppc: 'anúncio pago',
+  paidsocial: 'anúncio pago',
+  social: 'link na bio/post (não pago)',
+  referral: 'clique vindo de outro site',
+  organic: 'busca no Google (não pago)',
+}
+
+/** Traduz o "origem / meio" cru do GA4 (ex: "tiktok / paid") pra algo que a cliente entenda. */
+function fmtOrigem(raw: string): string {
+  if (raw === '(not set)') return 'Não identificado pelo Google'
+  if (raw === '(data not available)') return 'Indisponível (bloqueado por privacidade do navegador)'
+  if (raw.startsWith('(direct)')) return 'Acesso direto (digitou o site ou já tinha salvo)'
+
+  const [origemRaw, meioRaw] = raw.split(' / ').map(s => s?.trim())
+  const origem = ORIGEM_LABELS[(origemRaw || '').toLowerCase()] || origemRaw
+  const meio = meioRaw ? MEIO_LABELS[meioRaw.toLowerCase()] : undefined
+
+  return meio ? `${origem} — ${meio}` : origem
+}
+
 function Sparkline({ points }: { points: { date: string; activeUsers: number }[] }) {
   if (points.length === 0) return null
   const max = Math.max(...points.map(p => p.activeUsers), 1)
@@ -493,13 +528,16 @@ export default function TrafegoClient() {
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
                 Origem do tráfego
-                <InfoTooltip text="De onde vieram as sessões: por qual canal/plataforma a pessoa chegou ao site (ex: tiktok/paid, google/cpc, ig/social, direct)." />
+                <InfoTooltip text="De onde vieram as sessões: por qual canal a pessoa chegou ao site. 'Anúncio pago' = campanha paga (Meta/Google Ads); 'não pago' = alguém clicou num link ou achou no Google sem ser anúncio; 'acesso direto' = digitou o site ou já tinha salvo." />
               </p>
               <ul className="space-y-2">
                 {data.trafficSource.map(s => (
-                  <li key={s.source} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 truncate pr-2">{s.source}</span>
-                    <span className="font-semibold text-gray-900">{fmt(s.sessions)}</span>
+                  <li key={s.source} className="flex items-center justify-between text-sm gap-2">
+                    <span className="text-gray-600 truncate pr-2">
+                      {fmtOrigem(s.source)}
+                      <span className="block text-[10px] text-gray-400">{s.source}</span>
+                    </span>
+                    <span className="font-semibold text-gray-900 shrink-0">{fmt(s.sessions)}</span>
                   </li>
                 ))}
               </ul>
