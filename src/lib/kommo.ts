@@ -96,6 +96,7 @@ function unidadeFromSourceName(sourceName: string | undefined): string {
 interface UnsortedItem {
   created_at?: number
   metadata?: { service?: string; source_name?: string }
+  _embedded?: { contacts?: { id: number }[] }
 }
 
 /** Busca uma página "crua" da lista (sem filtro de data — a API ignora esse filtro nesse endpoint). */
@@ -119,12 +120,46 @@ async function fetchUnsortedPage(page: number): Promise<{ items: UnsortedItem[];
   throw new Error('Erro na API do Kommo: limite de requisições (429) excedido repetidamente')
 }
 
+// Se o contato vinculado à conversa foi criado até esse tanto de tempo antes da
+// conversa em si, consideramos que é a primeira vez que esse número fala com a
+// empresa ("novo"). A Kommo não duplica contato por telefone (confirmado testando
+// direto na API), então created_at do contato reflete o primeiro contato de verdade.
+const NOVO_THRESHOLD_SECONDS = 120
+
+/** Busca created_at de vários contatos de uma vez, em lotes, pra classificar novo x já existia. */
+async function fetchContactsCreatedAt(ids: number[]): Promise<Map<number, number>> {
+  const result = new Map<number, number>()
+  const BATCH_SIZE = 50
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE)
+    const query = batch.map(id => `filter[id][]=${id}`).join('&')
+    const url = `${baseUrl()}/contacts?limit=250&${query}`
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }, cache: 'no-store' })
+      if (res.status === 429) {
+        await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
+        continue
+      }
+      if (res.status === 204) break
+      if (!res.ok) throw new Error(`Erro na API do Kommo (${res.status}): ${await res.text()}`)
+      const data = await res.json()
+      const contacts = (data._embedded?.contacts || []) as { id: number; created_at: number }[]
+      for (const c of contacts) result.set(c.id, c.created_at)
+      break
+    }
+  }
+  return result
+}
+
 /**
  * Distribuição canal x unidade das conversas recebidas no período informado.
  * Como a API não filtra por data nesse endpoint, pagina a lista completa (mais
  * recente primeiro) e para assim que os itens saem do período pedido — só soma
  * o que realmente cai dentro de [fromUnix, toUnix]. Se bater no teto de segurança
  * antes de sair do período, volta marcado como "capped" (contagem parcial).
+ * Também classifica cada conversa em "novo" (primeira vez que esse número fala
+ * com a empresa) ou "já existia" (contato mais antigo que a conversa), comparando
+ * a data de criação do contato vinculado com a data da conversa.
  */
 export async function channelsByUnidade(fromUnix: number, toUnix: number): Promise<{
   matrix: Record<string, Record<string, number>>
@@ -132,6 +167,8 @@ export async function channelsByUnidade(fromUnix: number, toUnix: number): Promi
   unidades: string[]
   sampled: number
   capped: boolean
+  novos: number | null
+  existentes: number | null
 }> {
   if (!SUBDOMAIN || !ACCESS_TOKEN) {
     throw new Error('KOMMO_SUBDOMAIN e KOMMO_ACCESS_TOKEN são obrigatórios')
@@ -144,10 +181,13 @@ export async function channelsByUnidade(fromUnix: number, toUnix: number): Promi
 
   let sampled = 0
   let capped = false
+  const itemsInWindow: { contactId?: number; createdAt: number }[] = []
   const t0 = Date.now()
   // Teto de tempo (bem abaixo do maxDuration=60s da rota) pra sempre devolver uma
   // resposta válida em vez de deixar a Vercel matar a função com timeout no meio.
-  const TIME_BUDGET_MS = 45_000
+  // Reservamos uma fatia pra classificação novo x já existia, que roda depois.
+  const PAGINATION_BUDGET_MS = 30_000
+  const TOTAL_BUDGET_MS = 45_000
 
   for (let page = 1; page <= UNSORTED_SAFETY_MAX_PAGES; page++) {
     const { items, hasNext } = await fetchUnsortedPage(page)
@@ -160,6 +200,7 @@ export async function channelsByUnidade(fromUnix: number, toUnix: number): Promi
       if (createdAt < fromUnix) { crossedLowerBound = true; break } // já passou do início do período
 
       sampled += 1
+      itemsInWindow.push({ contactId: item._embedded?.contacts?.[0]?.id, createdAt })
       const unidade = unidadeFromSourceName(item.metadata?.source_name)
       const canal = CHANNEL_BY_SERVICE[item.metadata?.service || ''] || 'Outro'
       matrix[unidade][canal] += 1
@@ -167,13 +208,28 @@ export async function channelsByUnidade(fromUnix: number, toUnix: number): Promi
 
     if (crossedLowerBound) break
     if (!hasNext) break
-    if (page === UNSORTED_SAFETY_MAX_PAGES || Date.now() - t0 > TIME_BUDGET_MS) {
+    if (page === UNSORTED_SAFETY_MAX_PAGES || Date.now() - t0 > PAGINATION_BUDGET_MS) {
       capped = true
       break
     }
   }
 
-  return { matrix, channels, unidades, sampled, capped }
+  let novos: number | null = null
+  let existentes: number | null = null
+  if (Date.now() - t0 < TOTAL_BUDGET_MS) {
+    const uniqueIds = Array.from(new Set(itemsInWindow.map(i => i.contactId).filter((id): id is number => Boolean(id))))
+    const createdAtByContact = await fetchContactsCreatedAt(uniqueIds)
+    novos = 0
+    existentes = 0
+    for (const item of itemsInWindow) {
+      const contactCreatedAt = item.contactId ? createdAtByContact.get(item.contactId) : undefined
+      if (contactCreatedAt === undefined) continue
+      if (item.createdAt - contactCreatedAt <= NOVO_THRESHOLD_SECONDS) novos += 1
+      else existentes += 1
+    }
+  }
+
+  return { matrix, channels, unidades, sampled, capped, novos, existentes }
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/

@@ -139,7 +139,7 @@ export default function TrafegoClient() {
     start: fmtDate(new Date()),
     end: fmtDate(new Date()),
   }))
-  const [canais, setCanais] = useState<{ matrix: Record<string, Record<string, number>>; channels: string[]; unidades: string[]; sampled: number; capped: boolean } | null>(null)
+  const [canais, setCanais] = useState<{ matrix: Record<string, Record<string, number>>; channels: string[]; unidades: string[]; sampled: number; capped: boolean; novos: number | null; existentes: number | null } | null>(null)
   const [canaisError, setCanaisError] = useState<string | null>(null)
   const [canaisLoading, setCanaisLoading] = useState(true)
 
@@ -424,6 +424,21 @@ export default function TrafegoClient() {
             . Esse quadro tem um filtro próprio, separado do filtro geral acima, porque o cálculo é feito conversa por conversa — quanto maior o período, mais tempo leva.
             {canais?.capped && ' O período escolhido tem mais conversas do que o quadro consegue somar de uma vez — o número mostrado é parcial, não o total exato.'}
           </p>
+
+          {canais && canais.novos !== null && canais.existentes !== null && (
+            <p className="text-xs text-gray-500 mb-3 flex items-center gap-3 flex-wrap">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <strong className="text-gray-700">{fmt(canais.novos)}</strong> novos (nunca tinham falado com vocês)
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-gray-400" />
+                <strong className="text-gray-700">{fmt(canais.existentes)}</strong> já conhecidos (voltaram a chamar)
+              </span>
+              <InfoTooltip text="Compara a data de criação do contato com a data da conversa: se o contato foi criado na hora dessa conversa, é a primeira vez que esse número fala com vocês; se o contato já existia antes, é alguém que já tinham no Kommo." />
+            </p>
+          )}
+
           {canaisError ? (
             <p className="text-sm text-red-600">{canaisError}</p>
           ) : !canais ? (
