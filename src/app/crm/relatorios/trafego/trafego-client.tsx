@@ -21,7 +21,6 @@ interface TrafegoData {
   totals: Totals
   timeseries: { date: string; activeUsers: number }[]
   events: { name: string; count: number }[]
-  topPages: { path: string; views: number }[]
   trafficSource: { source: string; sessions: number }[]
 }
 
@@ -565,7 +564,7 @@ export default function TrafegoClient() {
             <Sparkline points={data.timeseries} />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="bg-white rounded-xl border border-amber-200 p-4">
               <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
                 <MousePointerClick className="w-3.5 h-3.5" /> Cliques por botão
@@ -577,21 +576,6 @@ export default function TrafegoClient() {
                   <li key={b.name} className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 truncate pr-2">{b.name.replace('Botão_', '').replace(/_/g, ' ')}</span>
                     <span className="font-semibold" style={{ color: GOLD }}>{fmt(b.count)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
-                Páginas mais vistas
-                <InfoTooltip text="As páginas do site com mais visualizações no período (equivalente ao card 'Visualizações' acima, mas separado por página)." />
-              </p>
-              <ul className="space-y-2">
-                {data.topPages.map(p => (
-                  <li key={p.path} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 truncate pr-2">{p.path}</span>
-                    <span className="font-semibold text-gray-900">{fmt(p.views)}</span>
                   </li>
                 ))}
               </ul>
