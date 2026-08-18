@@ -265,6 +265,15 @@ export default function TrafegoClient() {
 
   const botoes = data?.events.filter(e => e.name.startsWith('Botão')) || []
 
+  const funilStages = data && kommoLeads && canais
+    ? [
+        { label: 'Visitantes', value: data.totals.activeUsers, icon: Users },
+        { label: 'Cliques em botões', value: data.totals.buttonClicks, icon: MousePointerClick },
+        { label: 'Conversas recebidas (novas)', value: canais.novos, icon: Globe },
+        { label: 'Leads no CRM', value: kommoLeads.count, icon: UserPlus },
+      ]
+    : null
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between">
@@ -328,6 +337,54 @@ export default function TrafegoClient() {
         </div>
         <p className="text-xs text-gray-400 mt-2">Período: {periodoFormatado}</p>
       </div>
+
+      {/* Funil geral */}
+      {funilStages && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs text-gray-500 mb-1 flex items-center gap-1.5">
+            Funil geral
+            <InfoTooltip text="Funil aproximado: compara o total de cada etapa no período, mas não acompanha a mesma pessoa passo a passo — os dados vêm de sistemas diferentes (Google Analytics e Kommo) que não se conversam entre si. Útil pra ver onde o volume cai mais, não é uma taxa de conversão individual exata." />
+          </p>
+          <p className="text-xs text-gray-400 mb-4">
+            Visitantes / Cliques / Leads: {periodoFormatado} · Conversas recebidas: {canaisPeriodoFormatado} (filtro próprio do quadro Canal por unidade, mais abaixo)
+          </p>
+          <div className="space-y-3">
+            {funilStages.map((stage, i) => {
+              const first = funilStages[0].value ?? 0
+              const prev = i > 0 ? funilStages[i - 1].value : null
+              const value = stage.value
+              const width = value === null ? 0 : Math.max(first ? (value / first) * 100 : 0, value > 0 ? 2 : 0)
+              const pctFromPrev = value !== null && prev ? (value / prev) * 100 : null
+              const pctFromFirst = value !== null && i > 0 && first ? (value / first) * 100 : null
+              return (
+                <div key={stage.label}>
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className="flex items-center gap-1.5 text-gray-600">
+                      <stage.icon className="w-3.5 h-3.5" /> {stage.label}
+                    </span>
+                    <span className="font-semibold text-gray-900">{value === null ? '—' : fmt(value)}</span>
+                  </div>
+                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: GOLD }} />
+                  </div>
+                  {(pctFromPrev !== null || pctFromFirst !== null) && (
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      {pctFromPrev !== null && `${pctFromPrev.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% da etapa anterior`}
+                      {pctFromPrev !== null && pctFromFirst !== null && ' · '}
+                      {pctFromFirst !== null && `${pctFromFirst.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% do total de visitantes`}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {canais?.novos === null && (
+            <p className="text-xs text-amber-600 mt-3">
+              A etapa &quot;Conversas recebidas&quot; não pôde ser calculada agora (período grande demais pro quadro de canais) — o funil pode estar incompleto.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* CRM Kommo */}
       <div>
