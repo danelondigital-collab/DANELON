@@ -10,16 +10,8 @@ from datetime import datetime
 from collections import defaultdict
 import urllib.request, urllib.error
 
-SUPABASE_URL = "https://bfsbkljoaejkgxqoeeeg.supabase.co"
-SERVICE_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmc2JrbGpvYWVqa2d4cW9lZWVnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjI4MjU0MywiZXhwIjoyMDkxODU4NTQzfQ.A_2_LqWNLxrB-TM2ROko7yCWggYcK7rSVLrGim6I_rA"
+from _supabase import SUPABASE_URL, SERVICE_KEY, HEADERS  # credenciais via .env.local
 SA_UNIDADE   = "304d3a99-072f-46eb-b111-2ba03c26d834"
-
-HEADERS = {
-    "apikey": SERVICE_KEY,
-    "Authorization": f"Bearer {SERVICE_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "return=representation",
-}
 
 # ─── HTTP helpers ────────────────────────────────────────────────────────────
 
