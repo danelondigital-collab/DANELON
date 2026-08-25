@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, Plus, Trash2, Search, Scissors, ShoppingBag, Pencil, Wallet, Gift, MessageCircle, History } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Comanda, ComandaItem, Cliente, Profissional, Servico, Produto, ComissaoProfissionalItem, Pacote } from '@/types'
@@ -260,7 +260,8 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     const preco = item.tipo === 'servico'
       ? servicos.find(s => s.id === item.item_id)?.preco || 0
       : produtos.find(p => p.id === item.item_id)?.preco_venda || 0
-    const subtotalComDesconto = preco * qtd * (1 - item.desconto_percentual / 100)
+    const valorCheio = preco * qtd
+    const subtotalComDesconto = valorCheio * (1 - item.desconto_percentual / 100)
 
     const payload: Record<string, unknown> = {
       comanda_id: comandaId,
@@ -279,7 +280,8 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     if (item.profissionais.length > 0) {
       const comissaoBase = item.tipo === 'servico' ? (servicos.find(s => s.id === item.item_id)?.comissao_servico || 0) : 0
       const rateios = item.profissionais.filter(p => p.profissional_id).map(p => {
-        const valorBase = subtotalComDesconto * (p.participacao / 100)
+        // comissão sobre o valor cheio do item, sem o desconto da comanda
+        const valorBase = valorCheio * (p.participacao / 100)
         const especifica = comissoesProfissional.find(c =>
           c.profissional_id === p.profissional_id && c.tipo === item.tipo &&
           (item.tipo === 'servico' ? c.servico_id === item.item_id : c.produto_id === item.item_id)
@@ -318,7 +320,8 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     const preco = item.tipo === 'servico'
       ? servicos.find(s => s.id === item.item_id)?.preco || 0
       : produtos.find(p => p.id === item.item_id)?.preco_venda || 0
-    const subtotalComDesconto = preco * qtd * (1 - item.desconto_percentual / 100)
+    const valorCheio = preco * qtd
+    const subtotalComDesconto = valorCheio * (1 - item.desconto_percentual / 100)
 
     await supabase.from('comanda_itens').update({
       quantidade: qtd, preco_unitario: preco, desconto_percentual: item.desconto_percentual, subtotal: subtotalComDesconto,
@@ -329,7 +332,8 @@ export default function ComandaModal({ comanda: comandaInicial, profissionais, s
     if (item.profissionais.length > 0) {
       const comissaoBase = item.tipo === 'servico' ? (servicos.find(s => s.id === item.item_id)?.comissao_servico || 0) : 0
       const rateios = item.profissionais.filter(p => p.profissional_id).map(p => {
-        const valorBase = subtotalComDesconto * (p.participacao / 100)
+        // comissão sobre o valor cheio do item, sem o desconto da comanda
+        const valorBase = valorCheio * (p.participacao / 100)
         const especifica = comissoesProfissional.find(c =>
           c.profissional_id === p.profissional_id && c.tipo === item.tipo &&
           (item.tipo === 'servico' ? c.servico_id === item.item_id : c.produto_id === item.item_id)
@@ -1077,9 +1081,38 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
   const [profs, setProfs] = useState(profsIniciais)
   const [salvando, setSalvando] = useState(false)
   const [ultimoAdicionado, setUltimoAdicionado] = useState<string | null>(null)
+  const [buscaItem, setBuscaItem] = useState('')
+  const [listaItemAberta, setListaItemAberta] = useState(false)
+  const itemPickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickFora(e: MouseEvent) {
+      if (itemPickerRef.current && !itemPickerRef.current.contains(e.target as Node)) {
+        setListaItemAberta(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickFora)
+    return () => document.removeEventListener('mousedown', handleClickFora)
+  }, [])
 
   const lista = tipo === 'servico' ? servicos : produtos
   const item = lista.find(i => i.id === itemId)
+  const termoBusca = buscaItem.trim().toLowerCase()
+  const listaFiltrada = termoBusca
+    ? lista
+        .filter(i => i.nome.toLowerCase().includes(termoBusca))
+        .sort((a, b) => {
+          const aComeca = a.nome.toLowerCase().startsWith(termoBusca) ? 0 : 1
+          const bComeca = b.nome.toLowerCase().startsWith(termoBusca) ? 0 : 1
+          if (aComeca !== bComeca) return aComeca - bComeca
+          return a.nome.localeCompare(b.nome)
+        })
+    : lista
+  function selecionarItem(i: Servico | Produto) {
+    setItemId(i.id)
+    setBuscaItem('')
+    setListaItemAberta(false)
+  }
   const servicoSel = tipo === 'servico' ? servicos.find(s => s.id === itemId) : null
   const preco = item ? (tipo === 'servico' ? (item as Servico).preco : (item as Produto).preco_venda) : 0
   const totalBrutoItem = preco * quantidade
@@ -1130,6 +1163,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
   function trocarTipo(t: 'servico' | 'produto') {
     setTipo(t)
     setItemId('')
+    setBuscaItem('')
     setProfs([{ profissional_id: profissionais[0]?.id || '', participacao: 100 }])
   }
 
@@ -1156,6 +1190,7 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
 
   function resetForm() {
     setItemId('')
+    setBuscaItem('')
     setQuantidade(1)
     setDescontoPercentual(0)
     setDescontoReais(0)
@@ -1209,18 +1244,41 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
                 {tipo === 'servico' ? <Scissors className="w-4 h-4" /> : <ShoppingBag className="w-4 h-4" />}
               </button>
 
-              {/* Seleção do item */}
-              <select value={itemId} onChange={e => setItemId(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600">
-                <option value="">
-                  {tipo === 'servico' ? 'Selecionar serviço...' : 'Selecionar produto...'}
-                </option>
-                {lista.map(i => (
-                  <option key={i.id} value={i.id}>
-                    {i.nome} — {formatCurrency(tipo === 'servico' ? (i as Servico).preco : (i as Produto).preco_venda)}
-                  </option>
-                ))}
-              </select>
+              {/* Seleção do item -- busca por texto, filtra a lista conforme digita */}
+              <div ref={itemPickerRef} className="relative flex-1">
+                <input
+                  type="text"
+                  value={listaItemAberta ? buscaItem : (item ? `${item.nome} — ${formatCurrency(preco)}` : '')}
+                  onFocus={() => setListaItemAberta(true)}
+                  onChange={e => { setBuscaItem(e.target.value); setListaItemAberta(true) }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && listaFiltrada.length > 0) {
+                      e.preventDefault()
+                      selecionarItem(listaFiltrada[0])
+                    } else if (e.key === 'Escape') {
+                      setListaItemAberta(false)
+                    }
+                  }}
+                  placeholder={tipo === 'servico' ? 'Buscar serviço...' : 'Buscar produto...'}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                />
+                {listaItemAberta && (
+                  <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-50 bg-white shadow-lg">
+                    {listaFiltrada.length === 0 ? (
+                      <p className="px-3 py-2.5 text-sm text-gray-400">Nenhum item encontrado</p>
+                    ) : listaFiltrada.map(i => (
+                      <button
+                        key={i.id}
+                        type="button"
+                        onClick={() => selecionarItem(i)}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-amber-50 transition-colors ${i.id === itemId ? 'bg-amber-50' : ''}`}
+                      >
+                        {i.nome} — {formatCurrency(tipo === 'servico' ? (i as Servico).preco : (i as Produto).preco_venda)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <p className="text-xs text-gray-400 mt-1">
               {tipo === 'servico' ? '✂ Modo serviço' : '🛍 Modo produto'} — clique no ícone para trocar
@@ -1308,7 +1366,8 @@ function AdicionarItemModal({ servicos, produtos, profissionais, comissoesProfis
               <div className="divide-y divide-gray-100">
                 {profs.map((p, idx) => {
                   const profSel = profissionais.find(x => x.id === p.profissional_id)
-                  const valorBase = subtotal * (p.participacao / 100)
+                  // comissão sobre o valor cheio do item, sem o desconto da comanda
+                  const valorBase = totalBrutoItem * (p.participacao / 100)
                   const { pct: pctComissao, origem } = getComissaoProf(p.profissional_id)
                   const valorComissao = valorBase * (pctComissao / 100)
                   return (
