@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     const endDate = endParam && DATE_RE.test(endParam) ? endParam : DEFAULT_END
     const dateRanges = [{ startDate, endDate }]
 
-    const [totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw] = await Promise.all([
+    const [totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw] = await Promise.all([
       // topo do funil, sem fatiar
       runReport({
         dateRanges,
@@ -101,6 +101,20 @@ export async function GET(request: NextRequest) {
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         limit: '15',
       }),
+      // a home (elainedanelon.com.br/) isolada: é a página que está no link da
+      // bio de todos os perfis, então é nela que o tráfego de Instagram cai
+      runReport({
+        dateRanges,
+        metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'screenPageViews' }],
+        dimensionFilter: {
+          andGroup: {
+            expressions: [
+              hostFilter(),
+              { filter: { fieldName: 'landingPage', stringFilter: { matchType: 'EXACT' as const, value: '/' } } },
+            ],
+          },
+        },
+      }),
     ])
 
     // junta sessões + cliques na mesma chave de origem, depois agrupa por plataforma
@@ -134,6 +148,7 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.sessoes - a.sessoes)
 
     const totaisRow = totais.rows?.[0]?.metricValues
+    const homeRow = homeRaw.rows?.[0]?.metricValues
     const totalCliques = porFonte.reduce((s, f) => s + f.cliques, 0)
     const totalUsuariosQueClicaram = porFonte.reduce((s, f) => s + f.usuariosQueClicaram, 0)
 
@@ -146,6 +161,11 @@ export async function GET(request: NextRequest) {
         pageViews: num(totaisRow?.[2]?.value),
         cliques: totalCliques,
         usuariosQueClicaram: totalUsuariosQueClicaram,
+      },
+      home: {
+        sessoes: num(homeRow?.[0]?.value),
+        visitantes: num(homeRow?.[1]?.value),
+        pageViews: num(homeRow?.[2]?.value),
       },
       porFonte,
       botoes: ((botoesRaw.rows || []) as Row[]).map(r => ({

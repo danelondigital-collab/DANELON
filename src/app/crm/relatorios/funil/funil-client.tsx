@@ -50,6 +50,7 @@ interface TrafegoFunil {
   updatedAt: string
   range: { startDate: string; endDate: string }
   totais: { sessoes: number; visitantes: number; pageViews: number; cliques: number; usuariosQueClicaram: number }
+  home: { sessoes: number; visitantes: number; pageViews: number }
   porFonte: FonteFunil[]
   botoes: { nome: string; cliques: number }[]
   porPerfil: { perfil: string; sessoes: number; visitantes: number }[]
@@ -326,6 +327,42 @@ export default function FunilClient() {
         </div>
       </div>
 
+      {/* ── A PÁGINA DO LINK NA BIO ─────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-amber-200 p-5">
+        <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+          <Eye className="w-3.5 h-3.5" /> elainedanelon.com.br — a página do link na bio
+          <InfoTooltip text="Números da página inicial isolada. É ela que está no link da bio de todos os perfis, então é aqui que cai quem vem do Instagram. Praticamente todo o tráfego do site entra por essa página." />
+        </p>
+        <p className="text-xs text-gray-400 mb-4">
+          Só a página inicial, isolada do resto do site.
+        </p>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <p className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+              Visitas
+              <InfoTooltip text="Quantas vezes a página foi aberta como entrada no site (sessões). A mesma pessoa pode gerar várias se voltar depois de ~30 min parada." />
+            </p>
+            <p className="text-2xl font-bold text-gray-900 tabular-nums">{fmt(trafego?.home.sessoes ?? 0)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+              Visitas únicas
+              <InfoTooltip text="Pessoas diferentes que abriram essa página no período. Cada pessoa conta uma vez só, não importa quantas vezes voltou. É o número mais próximo de 'quantas pessoas de verdade'." />
+            </p>
+            <p className="text-2xl font-bold tabular-nums" style={{ color: GOLD }}>
+              {fmt(trafego?.home.visitantes ?? 0)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+              Visualizações
+              <InfoTooltip text="Total de carregamentos da página, incluindo recarregar e voltar. Sempre o maior dos três — é o número que menos serve pra medir gente." />
+            </p>
+            <p className="text-2xl font-bold text-gray-500 tabular-nums">{fmt(trafego?.home.pageViews ?? 0)}</p>
+          </div>
+        </div>
+      </div>
+
       {/* ── QUALIDADE POR FONTE ─────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
@@ -343,11 +380,36 @@ export default function FunilClient() {
             <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
-                  <th className="text-left font-medium pb-2">Fonte</th>
-                  <th className="text-right font-medium pb-2">Visitas</th>
-                  <th className="text-right font-medium pb-2">Pessoas</th>
-                  <th className="text-right font-medium pb-2">Clicaram</th>
-                  <th className="text-right font-medium pb-2 pl-4">Taxa de contato</th>
+                  <th className="text-left font-medium pb-2">
+                    <span className="inline-flex items-center gap-1">
+                      Fonte
+                      <InfoTooltip text="De onde a pessoa veio antes de entrar no site. Agrupa os vários endereços que a mesma plataforma usa: o Instagram, por exemplo, chega como ig/social, l.instagram.com e instagram.com — separados, cada um parece pequeno." />
+                    </span>
+                  </th>
+                  <th className="text-right font-medium pb-2">
+                    <span className="inline-flex items-center gap-1">
+                      Visitas
+                      <InfoTooltip text="Sessões: quantas vezes alguém entrou no site vindo dessa fonte. A mesma pessoa pode gerar mais de uma visita." />
+                    </span>
+                  </th>
+                  <th className="text-right font-medium pb-2">
+                    <span className="inline-flex items-center gap-1">
+                      Pessoas
+                      <InfoTooltip text="Visitas únicas: pessoas diferentes que vieram dessa fonte. Cada uma conta uma vez só. É o número real de gente." />
+                    </span>
+                  </th>
+                  <th className="text-right font-medium pb-2">
+                    <span className="inline-flex items-center gap-1">
+                      Clicaram
+                      <InfoTooltip text="Dessas pessoas, quantas clicaram em algum botão de contato (unidade, curso, loja) — ou seja, demonstraram intenção de falar com a Danelon." />
+                    </span>
+                  </th>
+                  <th className="text-right font-medium pb-2 pl-4">
+                    <span className="inline-flex items-center gap-1">
+                      Taxa de contato
+                      <InfoTooltip text="Clicaram ÷ Pessoas. De cada 100 pessoas que essa fonte trouxe, quantas chegaram a clicar em contato. Verde acima de 30%, vermelho abaixo de 10%. É a métrica que separa volume de resultado." />
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -384,6 +446,19 @@ export default function FunilClient() {
             </table>
           </div>
         )}
+
+        <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            <strong>Por que o Instagram aparece com menos visitas que o TikTok:</strong> o anúncio do
+            TikTok leva direto pro site, então cada clique no anúncio já vira uma visita aqui. O anúncio
+            da Meta leva pro perfil do Instagram, e só quem clica no link da bio depois é que chega no
+            site — é um passo a mais, e a maioria não dá esse passo. Por isso o número de visitas do
+            Instagram é menor por natureza, não por falha de rastreamento (só 0,3% do tráfego do período
+            ficou sem origem identificada). Repare que, mesmo com muito menos visitas, o Instagram
+            entrega <strong>mais pessoas clicando em contato</strong> que o TikTok.
+          </p>
+        </div>
       </div>
 
       {/* ── LINK NA BIO POR PERFIL ──────────────────────────────── */}
