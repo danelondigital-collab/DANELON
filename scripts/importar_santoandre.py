@@ -151,9 +151,9 @@ _prof_cache      = dict(profissionais_db)
 
 def parse_data(s):
     for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
-        try: return datetime.strptime(s, fmt).strftime("%Y-%m-%dT00:00:00")
+        try: return datetime.strptime(s, fmt).strftime("%Y-%m-%dT00:00:00-03:00")  # Brasilia, nao UTC
         except: pass
-    return datetime.now().strftime("%Y-%m-%dT00:00:00")
+    return datetime.now().strftime("%Y-%m-%dT00:00:00-03:00")
 
 def get_or_create_cliente(nome, celular):
     key = nome.lower()
