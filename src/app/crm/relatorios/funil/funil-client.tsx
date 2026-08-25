@@ -570,6 +570,34 @@ export default function FunilClient() {
                 Contagem parcial: o período é longo demais pra varrer inteiro dentro do tempo limite. Use um período menor pro número exato.
               </p>
             )}
+
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <div className="text-[11px] text-gray-500 leading-relaxed">
+                <p className="mb-1">
+                  <strong className="text-gray-600">Parte destas conversas fomos nós que começamos</strong> —
+                  automação (ManyChat) ou a própria equipe. Medição feita em 25/08/2026 sobre 7 dias, separando
+                  quem mandou a primeira mensagem:
+                </p>
+                <ul className="space-y-0.5 ml-3">
+                  <li>
+                    <strong>Instagram DM:</strong> de 138 conversas, 5 (≈4%) nós abrimos e ninguém respondeu.
+                  </li>
+                  <li>
+                    <strong>WhatsApp:</strong> de 149 conversas, 36 (≈24%) nós abrimos e ninguém respondeu.
+                  </li>
+                  <li>
+                    30% não puderam ser classificadas — o Kommo não guardou registro das mensagens delas.
+                  </li>
+                </ul>
+                <p className="mt-1.5">
+                  Esse desconto <strong>não está aplicado</strong> nos números acima: separar conversa por conversa
+                  exige varrer o histórico de mensagens do Kommo, o que leva ~2 min só para 7 dias — inviável de
+                  fazer enquanto a página carrega. Para descontar de verdade seria preciso o Kommo nos avisar de
+                  cada mensagem na hora (webhook) e guardarmos isso no nosso banco.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Conversa que virou lead */}
