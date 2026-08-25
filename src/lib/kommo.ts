@@ -357,8 +357,10 @@ export async function funilFundo(fromUnix: number, toUnix: number) {
   }
 
   const t0 = Date.now()
-  const PAGINATION_BUDGET_MS = 25_000
-  const TOTAL_BUDGET_MS = 40_000
+  // Sem a etapa de classificação de contato, todo o orçamento vai pra paginação.
+  // Fica abaixo do maxDuration=60s da rota pra sobrar tempo da busca de leads
+  // que roda depois e da serialização da resposta.
+  const PAGINATION_BUDGET_MS = 42_000
 
   const porCanal = new Map<string, number>()
   const porPerfil = new Map<string, number>()
