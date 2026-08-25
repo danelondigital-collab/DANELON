@@ -15,13 +15,21 @@ interface Totals {
   buttonClicks: number
 }
 
+interface HomeAccess {
+  pageViews: number
+  sessions: number
+  activeUsers: number
+}
+
 interface TrafegoData {
   updatedAt: string
   range: { startDate: string; endDate: string }
   totals: Totals
+  homeAccess: HomeAccess
   timeseries: { date: string; activeUsers: number }[]
   events: { name: string; count: number }[]
   trafficSource: { source: string; sessions: number }[]
+  campaignBreakdown: { campaign: string; sessions: number }[]
 }
 
 /** Tenta ler o corpo como JSON; se vier algo diferente (ex: página de erro/timeout da Vercel), dá uma mensagem legível em vez do erro cru de parsing. */
@@ -556,6 +564,27 @@ export default function TrafegoClient() {
               tooltip="Soma de cliques nos botões do site configurados como eventos rastreáveis (os que aparecem no quadro 'Cliques por botão' abaixo, tipo Unidade Santo André, Curso Presencial etc)." />
           </div>
 
+          <div className="bg-white rounded-xl border border-amber-200 p-4">
+            <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+              <Eye className="w-3.5 h-3.5" /> Acessos na home
+              <InfoTooltip text="Quem chegou na página inicial do site (elainedanelon.com.br), contando só quem caiu direto nela — sem entrar em nenhuma sub-página. Isso é diferente de 'Cliques em botões': aqui é só a chegada na página, antes de qualquer clique dentro dela. Serve de referência pra saber o volume de gente que passou pelo site, mesmo quem não clicou em nada." />
+            </p>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-2xl font-semibold text-gray-900">{fmt(data.homeAccess.pageViews)}</p>
+                <p className="text-xs text-gray-500">visualizações</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-gray-900">{fmt(data.homeAccess.sessions)}</p>
+                <p className="text-xs text-gray-500">sessões</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-gray-900">{fmt(data.homeAccess.activeUsers)}</p>
+                <p className="text-xs text-gray-500">usuários</p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs text-gray-500 mb-2 flex items-center gap-1.5">
               Usuários ativos por dia
@@ -594,6 +623,24 @@ export default function TrafegoClient() {
                       <span className="block text-[10px] text-gray-400">{s.source}</span>
                     </span>
                     <span className="font-semibold text-gray-900 shrink-0">{fmt(s.sessions)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+                Origem por perfil (link na bio)
+                <InfoTooltip text="Sessões vindas do link na bio do Instagram, separadas por perfil/unidade — cada perfil usa um link próprio com identificação (utm_campaign) diferente. Só aparece aqui o perfil que já estiver usando o link com essa identificação; perfil que ainda usa o link antigo sem identificação cai em 'Origem do tráfego', misturado com o resto do Instagram." />
+              </p>
+              <ul className="space-y-2">
+                {data.campaignBreakdown.length === 0 && (
+                  <li className="text-sm text-gray-400">Nenhum link com identificação de perfil usado ainda no período.</li>
+                )}
+                {data.campaignBreakdown.map(c => (
+                  <li key={c.campaign} className="flex items-center justify-between text-sm gap-2">
+                    <span className="text-gray-600 truncate pr-2">{c.campaign.replace('perfil_', '')}</span>
+                    <span className="font-semibold text-gray-900 shrink-0">{fmt(c.sessions)}</span>
                   </li>
                 ))}
               </ul>
