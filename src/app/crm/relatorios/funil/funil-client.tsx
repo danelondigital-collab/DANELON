@@ -103,33 +103,57 @@ interface Etapa {
 }
 
 /**
- * Funil visual: cada etapa é uma faixa centralizada cuja largura é proporcional
- * ao valor da primeira etapa — o estreitamento é o próprio funil. Entre as
- * faixas aparece a taxa de passagem de uma etapa pra próxima.
+ * Funil visual: faixas centralizadas que vão estreitando.
+ *
+ * A largura NÃO é proporção direta do valor: a queda entre a primeira etapa e a
+ * última é grande demais (28.145 -> 3), e proporção direta deixaria as faixas de
+ * baixo com uns 2% de largura, cortando o texto. Em vez disso usa escala de
+ * potência (comprime o extremo baixo) com piso de largura, mais uma garantia de
+ * que cada faixa é sempre um pouco mais estreita que a anterior — o funil
+ * continua legível como forma, e o número ao lado é que carrega a magnitude.
  */
+const LARGURA_MIN = 56
+const DEGRAU_MIN = 4
+
+function calcularLarguras(etapas: Etapa[]): number[] {
+  const base = etapas.find(e => e.valor !== null)?.valor || 1
+  const larguras: number[] = []
+
+  etapas.forEach((e, i) => {
+    let l: number
+    if (e.valor === null) {
+      // ainda carregando: usa só o degrau, pra não estourar a forma do funil
+      l = 100 - i * 8
+    } else {
+      const proporcao = Math.max(e.valor / base, 0)
+      l = LARGURA_MIN + (100 - LARGURA_MIN) * Math.pow(proporcao, 0.4)
+    }
+    if (i > 0) l = Math.min(l, larguras[i - 1] - DEGRAU_MIN)
+    larguras.push(Math.max(LARGURA_MIN, Math.min(100, l)))
+  })
+
+  return larguras
+}
+
 function Funil({ etapas }: { etapas: Etapa[] }) {
-  const base = etapas[0]?.valor || 1
-  const LARGURA_MIN = 22
+  const larguras = calcularLarguras(etapas)
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       {etapas.map((e, i) => {
         const anterior = i > 0 ? etapas[i - 1].valor : null
         const taxa = anterior && anterior > 0 && e.valor !== null ? e.valor / anterior : null
-        const largura = e.valor === null
-          ? 100
-          : Math.max(LARGURA_MIN, (e.valor / base) * 100)
         const Icon = e.icon
 
         return (
           <div key={e.label}>
             {i > 0 && (
-              <div className="flex items-center justify-center py-1">
+              <div className="flex items-center justify-center py-1.5">
                 {taxa === null ? (
-                  <span className="text-[10px] text-gray-300">—</span>
+                  <span className="text-xs text-gray-300">—</span>
                 ) : (
-                  <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                    <TrendingDown className="w-3 h-3" />
+                  <span className="text-xs text-gray-500 flex items-center gap-1.5 font-medium">
+                    <TrendingDown className="w-3.5 h-3.5" />
                     {fmtPct(taxa)} seguiram
                   </span>
                 )}
@@ -137,17 +161,17 @@ function Funil({ etapas }: { etapas: Etapa[] }) {
             )}
             <div className="flex justify-center">
               <div
-                className="rounded-lg px-4 py-3 flex items-center justify-between gap-4 transition-all min-w-0"
-                style={{ width: `${largura}%`, backgroundColor: e.cor }}
+                className="rounded-xl px-5 py-4 flex items-center justify-between gap-6 transition-all"
+                style={{ width: `${larguras[i]}%`, backgroundColor: e.cor }}
               >
-                <span className="flex items-center gap-2 text-white/90 text-xs font-medium truncate">
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{e.label}</span>
-                  <span className="text-[9px] uppercase tracking-wide bg-white/20 rounded px-1 py-0.5 shrink-0">
+                <span className="flex items-center gap-2.5 text-white text-sm font-semibold">
+                  <Icon className="w-4 h-4 shrink-0 opacity-90" />
+                  <span>{e.label}</span>
+                  <span className="text-[10px] uppercase tracking-wide bg-white/25 rounded px-1.5 py-0.5 shrink-0 font-medium">
                     {e.fonte}
                   </span>
                 </span>
-                <span className="text-white font-bold text-lg tabular-nums shrink-0">
+                <span className="text-white font-bold text-2xl tabular-nums shrink-0">
                   {e.valor === null ? '—' : fmt(e.valor)}
                 </span>
               </div>
