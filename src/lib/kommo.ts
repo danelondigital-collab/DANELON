@@ -394,21 +394,12 @@ export async function funilFundo(fromUnix: number, toUnix: number) {
     }
   }
 
-  // novo x já falava com a empresa
-  let novos: number | null = null
-  let existentes: number | null = null
-  if (Date.now() - t0 < TOTAL_BUDGET_MS) {
-    const uniqueIds = Array.from(new Set(itemsInWindow.map(i => i.contactId).filter((id): id is number => Boolean(id))))
-    const createdAtByContact = await fetchContactsCreatedAt(uniqueIds)
-    novos = 0
-    existentes = 0
-    for (const item of itemsInWindow) {
-      const contactCreatedAt = item.contactId ? createdAtByContact.get(item.contactId) : undefined
-      if (contactCreatedAt === undefined) continue
-      if (item.createdAt - contactCreatedAt <= NOVO_THRESHOLD_SECONDS) novos += 1
-      else existentes += 1
-    }
-  }
+  // NÃO dá pra classificar "primeiro contato x já em conversa" a partir daqui.
+  // Testado direto na API em ago/2026: cada conversa que cai na caixa de entrada
+  // cria um contato NOVO no mesmo instante (285 conversas -> 285 contatos, deltas
+  // de -137s a +5s), e metade nem tem telefone preenchido (DM de Instagram não
+  // manda telefone), então também não dá pra deduplicar por número. Qualquer
+  // cálculo aqui daria 100% "novo" sempre — número que parece informação e não é.
 
   const leads = await leadsPorPipeline(fromUnix, toUnix)
 
@@ -417,8 +408,6 @@ export async function funilFundo(fromUnix: number, toUnix: number) {
       total: totalConversas,
       porCanal: Array.from(porCanal, ([canal, total]) => ({ canal, total })).sort((a, b) => b.total - a.total),
       porPerfil: Array.from(porPerfil, ([perfil, total]) => ({ perfil, total })).sort((a, b) => b.total - a.total).slice(0, 12),
-      novos,
-      existentes,
       capped,
     },
     leads,

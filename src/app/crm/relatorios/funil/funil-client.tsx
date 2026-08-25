@@ -60,8 +60,6 @@ interface KommoFunil {
     total: number
     porCanal: { canal: string; total: number }[]
     porPerfil: { perfil: string; total: number }[]
-    novos: number | null
-    existentes: number | null
     capped: boolean
   }
   leads: {
@@ -240,15 +238,11 @@ export default function FunilClient() {
     },
     {
       label: 'Conversas recebidas', valor: kommo?.conversas.total ?? null, icon: MessageCircle, cor: '#0F766E', fonte: 'Kommo',
-      tooltip: 'Conversas que chegaram no Kommo no período, por qualquer canal (WhatsApp, DM de Instagram, TikTok, Facebook) — inclusive quem não passou pelo site.',
-    },
-    {
-      label: 'Primeiro contato', valor: kommo?.conversas.novos ?? null, icon: UserPlus, cor: '#115E59', fonte: 'Kommo',
-      tooltip: 'Das conversas recebidas, quantas vieram de um número que nunca tinha falado com a empresa antes. O resto é gente que já estava em conversa.',
+      tooltip: 'Conversas que chegaram na caixa de entrada do Kommo no período, por qualquer canal (WhatsApp, DM de Instagram, TikTok, Facebook) — inclusive quem não passou pelo site. Enquanto ninguém aceita a conversa no Kommo, ela fica parada nessa caixa.',
     },
     {
       label: 'Leads comerciais', valor: kommo?.leads.comercial ?? null, icon: Briefcase, cor: '#134E4A', fonte: 'Kommo',
-      tooltip: 'Leads criados nos pipelines de venda (Funil de vendas, Atendimento Geral, Fluxo já clientes). Não inclui candidatas a vaga — essas aparecem num quadro separado, porque não são resultado comercial.',
+      tooltip: 'Leads efetivamente criados nos pipelines de venda (Funil de vendas, Atendimento Geral, Fluxo já clientes) — ou seja, conversa que alguém aceitou e virou oportunidade. Não inclui candidatas a vaga: essas aparecem separadas logo abaixo.',
     },
   ], [trafego, kommo])
 
@@ -479,41 +473,46 @@ export default function FunilClient() {
             )}
           </div>
 
-          {/* Novo x já em conversa */}
+          {/* Conversa que virou lead */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-1.5">
-              <UserPlus className="w-3.5 h-3.5" /> Primeiro contato x já em conversa
-              <InfoTooltip text="Novo = número que nunca tinha falado com a empresa. Já em conversa = contato que já existia no Kommo e voltou a falar. A Kommo não duplica contato por telefone, então a data de criação do contato reflete o primeiro contato real." />
+            <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+              <UserPlus className="w-3.5 h-3.5" /> Da conversa ao lead
+              <InfoTooltip text="Toda conversa cai numa caixa de entrada do Kommo e fica lá até alguém aceitar e transformar em lead. Este quadro mostra quanto dessa caixa de entrada realmente virou oportunidade comercial no período." />
+            </p>
+            <p className="text-xs text-gray-400 mb-4">
+              Quanto da caixa de entrada virou oportunidade comercial.
             </p>
             {carregandoKommo && !kommo ? (
               <p className="text-sm text-gray-400 py-4">Carregando…</p>
-            ) : kommo?.conversas.novos === null ? (
-              <p className="text-sm text-gray-400">
-                Não deu tempo de classificar nesse período. Tente um intervalo menor.
-              </p>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-4 mb-3">
                   <div>
-                    <p className="text-2xl font-bold text-teal-700 tabular-nums">{fmt(kommo?.conversas.novos ?? 0)}</p>
-                    <p className="text-xs text-gray-500">primeiro contato</p>
+                    <p className="text-2xl font-bold text-gray-700 tabular-nums">{fmt(kommo?.conversas.total ?? 0)}</p>
+                    <p className="text-xs text-gray-500">conversas chegaram</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-gray-500 tabular-nums">{fmt(kommo?.conversas.existentes ?? 0)}</p>
-                    <p className="text-xs text-gray-500">já estavam em conversa</p>
+                    <p className="text-2xl font-bold text-teal-700 tabular-nums">{fmt(kommo?.leads.comercial ?? 0)}</p>
+                    <p className="text-xs text-gray-500">viraram lead comercial</p>
                   </div>
                 </div>
-                {(kommo?.conversas.novos ?? 0) + (kommo?.conversas.existentes ?? 0) > 0 && (
-                  <div className="h-2 rounded-full overflow-hidden flex">
-                    <div
-                      className="bg-teal-600 h-full"
-                      style={{
-                        width: `${((kommo?.conversas.novos ?? 0) /
-                          ((kommo?.conversas.novos ?? 0) + (kommo?.conversas.existentes ?? 0))) * 100}%`,
-                      }}
-                    />
-                    <div className="bg-gray-300 h-full flex-1" />
-                  </div>
+                {(kommo?.conversas.total ?? 0) > 0 && (
+                  <>
+                    <div className="h-2 rounded-full overflow-hidden bg-gray-200">
+                      <div
+                        className="bg-teal-600 h-full rounded-full"
+                        style={{
+                          width: `${Math.min(100, ((kommo?.leads.comercial ?? 0) / (kommo?.conversas.total || 1)) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-2">
+                      {fmtPct((kommo?.leads.comercial ?? 0) / (kommo?.conversas.total || 1))} das conversas
+                      viraram lead comercial no Kommo. O resto segue na caixa de entrada, sem ninguém ter
+                      aceitado a conversa no sistema — o que não quer dizer que a pessoa não foi atendida
+                      por fora, só que o CRM não registrou.
+                    </p>
+                  </>
                 )}
               </>
             )}
