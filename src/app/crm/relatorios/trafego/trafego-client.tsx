@@ -644,6 +644,13 @@ export default function TrafegoClient() {
                   </li>
                 ))}
               </ul>
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-[11px] text-gray-400 leading-relaxed flex items-start gap-1">
+                  <span>
+                    <strong className="text-gray-500">Referência antes da troca dos links</strong> (25/08/2026, link puro sem identificação, últimos 28 dias): 66.695 visualizações · 33.462 sessões · 26.277 usuários na home. Fica registrado aqui pra comparar com o que os links por perfil trouxerem depois.
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
 
