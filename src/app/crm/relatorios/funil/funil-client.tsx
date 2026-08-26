@@ -39,8 +39,6 @@ const COR_CANAL: Record<string, string> = {
 interface FonteFunil {
   grupo: string
   pago: boolean
-  /** origem que não representa visita intencional (ver quadro de pré-carregamento) */
-  preload: boolean
   sessoes: number
   visitantes: number
   pageViews: number
@@ -54,11 +52,6 @@ interface TrafegoFunil {
   updatedAt: string
   range: { startDate: string; endDate: string }
   totais: { sessoes: number; visitantes: number; pageViews: number; cliques: number; usuariosQueClicaram: number }
-  totaisComPreload: { sessoes: number; visitantes: number; pageViews: number }
-  preload: {
-    sessoes: number; visitantes: number; pageViews: number
-    cliques: number; usuariosQueClicaram: number; grupos: string[]
-  }
   home: { sessoes: number; visitantes: number; pageViews: number }
   porFonte: FonteFunil[]
   botoes: { nome: string; cliques: number }[]
@@ -410,13 +403,8 @@ export default function FunilClient() {
                 return (
                   <div
                     key={f.grupo}
-                    title={`${f.grupo}: ${fmt(f.sessoes)} sessões (${fmtPct(f.sessoes / totalFontes)})${f.preload ? ' — pré-carregamento, não é visita real' : ''}`}
-                    style={{
-                      width: `${pct}%`,
-                      backgroundColor: corFonte(f.grupo),
-                      // hachura visual pro que não é visita de verdade
-                      opacity: f.preload ? 0.35 : 1,
-                    }}
+                    title={`${f.grupo}: ${fmt(f.sessoes)} visitas (${fmtPct(f.sessoes / totalFontes)})`}
+                    style={{ width: `${pct}%`, backgroundColor: corFonte(f.grupo) }}
                   />
                 )
               })}
@@ -426,13 +414,9 @@ export default function FunilClient() {
                 const totalFontes = trafego.porFonte.reduce((s, x) => s + x.sessoes, 0) || 1
                 return (
                   <span key={f.grupo} className="text-[11px] text-gray-500 flex items-center gap-1.5">
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: corFonte(f.grupo), opacity: f.preload ? 0.35 : 1 }}
-                    />
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: corFonte(f.grupo) }} />
                     {f.grupo}
                     <strong className="text-gray-700">{fmtPct(f.sessoes / totalFontes)}</strong>
-                    {f.preload && <span className="text-amber-600">(pré-carregamento)</span>}
                   </span>
                 )
               })}
@@ -497,7 +481,7 @@ export default function FunilClient() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {(trafego?.porFonte || []).filter(f => !f.preload).map(f => (
+                {(trafego?.porFonte || []).map(f => (
                   <tr key={f.grupo} className="hover:bg-gray-50/60">
                     <td className="py-2.5 pr-3">
                       <div className="flex items-center gap-2">
@@ -535,62 +519,16 @@ export default function FunilClient() {
         <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
           <p className="text-[11px] text-gray-500 leading-relaxed">
-            O TikTok Ads <strong>não está nesta tabela</strong> — o volume dele não é visita
-            intencional, e somá-lo aqui diluiria a taxa de contato de todas as outras fontes.
-            Está separado no quadro logo abaixo, com a explicação.
+            <strong>Por que o Instagram aparece com menos visitas que o TikTok:</strong> o anúncio do
+            TikTok leva direto pro site, então cada clique no anúncio já vira uma visita aqui. O anúncio
+            da Meta leva pro perfil do Instagram, e só quem clica no link da bio depois é que chega no
+            site — é um passo a mais, e a maioria não dá esse passo. Por isso o número de visitas do
+            Instagram é menor por natureza, não por falha de rastreamento (só 0,3% do tráfego do período
+            ficou sem origem identificada). Repare que, mesmo com muito menos visitas, o Instagram
+            entrega <strong>mais pessoas clicando em contato</strong> que o TikTok.
           </p>
         </div>
       </div>
-
-      {/* ── PRÉ-CARREGAMENTO (TikTok) ───────────────────────────── */}
-      {(trafego?.preload.sessoes || 0) > 0 && (
-        <div className="bg-gray-50 rounded-xl border border-gray-300 border-dashed p-5">
-          <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-            Fora do funil: pré-carregamento do TikTok
-            <InfoTooltip text="O GA4 registra essas sessões, mas elas não são visita de verdade: a página própria do TikTok (Instant Page) carrega o site por trás enquanto a pessoa vê o anúncio, sem que ninguém tenha pedido pra entrar. Por isso ficam fora do funil e das taxas." />
-          </p>
-          <p className="text-xs text-gray-500 mb-4">
-            Aparece no Google Analytics, mas ninguém pediu pra entrar no site.
-          </p>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-            <div>
-              <p className="text-2xl font-bold text-gray-500 tabular-nums">{fmt(trafego?.preload.sessoes ?? 0)}</p>
-              <p className="text-xs text-gray-500">sessões registradas</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-500 tabular-nums">{fmt(trafego?.preload.visitantes ?? 0)}</p>
-              <p className="text-xs text-gray-500">visitas únicas</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-500 tabular-nums">{fmt(trafego?.preload.pageViews ?? 0)}</p>
-              <p className="text-xs text-gray-500">visualizações</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-500 tabular-nums">{fmt(trafego?.preload.usuariosQueClicaram ?? 0)}</p>
-              <p className="text-xs text-gray-500">clicaram em contato</p>
-            </div>
-          </div>
-
-          <div className="bg-white/70 rounded-lg p-3 text-[11px] text-gray-600 leading-relaxed">
-            <p className="mb-1.5">
-              <strong>Por que está fora do funil.</strong> As campanhas do TikTok da Danelon usam a
-              página própria (Instant Page), cujo botão leva direto pro WhatsApp — nenhum anúncio
-              aponta pro site. Mesmo assim o GA4 registra essas sessões, vindas das campanhas
-              <em> Tráfego20260522231050</em> e sua cópia, que custaram R$&nbsp;637,60 no período:
-              <strong> R$&nbsp;0,02 por &quot;visita&quot;</strong>. Não existe clique a dois centavos —
-              é a Instant Page pré-carregando o site por trás.
-            </p>
-            <p>
-              Somado ao total, esse volume derrubava a taxa de contato de todas as outras fontes e
-              fazia o Instagram parecer irrelevante, quando é dele que vem quase todo mundo que
-              realmente puxa conversa. Verificado em 26/08/2026 cruzando o nome da campanha no GA4
-              com a conta de anúncio do TikTok.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* ── LINK NA BIO POR PERFIL ──────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
