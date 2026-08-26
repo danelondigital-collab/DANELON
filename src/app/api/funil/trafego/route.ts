@@ -57,11 +57,11 @@ export async function GET(request: NextRequest) {
         metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'screenPageViews' }],
         dimensionFilter: hostFilter(),
       }),
-      // sessões e visitantes por origem
+      // sessões, visitantes e visualizações por origem
       runReport({
         dateRanges,
         dimensions: [{ name: 'sessionSourceMedium' }],
-        metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
+        metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'screenPageViews' }],
         dimensionFilter: hostFilter(),
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         limit: '40',
@@ -118,14 +118,17 @@ export async function GET(request: NextRequest) {
     ])
 
     // junta sessões + cliques na mesma chave de origem, depois agrupa por plataforma
-    const acc = new Map<string, { grupo: string; pago: boolean; sessoes: number; visitantes: number; cliques: number; usuariosQueClicaram: number; origens: string[] }>()
+    const acc = new Map<string, { grupo: string; pago: boolean; sessoes: number; visitantes: number; pageViews: number; cliques: number; usuariosQueClicaram: number; origens: string[] }>()
+    const vazio = (grupo: string, pago: boolean) =>
+      ({ grupo, pago, sessoes: 0, visitantes: 0, pageViews: 0, cliques: 0, usuariosQueClicaram: 0, origens: [] as string[] })
 
     for (const r of (porFonteRaw.rows || []) as Row[]) {
       const sm = r.dimensionValues[0].value
       const { grupo, pago } = classificar(sm)
-      const cur = acc.get(grupo) || { grupo, pago, sessoes: 0, visitantes: 0, cliques: 0, usuariosQueClicaram: 0, origens: [] }
+      const cur = acc.get(grupo) || vazio(grupo, pago)
       cur.sessoes += num(r.metricValues[0]?.value)
       cur.visitantes += num(r.metricValues[1]?.value)
+      cur.pageViews += num(r.metricValues[2]?.value)
       if (!cur.origens.includes(sm)) cur.origens.push(sm)
       acc.set(grupo, cur)
     }
@@ -133,7 +136,7 @@ export async function GET(request: NextRequest) {
     for (const r of (cliquesPorFonteRaw.rows || []) as Row[]) {
       const sm = r.dimensionValues[0].value
       const { grupo, pago } = classificar(sm)
-      const cur = acc.get(grupo) || { grupo, pago, sessoes: 0, visitantes: 0, cliques: 0, usuariosQueClicaram: 0, origens: [] }
+      const cur = acc.get(grupo) || vazio(grupo, pago)
       cur.cliques += num(r.metricValues[0]?.value)
       cur.usuariosQueClicaram += num(r.metricValues[1]?.value)
       acc.set(grupo, cur)

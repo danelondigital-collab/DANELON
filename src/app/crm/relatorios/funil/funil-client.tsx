@@ -40,6 +40,7 @@ interface FonteFunil {
   pago: boolean
   sessoes: number
   visitantes: number
+  pageViews: number
   cliques: number
   usuariosQueClicaram: number
   taxaContato: number
@@ -401,7 +402,7 @@ export default function FunilClient() {
           <p className="text-sm text-gray-400 py-6 text-center">Carregando dados do Analytics…</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm min-w-[760px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
                   <th className="text-left font-medium pb-2">
@@ -418,8 +419,14 @@ export default function FunilClient() {
                   </th>
                   <th className="text-right font-medium pb-2">
                     <span className="inline-flex items-center gap-1">
-                      Pessoas
-                      <InfoTooltip text="Visitas únicas: pessoas diferentes que vieram dessa fonte. Cada uma conta uma vez só. É o número real de gente." />
+                      Visitas únicas
+                      <InfoTooltip text="Pessoas diferentes que vieram dessa fonte. Cada uma conta uma vez só, não importa quantas vezes voltou. É o número real de gente." />
+                    </span>
+                  </th>
+                  <th className="text-right font-medium pb-2">
+                    <span className="inline-flex items-center gap-1">
+                      Visualizações
+                      <InfoTooltip text="Total de páginas carregadas por quem veio dessa fonte, incluindo recarregar e navegar entre páginas. Sempre o maior dos três números — mostra o quanto a pessoa mexeu no site, não quantas pessoas são." />
                     </span>
                   </th>
                   <th className="text-right font-medium pb-2">
@@ -454,7 +461,8 @@ export default function FunilClient() {
                       </div>
                     </td>
                     <td className="text-right tabular-nums text-gray-700 align-top pt-3">{fmt(f.sessoes)}</td>
-                    <td className="text-right tabular-nums text-gray-500 align-top pt-3">{fmt(f.visitantes)}</td>
+                    <td className="text-right tabular-nums font-semibold text-gray-800 align-top pt-3">{fmt(f.visitantes)}</td>
+                    <td className="text-right tabular-nums text-gray-400 align-top pt-3">{fmt(f.pageViews)}</td>
                     <td className="text-right tabular-nums text-gray-500 align-top pt-3">{fmt(f.usuariosQueClicaram)}</td>
                     <td className="text-right align-top pt-3 pl-4">
                       <span
