@@ -6,6 +6,7 @@ import {
   Filter, Loader2, RefreshCw, MousePointerClick, Users, Eye, MessageCircle,
   UserPlus, HelpCircle, Briefcase, TrendingDown, AlertTriangle,
 } from 'lucide-react'
+import InvestimentoSection from './investimento-section'
 
 const GOLD = '#B8924A'
 const fmtDate = (d: Date) => format(d, 'yyyy-MM-dd')
@@ -737,6 +738,12 @@ export default function FunilClient() {
             </>
           )}
         </div>
+      </div>
+
+      {/* ── FINANCEIRO ─────────────────────────────────────────── */}
+      <div>
+        <p className="text-[11px] uppercase tracking-wider text-gray-400 mb-2 font-medium">Financeiro</p>
+        <InvestimentoSection range={range} porFonte={trafego?.porFonte || []} />
       </div>
 
       {trafego && (
