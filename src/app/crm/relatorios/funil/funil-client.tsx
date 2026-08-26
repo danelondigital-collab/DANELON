@@ -355,11 +355,11 @@ export default function FunilClient() {
       {/* ── A PÁGINA DO LINK NA BIO ─────────────────────────────── */}
       <div className="bg-white rounded-xl border border-amber-200 p-5">
         <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-          <Eye className="w-3.5 h-3.5" /> elainedanelon.com.br — a página do link na bio
-          <InfoTooltip text="Números da página inicial isolada. É ela que está no link da bio de todos os perfis, então é aqui que cai quem vem do Instagram. Praticamente todo o tráfego do site entra por essa página." />
+          <Eye className="w-3.5 h-3.5" /> elainedanelon.com.br — total da página, somando todas as fontes
+          <InfoTooltip text="Números da página inicial isolada, somando TODAS as origens. Atenção: essa página não recebe só quem vem do link na bio — o anúncio do TikTok aponta direto pra ela também, e é de onde vem a maior parte desse número. A composição está logo abaixo." />
         </p>
         <p className="text-xs text-gray-400 mb-4">
-          Só a página inicial, isolada do resto do site.
+          Todas as origens somadas. A fatia de cada uma está na barra abaixo e na tabela seguinte.
         </p>
         <div className="grid grid-cols-3 gap-4">
           <div>
@@ -386,6 +386,42 @@ export default function FunilClient() {
             <p className="text-2xl font-bold text-gray-500 tabular-nums">{fmt(trafego?.home.pageViews ?? 0)}</p>
           </div>
         </div>
+
+        {/* Composição: de quem é esse número */}
+        {(trafego?.porFonte.length || 0) > 0 && (
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+              De quem é esse número
+              <InfoTooltip text="Quanto cada origem representa do total acima. É aqui que se vê por que o número da página é tão maior que o do Instagram: o anúncio do TikTok manda direto pra essa mesma página." />
+            </p>
+            <div className="h-3 rounded-full overflow-hidden flex bg-gray-100">
+              {trafego?.porFonte.map(f => {
+                const totalFontes = trafego.porFonte.reduce((s, x) => s + x.sessoes, 0) || 1
+                const pct = (f.sessoes / totalFontes) * 100
+                if (pct < 0.4) return null
+                return (
+                  <div
+                    key={f.grupo}
+                    title={`${f.grupo}: ${fmt(f.sessoes)} visitas (${fmtPct(f.sessoes / totalFontes)})`}
+                    style={{ width: `${pct}%`, backgroundColor: corFonte(f.grupo) }}
+                  />
+                )
+              })}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
+              {trafego?.porFonte.slice(0, 5).map(f => {
+                const totalFontes = trafego.porFonte.reduce((s, x) => s + x.sessoes, 0) || 1
+                return (
+                  <span key={f.grupo} className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: corFonte(f.grupo) }} />
+                    {f.grupo}
+                    <strong className="text-gray-700">{fmtPct(f.sessoes / totalFontes)}</strong>
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── QUALIDADE POR FONTE ─────────────────────────────────── */}
