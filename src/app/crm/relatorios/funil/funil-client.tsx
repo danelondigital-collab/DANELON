@@ -528,6 +528,20 @@ export default function FunilClient() {
             entrega <strong>mais pessoas clicando em contato</strong> que o TikTok.
           </p>
         </div>
+
+        <div className="mt-3 pt-3 border-t border-gray-100 flex items-start gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            <strong>O volume do TikTok Ads é tráfego real, conferido direto no TikTok Ads Manager
+            em 26/08/2026:</strong> as campanhas <em>Tráfego20260522231050</em> e sua cópia registram
+            30.680 + 841 = <strong>31.521 cliques</strong> lá dentro, contra 31.711 sessões aqui no
+            GA4 — 0,6% de diferença, dentro do esperado entre duas ferramentas de medição diferentes.
+            O custo por clique de R$&nbsp;0,02 bate com a conta: CPM de R$&nbsp;7,06 × CTR de 35,5%
+            (ambos direto do TikTok Ads Manager). Não é tráfego falso nem pré-carregamento — é clique
+            barato e de baixa intenção de compra, característica normal de campanha de tráfego amplo
+            no TikTok, e é exatamente isso que a taxa de contato de 4,1% já mostrava.
+          </p>
+        </div>
       </div>
 
       {/* ── LINK NA BIO POR PERFIL ──────────────────────────────── */}
