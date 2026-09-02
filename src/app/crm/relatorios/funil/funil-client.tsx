@@ -574,16 +574,21 @@ export default function FunilClient() {
           </p>
 
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-3 mb-4">
-            <div className="flex items-center justify-between text-sm mb-0.5">
-              <span className="text-gray-700 font-medium flex items-center gap-1">
-                www.elainedanelon.com.br (raiz)
-                <InfoTooltip text="Total de visitas na home, somando TODAS as origens — TikTok Ads, link de bio identificado, acesso direto, tudo. Não é mais um perfil da lista abaixo, é o total geral pra comparar com o que veio identificado por link de bio." />
-              </span>
-              <span className="font-bold text-gray-900 tabular-nums">{fmt(trafego?.home.sessoes ?? 0)}</span>
+            <span className="text-gray-700 font-medium text-sm flex items-center gap-1 mb-2">
+              www.elainedanelon.com.br (raiz)
+              <InfoTooltip text="Total de visitas na home, somando TODAS as origens — TikTok Ads, link de bio identificado, acesso direto, tudo. Não é mais um perfil da lista abaixo, é o total geral pra comparar com o que veio identificado por link de bio." />
+            </span>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xl font-bold text-gray-900 tabular-nums">{fmt(trafego?.home.sessoes ?? 0)}</p>
+                <p className="text-[11px] text-gray-500">visitas</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold text-gray-900 tabular-nums">{fmt(trafego?.home.visitantes ?? 0)}</p>
+                <p className="text-[11px] text-gray-500">pessoas únicas</p>
+              </div>
             </div>
-            <p className="text-[11px] text-gray-400">
-              {fmt(trafego?.home.visitantes ?? 0)} visitas únicas · inclui todas as origens, não só link de bio
-            </p>
+            <p className="text-[11px] text-gray-400 mt-2">Inclui todas as origens, não só link de bio</p>
           </div>
 
           {(trafego?.porPerfil.length || 0) === 0 ? (
