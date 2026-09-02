@@ -856,7 +856,12 @@ export default function FunilClient() {
       {/* ── FINANCEIRO ─────────────────────────────────────────── */}
       <div>
         <p className="text-[11px] uppercase tracking-wider text-gray-400 mb-2 font-medium">Financeiro</p>
-        <InvestimentoSection range={range} porFonte={trafego?.porFonte || []} />
+        <InvestimentoSection
+          range={range}
+          porFonte={trafego?.porFonte || []}
+          porPerfil={trafego?.porPerfil || []}
+          botoes={trafego?.botoes || []}
+        />
       </div>
 
       {trafego && (

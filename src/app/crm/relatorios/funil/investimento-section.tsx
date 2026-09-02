@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { DollarSign, Plus, Trash2, Loader2, HelpCircle, AlertTriangle, Eye, MousePointerClick, Target } from 'lucide-react'
+import { DollarSign, Plus, Trash2, Loader2, HelpCircle, AlertTriangle, Eye, MousePointerClick, Target, Building2, ArrowRight } from 'lucide-react'
 
 const GOLD = '#B8924A'
 const fmtBRL = (v: number) =>
@@ -20,10 +20,20 @@ const GRUPOS_POR_PLATAFORMA: Record<string, string[]> = {
 
 const PLATAFORMAS = Object.keys(GRUPOS_POR_PLATAFORMA)
 
+/** As 4 unidades físicas — usado no lançamento e pra casar com GA4 (porPerfil/botões). */
+const UNIDADES = ['Morumbi', 'Santo André', 'Alphaville', 'Goiânia']
+
+/** Remove acento/espaço/caixa pra comparar nomes de unidade vindos de fontes diferentes
+ * (formulário, campanha do GA4 "perfil_santoandre", evento de botão "Unidade Santo Andre"). */
+function normalizarUnidade(s: string) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '')
+}
+
 interface Investimento {
   id: string
   plataforma: string
   destino: 'site' | 'perfil'
+  unidade: string
   mes: string
   valor: number
   impressoes: number | null
@@ -46,6 +56,18 @@ interface FonteFunil {
   usuariosQueClicaram: number
 }
 
+interface PerfilFunil {
+  perfil: string
+  sessoes: number
+  visitantes: number
+}
+
+interface BotaoFunil {
+  nome: string
+  cliques: number
+  pessoas: number
+}
+
 function InfoTooltip({ text }: { text: string }) {
   return (
     <span className="relative inline-flex group/tip">
@@ -60,9 +82,13 @@ function InfoTooltip({ text }: { text: string }) {
 export default function InvestimentoSection({
   range,
   porFonte,
+  porPerfil,
+  botoes,
 }: {
   range: { start: string; end: string }
   porFonte: FonteFunil[]
+  porPerfil: PerfilFunil[]
+  botoes: BotaoFunil[]
 }) {
   const [investimentos, setInvestimentos] = useState<Investimento[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -72,6 +98,7 @@ export default function InvestimentoSection({
 
   const [plataforma, setPlataforma] = useState('TikTok Ads')
   const [destino, setDestino] = useState<'site' | 'perfil'>('site')
+  const [unidade, setUnidade] = useState('')
   const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7))
   const [valor, setValor] = useState('')
   const [impressoes, setImpressoes] = useState('')
@@ -104,7 +131,7 @@ export default function InvestimentoSection({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          plataforma, destino, mes: `${mes}-01`, valor,
+          plataforma, destino, unidade, mes: `${mes}-01`, valor,
           impressoes: impressoes || null,
           cliques: cliques || null,
           resultados: resultados || null,
@@ -136,10 +163,14 @@ export default function InvestimentoSection({
     }
   }
 
-  /** Cruza o gasto de cada plataforma com as visitas e contatos que ela gerou. */
+  /** Cruza o gasto de cada plataforma com as visitas e contatos que ela gerou.
+   * Ignora lançamentos por unidade aqui — eles já estão contados dentro do
+   * lançamento geral da plataforma (ex: "Meta / perfil" cobre as campanhas
+   * das 4 unidades + as gerais); somar os dois juntaria o mesmo real duas vezes.
+   * O detalhe por unidade aparece à parte, no "Funil por unidade" abaixo. */
   const linhas = useMemo(() => {
     return PLATAFORMAS.map(p => {
-      const doPeriodo = investimentos.filter(i => i.plataforma === p)
+      const doPeriodo = investimentos.filter(i => i.plataforma === p && !i.unidade)
       const gastoSite = doPeriodo.filter(i => i.destino === 'site').reduce((s, i) => s + Number(i.valor), 0)
       const gastoPerfil = doPeriodo.filter(i => i.destino === 'perfil').reduce((s, i) => s + Number(i.valor), 0)
       const gastoTotal = gastoSite + gastoPerfil
@@ -187,7 +218,38 @@ export default function InvestimentoSection({
   const melhor = custos.length > 0 ? Math.min(...custos) : null
   const pior = custos.length > 0 ? Math.max(...custos) : null
 
+  /**
+   * Funil por unidade: da campanha da Meta que leva pro perfil daquela
+   * unidade até o clique no botão de contato daquela mesma unidade no site.
+   * Cruza 3 fontes que não têm a mesma chave de nome, então casa por
+   * normalização (sem acento/espaço/caixa): lançamento manual (unidade =
+   * "Santo André"), GA4 por perfil (perfil = "santoandre", vem do UTM da
+   * bio) e GA4 por botão (nome = "Unidade Santo Andre", vem do evento).
+   */
+  const funilPorUnidade = useMemo(() => {
+    return UNIDADES.map(u => {
+      const chave = normalizarUnidade(u)
+
+      const lancamento = investimentos.find(i => normalizarUnidade(i.unidade) === chave)
+      const perfil = porPerfil.find(p => normalizarUnidade(p.perfil).includes(chave))
+      const botao = botoes.find(b => normalizarUnidade(b.nome).includes(chave))
+
+      return {
+        unidade: u,
+        valor: lancamento ? Number(lancamento.valor) : null,
+        impressoes: lancamento?.impressoes ?? null,
+        cliquesMeta: lancamento?.cliques ?? null,
+        visitasPerfil: perfil?.sessoes ?? null,
+        pessoasPerfil: perfil?.visitantes ?? null,
+        cliquesBotao: botao?.cliques ?? null,
+        pessoasBotao: botao?.pessoas ?? null,
+        temDado: Boolean(lancamento || perfil || botao),
+      }
+    }).filter(u => u.temDado)
+  }, [investimentos, porPerfil, botoes])
+
   return (
+    <div className="space-y-4">
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
         <p className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
@@ -211,7 +273,7 @@ export default function InvestimentoSection({
 
       {formAberto && (
         <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 mb-4">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Plataforma</label>
               <select value={plataforma} onChange={e => setPlataforma(e.target.value)}
@@ -228,6 +290,17 @@ export default function InvestimentoSection({
                 className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
                 <option value="site">Leva pro site</option>
                 <option value="perfil">Leva pro perfil</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                Unidade
+                <InfoTooltip text="Opcional. Preencha só quando a campanha é de uma unidade específica (ex: 'MORUMBI - PERFIL DANELON MORUMBI'). Deixe em branco pra campanha geral (Reconhecimento Nacional, RMK, Curso) — esses já entram no total da plataforma; os por unidade só alimentam o funil por unidade, sem duplicar o gasto." />
+              </label>
+              <select value={unidade} onChange={e => setUnidade(e.target.value)}
+                className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
+                <option value="">— geral —</option>
+                {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
             <div>
@@ -428,7 +501,7 @@ export default function InvestimentoSection({
                 <li key={i.id} className="flex items-center justify-between text-xs text-gray-600 group">
                   <span>
                     {i.plataforma}
-                    <span className="text-gray-400"> · {i.destino === 'perfil' ? 'perfil' : 'site'} · </span>
+                    <span className="text-gray-400"> · {i.destino === 'perfil' ? 'perfil' : 'site'}{i.unidade ? ` · ${i.unidade}` : ''} · </span>
                     {new Date(i.mes + 'T12:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}
                   </span>
                   <span className="flex items-center gap-3">
@@ -455,6 +528,77 @@ export default function InvestimentoSection({
           </div>
         </>
       )}
+    </div>
+
+    {/* Funil por unidade: da campanha da Meta até o clique no botão daquela unidade */}
+    {funilPorUnidade.length > 0 && (
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+          <Building2 className="w-3.5 h-3.5" /> Funil por unidade
+          <InfoTooltip text="Da campanha da Meta que leva pro perfil daquela unidade até o clique no botão de contato da mesma unidade no site. Cruza 3 fontes diferentes (lançamento manual, GA4 por perfil, GA4 por botão) — hoje só a Meta tem campanha separada por unidade." />
+        </p>
+        <p className="text-xs text-gray-400 mb-4">
+          Investimento (Meta) → visita ao perfil → clique no botão daquela unidade, lado a lado.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {funilPorUnidade.map(u => {
+            const custoPorClique = u.valor !== null && u.cliquesBotao ? u.valor / u.cliquesBotao : null
+            return (
+              <div key={u.unidade} className="rounded-lg border border-gray-200 p-4">
+                <p className="text-sm font-semibold text-gray-800 mb-3">{u.unidade}</p>
+                <div className="flex items-center gap-2 text-center">
+                  <div className="flex-1">
+                    <p className="text-lg font-bold tabular-nums" style={{ color: GOLD }}>
+                      {u.valor !== null ? fmtBRL(u.valor) : '—'}
+                    </p>
+                    <p className="text-[10px] text-gray-500">investido (Meta)</p>
+                    {u.impressoes !== null && (
+                      <p className="text-[10px] text-gray-400">{fmt(u.impressoes)} impr.</p>
+                    )}
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-lg font-bold tabular-nums text-pink-700">
+                      {u.visitasPerfil !== null ? fmt(u.visitasPerfil) : '—'}
+                    </p>
+                    <p className="text-[10px] text-gray-500">visitas (link bio)</p>
+                    {u.pessoasPerfil !== null && (
+                      <p className="text-[10px] text-gray-400">{fmt(u.pessoasPerfil)} pessoas</p>
+                    )}
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-lg font-bold tabular-nums text-teal-700">
+                      {u.cliquesBotao !== null ? fmt(u.cliquesBotao) : '—'}
+                    </p>
+                    <p className="text-[10px] text-gray-500">cliques no botão</p>
+                    {u.pessoasBotao !== null && (
+                      <p className="text-[10px] text-gray-400">{fmt(u.pessoasBotao)} pessoas</p>
+                    )}
+                  </div>
+                </div>
+                {custoPorClique !== null && (
+                  <p className="text-[11px] text-gray-400 mt-3 pt-2 border-t border-gray-100 text-center">
+                    {fmtBRL(custoPorClique)} por clique no botão dessa unidade
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            As 3 colunas não são necessariamente a mesma pessoa passo a passo: quem clica no botão daquela
+            unidade pode ter chegado por outra origem (TikTok, direto), não só pelo link de bio daquele
+            perfil. Trate como estágios do processo daquela unidade, não como um funil fechado pessoa por
+            pessoa — o mesmo aviso já vale pro funil geral lá em cima.
+          </p>
+        </div>
+      </div>
+    )}
     </div>
   )
 }
