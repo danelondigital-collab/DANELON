@@ -54,9 +54,8 @@ interface TrafegoFunil {
   totais: { sessoes: number; visitantes: number; pageViews: number; cliques: number; usuariosQueClicaram: number }
   home: { sessoes: number; visitantes: number; pageViews: number }
   porFonte: FonteFunil[]
-  botoes: { nome: string; cliques: number }[]
+  botoes: { nome: string; cliques: number; pessoas: number }[]
   porPerfil: { perfil: string; sessoes: number; visitantes: number }[]
-  porPagina: { pagina: string; sessoes: number; visitantes: number; fontePrincipal: string }[]
 }
 
 interface IniciativaCanal {
@@ -566,46 +565,6 @@ export default function FunilClient() {
         </div>
       </div>
 
-      {/* ── CAPTAÇÃO POR PÁGINA ─────────────────────────────────── */}
-      {(trafego?.porPagina.length || 0) > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-            Captação por página
-            <InfoTooltip text="elainedanelon.com.br tem várias páginas curtas além da home — /google, /tiktok, /alphaville, /morumbi etc. A home já foi mostrada acima (dominada pelo TikTok Ads); aqui está o restante, cada uma com sua própria fonte." />
-          </p>
-          <p className="text-xs text-gray-400 mb-4">
-            Todas as páginas do site com acesso no período, exceto a home (já detalhada acima).
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[520px]">
-              <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
-                  <th className="text-left font-medium pb-2">Página</th>
-                  <th className="text-right font-medium pb-2">Visitas</th>
-                  <th className="text-right font-medium pb-2">Visitas únicas</th>
-                  <th className="text-left font-medium pb-2 pl-4">Fonte principal</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {trafego?.porPagina.map(p => (
-                  <tr key={p.pagina} className="hover:bg-gray-50/60">
-                    <td className="py-2 pr-3 text-gray-700 font-mono text-xs">{p.pagina || '(vazia)'}</td>
-                    <td className="text-right tabular-nums text-gray-700">{fmt(p.sessoes)}</td>
-                    <td className="text-right tabular-nums font-semibold text-gray-800">{fmt(p.visitantes)}</td>
-                    <td className="pl-4">
-                      <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: corFonte(p.fontePrincipal) }} />
-                        {p.fontePrincipal}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* ── LINK NA BIO POR PERFIL ──────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -657,14 +616,17 @@ export default function FunilClient() {
         <div className="bg-white rounded-xl border border-amber-200 p-5">
           <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-1.5">
             Qual unidade a pessoa procurou
-            <InfoTooltip text="Cliques por botão de contato do site. Mostra a demanda por unidade — qual está puxando mais interesse do tráfego." />
+            <InfoTooltip text="Cliques por botão de contato do site, e ao lado quantas pessoas diferentes clicaram — a mesma pessoa pode clicar mais de uma vez, então cliques costuma ser maior que pessoas." />
           </p>
           <ul className="space-y-2.5">
             {(trafego?.botoes || []).map(b => (
               <li key={b.nome}>
                 <div className="flex items-center justify-between text-sm mb-1">
                   <span className="text-gray-600">{b.nome}</span>
-                  <span className="font-semibold tabular-nums" style={{ color: GOLD }}>{fmt(b.cliques)}</span>
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="font-semibold tabular-nums" style={{ color: GOLD }}>{fmt(b.cliques)}</span>
+                    <span className="text-xs text-gray-400 tabular-nums">({fmt(b.pessoas)} pessoas)</span>
+                  </span>
                 </div>
                 <Barra valor={b.cliques} max={Math.max(...(trafego?.botoes.map(x => x.cliques) || [1]), 1)} cor={GOLD} />
               </li>
