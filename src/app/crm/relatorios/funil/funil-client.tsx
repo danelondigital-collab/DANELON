@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import {
   Filter, Loader2, RefreshCw, MousePointerClick, Users, Eye, MessageCircle,
-  UserPlus, HelpCircle, Briefcase, TrendingDown, AlertTriangle,
+  UserPlus, HelpCircle, Briefcase, TrendingDown, AlertTriangle, Megaphone,
 } from 'lucide-react'
 import InvestimentoSection from './investimento-section'
 
@@ -671,49 +671,6 @@ export default function FunilClient() {
               </p>
             )}
 
-            {(kommo?.conversas.iniciativa.length || 0) > 0 ? (
-              <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                <div className="text-[11px] text-gray-500 leading-relaxed">
-                  <p className="mb-1">
-                    <strong className="text-gray-600">Quem mandou a primeira mensagem, por canal</strong> — parte
-                    destas conversas fomos nós (equipe ou automação) que começamos, não é a pessoa procurando a
-                    Danelon por conta própria:
-                  </p>
-                  <ul className="space-y-0.5 ml-3">
-                    {kommo?.conversas.iniciativa
-                      .filter(i => i.total > 0)
-                      .map(i => (
-                        <li key={i.canal}>
-                          <strong>{i.canal}:</strong> de {fmt(i.total)} conversas,{' '}
-                          <strong>{fmt(i.nosIniciamos)} ({fmtPct(i.nosIniciamos / i.total)}) nós começamos</strong>,
-                          {' '}{fmt(i.clienteIniciou)} ({fmtPct(i.clienteIniciou / i.total)}) a pessoa procurou primeiro.
-                        </li>
-                      ))}
-                  </ul>
-                  <p className="mt-1.5">
-                    Calculado em {new Date(kommo!.conversas.iniciativa[0].calculadoEm).toLocaleDateString('pt-BR')} sobre{' '}
-                    {kommo!.conversas.iniciativa[0].periodoInicio.split('-').reverse().join('/')} a{' '}
-                    {kommo!.conversas.iniciativa[0].periodoFim.split('-').reverse().join('/')} — não recalcula ao
-                    vivo com o filtro de período acima. Varrer isso de verdade exige buscar todo o histórico de
-                    mensagens do Kommo (a API não filtra por conversa), o que passa de 5 minutos para 28 dias —
-                    inviável dentro do carregamento da página. Pra atualizar, rode{' '}
-                    <code className="bg-gray-100 px-1 rounded">scripts/kommo_iniciativa.py</code>.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-gray-500 leading-relaxed">
-                  <strong className="text-gray-600">Quem começou cada conversa ainda não foi calculado.</strong>{' '}
-                  Parte do que aparece acima é a própria equipe (ou automação) mandando a primeira mensagem, não
-                  a pessoa procurando a Danelon — sobretudo no Instagram. Rode{' '}
-                  <code className="bg-gray-100 px-1 rounded">scripts/kommo_iniciativa.py</code> pra gerar esse
-                  recorte (não roda ao vivo: exige varrer o histórico de mensagens do Kommo, o que leva minutos).
-                </p>
-              </div>
-            )}
           </div>
 
           {/* Conversa que virou lead */}
@@ -760,6 +717,83 @@ export default function FunilClient() {
               </>
             )}
           </div>
+        </div>
+
+        {/* Quem começou a conversa, por canal */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
+          <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
+            <p className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+              <Megaphone className="w-3.5 h-3.5" /> Quem começou a conversa, por canal
+              <InfoTooltip text="Quem mandou a PRIMEIRA mensagem de cada conversa nova: a própria Danelon (equipe ou automação) abordando, ou a pessoa procurando por conta própria. Contar conversa sem essa distinção infla o resultado do tráfego pago com contato que a gente foi buscar." />
+            </p>
+          </div>
+          <p className="text-xs text-gray-400 mb-4">
+            Nós abordamos primeiro vs. a pessoa procurou primeiro, em cada canal.
+          </p>
+
+          {carregandoKommo && !kommo ? (
+            <p className="text-sm text-gray-400 py-4">Carregando…</p>
+          ) : (kommo?.conversas.iniciativa.filter(i => i.total > 0).length || 0) > 0 ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {kommo?.conversas.iniciativa
+                  .filter(i => i.total > 0)
+                  .map(i => {
+                    const pctNos = i.nosIniciamos / i.total
+                    const pctCliente = i.clienteIniciou / i.total
+                    return (
+                      <div key={i.canal} className="rounded-lg border border-gray-200 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COR_CANAL[i.canal] || '#9CA3AF' }} />
+                            {i.canal}
+                          </span>
+                          <span className="text-xs text-gray-400 tabular-nums">{fmt(i.total)} conversas</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-3xl font-bold tabular-nums text-amber-600">{fmt(i.nosIniciamos)}</p>
+                            <p className="text-xs text-gray-500">
+                              nós começamos <span className="font-semibold text-amber-600">({fmtPct(pctNos)})</span>
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-3xl font-bold tabular-nums text-teal-700">{fmt(i.clienteIniciou)}</p>
+                            <p className="text-xs text-gray-500">
+                              a pessoa procurou <span className="font-semibold text-teal-700">({fmtPct(pctCliente)})</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="h-2 rounded-full overflow-hidden bg-gray-100 flex mt-3">
+                          <div className="h-full bg-amber-500" style={{ width: `${pctNos * 100}%` }} />
+                          <div className="h-full bg-teal-600" style={{ width: `${pctCliente * 100}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-4">
+                Calculado em {new Date(kommo!.conversas.iniciativa[0].calculadoEm).toLocaleDateString('pt-BR')} sobre{' '}
+                {kommo!.conversas.iniciativa[0].periodoInicio.split('-').reverse().join('/')} a{' '}
+                {kommo!.conversas.iniciativa[0].periodoFim.split('-').reverse().join('/')} — não recalcula ao vivo
+                com o filtro de período lá em cima. Varrer isso de verdade exige buscar todo o histórico de
+                mensagens do Kommo (a API não filtra por conversa), o que passa de 5 minutos para 28 dias —
+                inviável dentro do carregamento da página. Pra atualizar pra outro período, rode{' '}
+                <code className="bg-gray-100 px-1 rounded">scripts/kommo_iniciativa.py</code>.
+              </p>
+            </>
+          ) : (
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                <strong className="text-gray-600">Quem começou cada conversa ainda não foi calculado.</strong>{' '}
+                Parte do que aparece em &quot;Conversas por canal&quot; é a própria equipe (ou automação)
+                mandando a primeira mensagem, não a pessoa procurando a Danelon — sobretudo no Instagram. Rode{' '}
+                <code className="bg-gray-100 px-1 rounded">scripts/kommo_iniciativa.py</code> pra gerar esse
+                recorte (não roda ao vivo: exige varrer o histórico de mensagens do Kommo, o que leva minutos).
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Leads: comercial x recrutamento */}
