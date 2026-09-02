@@ -56,6 +56,17 @@ interface TrafegoFunil {
   porFonte: FonteFunil[]
   botoes: { nome: string; cliques: number }[]
   porPerfil: { perfil: string; sessoes: number; visitantes: number }[]
+  porPagina: { pagina: string; sessoes: number; visitantes: number; fontePrincipal: string }[]
+}
+
+interface IniciativaCanal {
+  canal: string
+  total: number
+  clienteIniciou: number
+  nosIniciamos: number
+  periodoInicio: string
+  periodoFim: string
+  calculadoEm: string
 }
 
 interface KommoFunil {
@@ -64,6 +75,7 @@ interface KommoFunil {
     porCanal: { canal: string; total: number }[]
     porPerfil: { perfil: string; total: number }[]
     capped: boolean
+    iniciativa: IniciativaCanal[]
   }
   leads: {
     total: number
@@ -102,6 +114,8 @@ interface Etapa {
   tooltip: string
   /** origem do dado, pra deixar claro que o funil cruza dois sistemas */
   fonte: 'GA4' | 'Kommo'
+  /** true quando o número é uma contagem parcial (varredura não terminou a tempo) */
+  parcial?: boolean
 }
 
 /**
@@ -172,6 +186,11 @@ function Funil({ etapas }: { etapas: Etapa[] }) {
                   <span className="text-[10px] uppercase tracking-wide bg-white/25 rounded px-1.5 py-0.5 shrink-0 font-medium">
                     {e.fonte}
                   </span>
+                  {e.parcial && (
+                    <span className="text-[10px] uppercase tracking-wide bg-amber-400 text-amber-950 rounded px-1.5 py-0.5 shrink-0 font-bold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" /> parcial
+                    </span>
+                  )}
                 </span>
                 <span className="text-white font-bold text-2xl tabular-nums shrink-0">
                   {e.valor === null ? '—' : fmt(e.valor)}
@@ -265,7 +284,10 @@ export default function FunilClient() {
     },
     {
       label: 'Conversas recebidas', valor: kommo?.conversas.total ?? null, icon: MessageCircle, cor: '#0F766E', fonte: 'Kommo',
-      tooltip: 'Conversas que chegaram na caixa de entrada do Kommo no período, por qualquer canal (WhatsApp, DM de Instagram, TikTok, Facebook) — inclusive quem não passou pelo site. Enquanto ninguém aceita a conversa no Kommo, ela fica parada nessa caixa.',
+      parcial: kommo?.conversas.capped,
+      tooltip: kommo?.conversas.capped
+        ? 'CONTAGEM PARCIAL: o período pedido tem gente demais na caixa de entrada do Kommo pra varrer inteiro dentro do tempo limite do servidor. Este número é menor que o real — use um período mais curto (ou mais recente) pra ver o valor exato.'
+        : 'Conversas que chegaram na caixa de entrada do Kommo no período, por qualquer canal (WhatsApp, DM de Instagram, TikTok, Facebook) — inclusive quem não passou pelo site. Enquanto ninguém aceita a conversa no Kommo, ela fica parada nessa caixa.',
     },
     {
       label: 'Leads comerciais', valor: kommo?.leads.comercial ?? null, icon: Briefcase, cor: '#134E4A', fonte: 'Kommo',
@@ -544,6 +566,46 @@ export default function FunilClient() {
         </div>
       </div>
 
+      {/* ── CAPTAÇÃO POR PÁGINA ─────────────────────────────────── */}
+      {(trafego?.porPagina.length || 0) > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+            Captação por página
+            <InfoTooltip text="elainedanelon.com.br tem várias páginas curtas além da home — /google, /tiktok, /alphaville, /morumbi etc. A home já foi mostrada acima (dominada pelo TikTok Ads); aqui está o restante, cada uma com sua própria fonte." />
+          </p>
+          <p className="text-xs text-gray-400 mb-4">
+            Todas as páginas do site com acesso no período, exceto a home (já detalhada acima).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[520px]">
+              <thead>
+                <tr className="text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                  <th className="text-left font-medium pb-2">Página</th>
+                  <th className="text-right font-medium pb-2">Visitas</th>
+                  <th className="text-right font-medium pb-2">Visitas únicas</th>
+                  <th className="text-left font-medium pb-2 pl-4">Fonte principal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {trafego?.porPagina.map(p => (
+                  <tr key={p.pagina} className="hover:bg-gray-50/60">
+                    <td className="py-2 pr-3 text-gray-700 font-mono text-xs">{p.pagina || '(vazia)'}</td>
+                    <td className="text-right tabular-nums text-gray-700">{fmt(p.sessoes)}</td>
+                    <td className="text-right tabular-nums font-semibold text-gray-800">{fmt(p.visitantes)}</td>
+                    <td className="pl-4">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: corFonte(p.fontePrincipal) }} />
+                        {p.fontePrincipal}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ── LINK NA BIO POR PERFIL ──────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -630,33 +692,49 @@ export default function FunilClient() {
               </p>
             )}
 
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-              <div className="text-[11px] text-gray-500 leading-relaxed">
-                <p className="mb-1">
-                  <strong className="text-gray-600">Parte destas conversas fomos nós que começamos</strong> —
-                  automação (ManyChat) ou a própria equipe. Medição feita em 25/08/2026 sobre 7 dias, separando
-                  quem mandou a primeira mensagem:
-                </p>
-                <ul className="space-y-0.5 ml-3">
-                  <li>
-                    <strong>Instagram DM:</strong> de 138 conversas, 5 (≈4%) nós abrimos e ninguém respondeu.
-                  </li>
-                  <li>
-                    <strong>WhatsApp:</strong> de 149 conversas, 36 (≈24%) nós abrimos e ninguém respondeu.
-                  </li>
-                  <li>
-                    30% não puderam ser classificadas — o Kommo não guardou registro das mensagens delas.
-                  </li>
-                </ul>
-                <p className="mt-1.5">
-                  Esse desconto <strong>não está aplicado</strong> nos números acima: separar conversa por conversa
-                  exige varrer o histórico de mensagens do Kommo, o que leva ~2 min só para 7 dias — inviável de
-                  fazer enquanto a página carrega. Para descontar de verdade seria preciso o Kommo nos avisar de
-                  cada mensagem na hora (webhook) e guardarmos isso no nosso banco.
+            {(kommo?.conversas.iniciativa.length || 0) > 0 ? (
+              <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="text-[11px] text-gray-500 leading-relaxed">
+                  <p className="mb-1">
+                    <strong className="text-gray-600">Quem mandou a primeira mensagem, por canal</strong> — parte
+                    destas conversas fomos nós (equipe ou automação) que começamos, não é a pessoa procurando a
+                    Danelon por conta própria:
+                  </p>
+                  <ul className="space-y-0.5 ml-3">
+                    {kommo?.conversas.iniciativa
+                      .filter(i => i.total > 0)
+                      .map(i => (
+                        <li key={i.canal}>
+                          <strong>{i.canal}:</strong> de {fmt(i.total)} conversas,{' '}
+                          <strong>{fmt(i.nosIniciamos)} ({fmtPct(i.nosIniciamos / i.total)}) nós começamos</strong>,
+                          {' '}{fmt(i.clienteIniciou)} ({fmtPct(i.clienteIniciou / i.total)}) a pessoa procurou primeiro.
+                        </li>
+                      ))}
+                  </ul>
+                  <p className="mt-1.5">
+                    Calculado em {new Date(kommo!.conversas.iniciativa[0].calculadoEm).toLocaleDateString('pt-BR')} sobre{' '}
+                    {kommo!.conversas.iniciativa[0].periodoInicio.split('-').reverse().join('/')} a{' '}
+                    {kommo!.conversas.iniciativa[0].periodoFim.split('-').reverse().join('/')} — não recalcula ao
+                    vivo com o filtro de período acima. Varrer isso de verdade exige buscar todo o histórico de
+                    mensagens do Kommo (a API não filtra por conversa), o que passa de 5 minutos para 28 dias —
+                    inviável dentro do carregamento da página. Pra atualizar, rode{' '}
+                    <code className="bg-gray-100 px-1 rounded">scripts/kommo_iniciativa.py</code>.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  <strong className="text-gray-600">Quem começou cada conversa ainda não foi calculado.</strong>{' '}
+                  Parte do que aparece acima é a própria equipe (ou automação) mandando a primeira mensagem, não
+                  a pessoa procurando a Danelon — sobretudo no Instagram. Rode{' '}
+                  <code className="bg-gray-100 px-1 rounded">scripts/kommo_iniciativa.py</code> pra gerar esse
+                  recorte (não roda ao vivo: exige varrer o histórico de mensagens do Kommo, o que leva minutos).
                 </p>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Conversa que virou lead */}

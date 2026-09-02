@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { DollarSign, Plus, Trash2, Loader2, HelpCircle, AlertTriangle } from 'lucide-react'
+import { DollarSign, Plus, Trash2, Loader2, HelpCircle, AlertTriangle, Eye, MousePointerClick, Target } from 'lucide-react'
 
 const GOLD = '#B8924A'
 const fmtBRL = (v: number) =>
@@ -26,7 +26,17 @@ interface Investimento {
   destino: 'site' | 'perfil'
   mes: string
   valor: number
+  impressoes: number | null
+  cliques: number | null
+  resultados: number | null
   observacoes: string | null
+}
+
+/** Como cada plataforma chama sua própria métrica de "resultado" — não são comparáveis entre si. */
+const ROTULO_RESULTADO: Record<string, string> = {
+  'TikTok Ads': 'Conversões (clique em contato)',
+  'Google Ads': 'Conversões',
+  'Meta': 'Resultados (perfil, alcance, leads — misto)',
 }
 
 interface FonteFunil {
@@ -64,6 +74,9 @@ export default function InvestimentoSection({
   const [destino, setDestino] = useState<'site' | 'perfil'>('site')
   const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7))
   const [valor, setValor] = useState('')
+  const [impressoes, setImpressoes] = useState('')
+  const [cliques, setCliques] = useState('')
+  const [resultados, setResultados] = useState('')
 
   const buscar = useCallback(async () => {
     setCarregando(true)
@@ -90,11 +103,19 @@ export default function InvestimentoSection({
       const res = await fetch('/api/funil/investimento', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plataforma, destino, mes: `${mes}-01`, valor }),
+        body: JSON.stringify({
+          plataforma, destino, mes: `${mes}-01`, valor,
+          impressoes: impressoes || null,
+          cliques: cliques || null,
+          resultados: resultados || null,
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Erro ao salvar.')
       setValor('')
+      setImpressoes('')
+      setCliques('')
+      setResultados('')
       setFormAberto(false)
       buscar()
     } catch (e) {
@@ -123,6 +144,15 @@ export default function InvestimentoSection({
       const gastoPerfil = doPeriodo.filter(i => i.destino === 'perfil').reduce((s, i) => s + Number(i.valor), 0)
       const gastoTotal = gastoSite + gastoPerfil
 
+      // topo do funil reportado pela própria plataforma (opcional por lançamento)
+      const somaOpcional = (campo: 'impressoes' | 'cliques' | 'resultados') =>
+        doPeriodo.some(i => i[campo] !== null)
+          ? doPeriodo.reduce((s, i) => s + (i[campo] ?? 0), 0)
+          : null
+      const impressoesPlataforma = somaOpcional('impressoes')
+      const cliquesPlataforma = somaOpcional('cliques')
+      const resultadosPlataforma = somaOpcional('resultados')
+
       const grupos = GRUPOS_POR_PLATAFORMA[p]
       const fontes = porFonte.filter(f => grupos.includes(f.grupo))
       const visitas = fontes.reduce((s, f) => s + f.sessoes, 0)
@@ -133,6 +163,9 @@ export default function InvestimentoSection({
         gastoSite,
         gastoPerfil,
         gastoTotal,
+        impressoesPlataforma,
+        cliquesPlataforma,
+        resultadosPlataforma,
         visitas,
         contatos,
         // custo por contato usa o gasto TOTAL da plataforma: mesmo a verba que
@@ -209,6 +242,37 @@ export default function InvestimentoSection({
                 className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white" />
             </div>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t border-gray-200">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                Impressões
+                <InfoTooltip text="Opcional. Vem do relatório que a própria plataforma exporta (Google Ads, Meta Ads Manager, TikTok Ads Manager) — quantas vezes o anúncio apareceu no período." />
+              </label>
+              <input type="text" inputMode="numeric" value={impressoes} placeholder="ex: 171485"
+                onChange={e => setImpressoes(e.target.value.replace(/\D/g, ''))}
+                className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                Cliques / visualizações
+                <InfoTooltip text="Opcional. Cliques ou visualizações reportados pela plataforma — não é o clique no botão de contato do site, esse já vem do GA4 automaticamente." />
+              </label>
+              <input type="text" inputMode="numeric" value={cliques} placeholder="ex: 79327"
+                onChange={e => setCliques(e.target.value.replace(/\D/g, ''))}
+                className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                Resultados
+                <InfoTooltip text="Opcional. O 'resultado' que a própria plataforma contabilizou (conversão, lead etc.) — a definição varia por plataforma, então não dá pra somar Google + Meta + TikTok num número só." />
+              </label>
+              <input type="text" inputMode="numeric" value={resultados} placeholder="ex: 41468"
+                onChange={e => setResultados(e.target.value.replace(/\D/g, ''))}
+                className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white" />
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 mt-3">
             <button onClick={salvar} disabled={salvando}
               className="text-xs px-3 py-1.5 rounded-lg text-white font-medium disabled:opacity-50"
@@ -222,6 +286,47 @@ export default function InvestimentoSection({
             <span className="text-[11px] text-gray-400 ml-1">
               Lançar o mesmo mês de novo atualiza o valor, não duplica.
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Topo do funil: o que cada plataforma reportou antes de qualquer clique
+          chegar no site — impressão, clique/visualização, resultado próprio. */}
+      {linhas.some(l => l.impressoesPlataforma !== null || l.cliquesPlataforma !== null || l.resultadosPlataforma !== null) && (
+        <div className="mb-5">
+          <p className="text-xs text-gray-500 mb-2.5 flex items-center gap-1">
+            Topo do funil, reportado pela própria plataforma
+            <InfoTooltip text="Impressão, clique e resultado como o Google Ads, o Meta Ads Manager e o TikTok Ads Manager contam — antes de qualquer coisa acontecer no site. Alimenta manualmente pelo relatório exportado de cada plataforma; 'Resultado' não é comparável entre elas, cada uma define diferente." />
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {linhas
+              .filter(l => l.impressoesPlataforma !== null || l.cliquesPlataforma !== null || l.resultadosPlataforma !== null)
+              .map(l => (
+                <div key={l.plataforma} className="rounded-lg border border-gray-200 p-3.5">
+                  <p className="text-xs font-semibold text-gray-700 mb-2.5">{l.plataforma}</p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500 flex items-center gap-1"><Eye className="w-3 h-3" /> Impressões</span>
+                      <span className="tabular-nums font-medium text-gray-800">
+                        {l.impressoesPlataforma !== null ? fmt(l.impressoesPlataforma) : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500 flex items-center gap-1"><MousePointerClick className="w-3 h-3" /> Cliques/views</span>
+                      <span className="tabular-nums font-medium text-gray-800">
+                        {l.cliquesPlataforma !== null ? fmt(l.cliquesPlataforma) : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs pt-1.5 border-t border-gray-100">
+                      <span className="text-gray-500 flex items-center gap-1"><Target className="w-3 h-3" /> Resultados</span>
+                      <span className="tabular-nums font-semibold" style={{ color: GOLD }}>
+                        {l.resultadosPlataforma !== null ? fmt(l.resultadosPlataforma) : '—'}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2 leading-snug">{ROTULO_RESULTADO[l.plataforma]}</p>
+                </div>
+              ))}
           </div>
         </div>
       )}

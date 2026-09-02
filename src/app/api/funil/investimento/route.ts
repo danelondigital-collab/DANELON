@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investimento_trafego')
-    .select('id, plataforma, destino, mes, valor, observacoes')
+    .select('id, plataforma, destino, mes, valor, impressoes, cliques, resultados, observacoes')
     .order('mes', { ascending: false })
     .order('plataforma')
 
@@ -59,7 +59,16 @@ export async function POST(request: NextRequest) {
   const supabase = await exigirAdmin()
   if (!supabase) return NextResponse.json({ error: 'Acesso restrito ao administrador.' }, { status: 403 })
 
-  let body: { plataforma?: string; destino?: string; mes?: string; valor?: number | string; observacoes?: string }
+  let body: {
+    plataforma?: string
+    destino?: string
+    mes?: string
+    valor?: number | string
+    impressoes?: number | string | null
+    cliques?: number | string | null
+    resultados?: number | string | null
+    observacoes?: string
+  }
   try {
     body = await request.json()
   } catch {
@@ -71,6 +80,17 @@ export async function POST(request: NextRequest) {
   const mes = (body.mes || '').trim()
   const valor = typeof body.valor === 'string' ? parseFloat(body.valor.replace(',', '.')) : body.valor
 
+  /** Campo opcional: string vazia/undefined vira null, senão precisa ser um inteiro >= 0. */
+  function parseInteiroOpcional(v: number | string | null | undefined): number | null | 'invalido' {
+    if (v === undefined || v === null || v === '') return null
+    const n = typeof v === 'string' ? parseInt(v.replace(/\./g, ''), 10) : v
+    if (!Number.isFinite(n) || n < 0) return 'invalido'
+    return n
+  }
+  const impressoes = parseInteiroOpcional(body.impressoes)
+  const cliques = parseInteiroOpcional(body.cliques)
+  const resultados = parseInteiroOpcional(body.resultados)
+
   if (!plataforma) return NextResponse.json({ error: 'Informe a plataforma.' }, { status: 400 })
   if (!DATE_RE.test(mes)) return NextResponse.json({ error: 'Informe o mês (formato aaaa-mm-01).' }, { status: 400 })
   if (destino !== 'site' && destino !== 'perfil') {
@@ -78,6 +98,9 @@ export async function POST(request: NextRequest) {
   }
   if (valor === undefined || valor === null || Number.isNaN(valor) || valor < 0) {
     return NextResponse.json({ error: 'Informe um valor válido.' }, { status: 400 })
+  }
+  if (impressoes === 'invalido' || cliques === 'invalido' || resultados === 'invalido') {
+    return NextResponse.json({ error: 'Impressões, cliques e resultados precisam ser números inteiros positivos.' }, { status: 400 })
   }
 
   const { data, error } = await supabase
@@ -88,6 +111,9 @@ export async function POST(request: NextRequest) {
         destino,
         mes: `${mes.slice(0, 7)}-01`, // normaliza sempre pro dia 1
         valor,
+        impressoes,
+        cliques,
+        resultados,
         observacoes: body.observacoes?.trim() || null,
       },
       { onConflict: 'plataforma,destino,mes' }

@@ -357,10 +357,13 @@ export async function funilFundo(fromUnix: number, toUnix: number) {
   }
 
   const t0 = Date.now()
-  // Sem a etapa de classificação de contato, todo o orçamento vai pra paginação.
   // Fica abaixo do maxDuration=60s da rota pra sobrar tempo da busca de leads
-  // que roda depois e da serialização da resposta.
-  const PAGINATION_BUDGET_MS = 42_000
+  // que roda depois e da serialização da resposta. Um mês fechado inteiro (ex:
+  // 01/08 a 31/08, pedido alguns dias depois de virar o mês) já passa de 1.500
+  // conversas e precisa paginar ~7 páginas pra sair do período — com 42s isso
+  // ficava perto demais do limite e girava "capped" (contagem parcial) só por
+  // a rede estar um pouco mais lenta que o normal num dado carregamento.
+  const PAGINATION_BUDGET_MS = 48_000
 
   const porCanal = new Map<string, number>()
   const porPerfil = new Map<string, number>()

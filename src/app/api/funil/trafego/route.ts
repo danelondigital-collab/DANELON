@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     const endDate = endParam && DATE_RE.test(endParam) ? endParam : DEFAULT_END
     const dateRanges = [{ startDate, endDate }]
 
-    const [totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw] = await Promise.all([
+    const [totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw, porPaginaRaw] = await Promise.all([
       // topo do funil, sem fatiar
       runReport({
         dateRanges,
@@ -115,6 +115,17 @@ export async function GET(request: NextRequest) {
           },
         },
       }),
+      // captação por página (landingPage x origem) — cada redirect curto que
+      // criamos (/google, /tiktok, /alphaville, /morumbi...) tem sua própria
+      // fonte dominante, e isso fica escondido dentro do total da home
+      runReport({
+        dateRanges,
+        dimensions: [{ name: 'landingPage' }, { name: 'sessionSourceMedium' }],
+        metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
+        dimensionFilter: hostFilter(),
+        orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+        limit: '300',
+      }),
     ])
 
     // junta sessões + cliques na mesma chave de origem, depois agrupa por plataforma
@@ -150,6 +161,33 @@ export async function GET(request: NextRequest) {
       }))
       .sort((a, b) => b.sessoes - a.sessoes)
 
+    // agrupa por página (excluindo a home, já coberta em `home`/`porFonte`
+    // acima) e, dentro de cada página, pela mesma classificação de origem
+    const porPaginaAcc = new Map<string, { sessoes: number; visitantes: number; porFonte: Map<string, number> }>()
+    for (const r of (porPaginaRaw.rows || []) as Row[]) {
+      const pagina = r.dimensionValues[0].value
+      if (pagina === '/') continue
+      const sm = r.dimensionValues[1].value
+      const sess = num(r.metricValues[0]?.value)
+      const users = num(r.metricValues[1]?.value)
+      const { grupo } = classificar(sm)
+      const cur = porPaginaAcc.get(pagina) || { sessoes: 0, visitantes: 0, porFonte: new Map<string, number>() }
+      cur.sessoes += sess
+      cur.visitantes += users
+      cur.porFonte.set(grupo, (cur.porFonte.get(grupo) || 0) + sess)
+      porPaginaAcc.set(pagina, cur)
+    }
+    const porPagina = Array.from(porPaginaAcc.entries())
+      .map(([pagina, v]) => ({
+        pagina,
+        sessoes: v.sessoes,
+        visitantes: v.visitantes,
+        fontePrincipal: Array.from(v.porFonte.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Não identificado',
+      }))
+      .filter(p => p.sessoes >= 1)
+      .sort((a, b) => b.sessoes - a.sessoes)
+      .slice(0, 20)
+
     const totaisRow = totais.rows?.[0]?.metricValues
     const homeRow = homeRaw.rows?.[0]?.metricValues
     const totalCliques = porFonte.reduce((s, f) => s + f.cliques, 0)
@@ -180,6 +218,7 @@ export async function GET(request: NextRequest) {
         sessoes: num(r.metricValues[0]?.value),
         visitantes: num(r.metricValues[1]?.value),
       })),
+      porPagina,
     })
   } catch (error) {
     console.error('Erro ao montar o funil de tráfego (GA4):', error)
