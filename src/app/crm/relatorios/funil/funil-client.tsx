@@ -613,12 +613,28 @@ export default function FunilClient() {
             Link na bio, por perfil
             <InfoTooltip text="Sessões que entraram pelos links curtos configurados na bio de cada perfil do Instagram (elainedanelon.com.br/ig, /elaine, /morumbi etc). Só conta a partir do momento em que cada perfil trocou o link." />
           </p>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-3 mb-4">
+            <div className="flex items-center justify-between text-sm mb-0.5">
+              <span className="text-gray-700 font-medium flex items-center gap-1">
+                www.elainedanelon.com.br (raiz)
+                <InfoTooltip text="Total de visitas na home, somando TODAS as origens — TikTok Ads, link de bio identificado, acesso direto, tudo. Não é mais um perfil da lista abaixo, é o total geral pra comparar com o que veio identificado por link de bio." />
+              </span>
+              <span className="font-bold text-gray-900 tabular-nums">{fmt(trafego?.home.sessoes ?? 0)}</span>
+            </div>
+            <p className="text-[11px] text-gray-400">
+              {fmt(trafego?.home.visitantes ?? 0)} visitas únicas · inclui todas as origens, não só link de bio
+            </p>
+          </div>
+
           {(trafego?.porPerfil.length || 0) === 0 ? (
             <p className="text-sm text-gray-400">
               Nenhum acesso por link identificado ainda. Aparece assim que os perfis trocarem o link da bio.
             </p>
           ) : (
-            <ul className="space-y-2.5">
+            <>
+              <p className="text-[11px] text-gray-400 mb-2">Desse total, o que veio identificado por link de bio:</p>
+              <ul className="space-y-2.5">
               {trafego?.porPerfil.map(p => (
                 <li key={p.perfil}>
                   <div className="flex items-center justify-between text-sm mb-1">
@@ -632,7 +648,8 @@ export default function FunilClient() {
                   />
                 </li>
               ))}
-            </ul>
+              </ul>
+            </>
           )}
         </div>
 
