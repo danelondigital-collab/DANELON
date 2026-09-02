@@ -603,7 +603,10 @@ export default function FunilClient() {
                 <li key={p.perfil}>
                   <div className="flex items-center justify-between text-sm mb-1">
                     <span className="text-gray-600">{p.perfil}</span>
-                    <span className="font-semibold text-gray-900 tabular-nums">{fmt(p.sessoes)}</span>
+                    <span className="flex items-baseline gap-1.5">
+                      <span className="font-semibold text-gray-900 tabular-nums">{fmt(p.sessoes)}</span>
+                      <span className="text-xs text-gray-400 tabular-nums">({fmt(p.visitantes)} pessoas)</span>
+                    </span>
                   </div>
                   <Barra
                     valor={p.sessoes}
