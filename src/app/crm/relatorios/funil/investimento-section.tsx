@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DollarSign, Plus, Trash2, Loader2, HelpCircle, AlertTriangle, Eye, MousePointerClick, Target, Building2, ArrowRight } from 'lucide-react'
 
 const GOLD = '#B8924A'
@@ -105,18 +105,25 @@ export default function InvestimentoSection({
   const [cliques, setCliques] = useState('')
   const [resultados, setResultados] = useState('')
 
+  // Mesma proteção de rodada das outras buscas da página: resposta de um período
+  // antigo não pode chegar depois e sobrescrever a do período atual.
+  const reqIdRef = useRef(0)
+
   const buscar = useCallback(async () => {
+    const reqId = ++reqIdRef.current
     setCarregando(true)
     setErro(null)
     try {
       const res = await fetch(`/api/funil/investimento?start=${range.start}&end=${range.end}`, { cache: 'no-store' })
       const json = await res.json()
+      if (reqId !== reqIdRef.current) return
       if (!res.ok) throw new Error(json.error || 'Erro ao carregar investimentos.')
       setInvestimentos(json.investimentos)
     } catch (e) {
+      if (reqId !== reqIdRef.current) return
       setErro(e instanceof Error ? e.message : 'Erro ao carregar investimentos.')
     } finally {
-      setCarregando(false)
+      if (reqId === reqIdRef.current) setCarregando(false)
     }
   }, [range])
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import {
   Filter, Loader2, RefreshCw, MousePointerClick, Users, Eye, MessageCircle,
@@ -225,33 +225,47 @@ export default function FunilClient() {
   const [carregandoTrafego, setCarregandoTrafego] = useState(true)
   const [carregandoKommo, setCarregandoKommo] = useState(true)
 
+  // Contadores de rodada: a busca do Kommo pode levar dezenas de segundos e a do
+  // GA4 alguns segundos. Se o período muda no meio, a resposta antiga chega depois
+  // da nova e sobrescreve a tela com dados do período errado — daí a sensação de
+  // "mudei a data e esse quadro não atualizou". Cada busca só aplica o resultado
+  // se ainda for a rodada mais recente.
+  const trafegoReqId = useRef(0)
+  const kommoReqId = useRef(0)
+
   const buscarTrafego = useCallback(async () => {
+    const reqId = ++trafegoReqId.current
     setCarregandoTrafego(true)
     setErroTrafego(null)
     try {
       const res = await fetch(`/api/funil/trafego?start=${range.start}&end=${range.end}`, { cache: 'no-store' })
       const json = await safeJson(res)
+      if (reqId !== trafegoReqId.current) return
       if (!res.ok) throw new Error(json.error || 'Erro ao carregar tráfego.')
       setTrafego(json)
     } catch (e) {
+      if (reqId !== trafegoReqId.current) return
       setErroTrafego(e instanceof Error ? e.message : 'Erro ao carregar tráfego.')
     } finally {
-      setCarregandoTrafego(false)
+      if (reqId === trafegoReqId.current) setCarregandoTrafego(false)
     }
   }, [range])
 
   const buscarKommo = useCallback(async () => {
+    const reqId = ++kommoReqId.current
     setCarregandoKommo(true)
     setErroKommo(null)
     try {
       const res = await fetch(`/api/funil/kommo?start=${range.start}&end=${range.end}`, { cache: 'no-store' })
       const json = await safeJson(res)
+      if (reqId !== kommoReqId.current) return
       if (!res.ok) throw new Error(json.error || 'Erro ao carregar Kommo.')
       setKommo(json)
     } catch (e) {
+      if (reqId !== kommoReqId.current) return
       setErroKommo(e instanceof Error ? e.message : 'Erro ao carregar Kommo.')
     } finally {
-      setCarregandoKommo(false)
+      if (reqId === kommoReqId.current) setCarregandoKommo(false)
     }
   }, [range])
 
