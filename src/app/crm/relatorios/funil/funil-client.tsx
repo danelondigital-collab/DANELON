@@ -311,6 +311,21 @@ export default function FunilClient() {
   const maxSessoes = Math.max(...(trafego?.porFonte.map(f => f.sessoes) || [1]), 1)
   const maxCanal = Math.max(...(kommo?.conversas.porCanal.map(c => c.total) || [1]), 1)
 
+  /**
+   * "Quem começou a conversa" vem de um snapshot pré-calculado, que pode ser de
+   * um período diferente do filtro. O aviso disso ficava só no rodapé em cinza
+   * claro e passava batido — daí a impressão de que o quadro não atualizou.
+   * Aqui a divergência vira um selo visível ao lado do título.
+   */
+  const snapshotIniciativa = kommo?.conversas.iniciativa?.[0]
+  const snapshotForaDoFiltro = Boolean(
+    snapshotIniciativa &&
+    (snapshotIniciativa.periodoInicio !== range.start || snapshotIniciativa.periodoFim !== range.end)
+  )
+  const snapshotPeriodo = snapshotIniciativa
+    ? `${snapshotIniciativa.periodoInicio.split('-').reverse().join('/')} a ${snapshotIniciativa.periodoFim.split('-').reverse().join('/')}`
+    : ''
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
@@ -748,6 +763,12 @@ export default function FunilClient() {
               <Megaphone className="w-3.5 h-3.5" /> Quem começou a conversa, por canal
               <InfoTooltip text="Quem mandou a PRIMEIRA mensagem de cada conversa nova: a própria Danelon (equipe ou automação) abordando, ou a pessoa procurando por conta própria. Contar conversa sem essa distinção infla o resultado do tráfego pago com contato que a gente foi buscar." />
             </p>
+            {snapshotForaDoFiltro && (
+              <span className="text-[11px] font-semibold bg-amber-100 text-amber-800 rounded-md px-2 py-1 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                Outro período: {snapshotPeriodo}
+              </span>
+            )}
           </div>
           <p className="text-xs text-gray-400 mb-4">
             Nós abordamos primeiro vs. a pessoa procurou primeiro, em cada canal.

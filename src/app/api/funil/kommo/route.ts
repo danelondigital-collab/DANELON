@@ -35,12 +35,16 @@ async function iniciativaMaisRecente() {
       .order('calculado_em', { ascending: false })
     if (error || !data) return []
 
-    // Um snapshot por canal: o mais recente já calculado pra ele.
-    const porCanal = new Map<string, IniciativaRow>()
-    for (const row of data as IniciativaRow[]) {
-      if (!porCanal.has(row.canal)) porCanal.set(row.canal, row)
-    }
-    return Array.from(porCanal.values())
+    const linhas = data as IniciativaRow[]
+    if (linhas.length === 0) return []
+
+    // Só as linhas da rodada mais recente (mesmo período). Pegar "o mais recente
+    // por canal" misturava períodos: um canal sem conversa no cálculo novo ficava
+    // exibindo o número de um período antigo ao lado dos atualizados.
+    const maisRecente = linhas[0]
+    return linhas.filter(
+      r => r.periodo_inicio === maisRecente.periodo_inicio && r.periodo_fim === maisRecente.periodo_fim
+    )
   } catch {
     return []
   }

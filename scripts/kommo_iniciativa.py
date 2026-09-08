@@ -13,8 +13,13 @@ rota da Vercel. Por isso roda manualmente e guarda o resultado no Supabase
 
 Uso:
     python3 scripts/kommo_iniciativa.py [dias]
+    python3 scripts/kommo_iniciativa.py <início aaaa-mm-dd> <fim aaaa-mm-dd>
 
-    dias: tamanho da janela terminando ontem (padrão: 28)
+    dias: tamanho da janela terminando ontem, no fuso de Brasília (padrão: 28)
+
+    A forma com duas datas é a que casa exatamente com o filtro de período do
+    relatório — use ela quando quiser que o quadro "Quem começou a conversa"
+    bata com o resto da página.
 """
 
 import json
@@ -170,10 +175,24 @@ def salvar_snapshot(canal, periodo_inicio, periodo_fim, total, cliente_iniciou, 
 
 
 def main():
-    dias = int(sys.argv[1]) if len(sys.argv) > 1 else 28
-    end_date = datetime.now(timezone.utc).date() - timedelta(days=1)
-    start_date = end_date - timedelta(days=dias - 1)
+    # Fuso de Brasília: "ontem" tem que ser ontem AQUI. Usar UTC deslocava a
+    # janela um dia inteiro sempre que o script rodava depois das 21h locais.
     tz = timezone(timedelta(hours=-3))
+
+    args = sys.argv[1:]
+    if len(args) == 2:
+        # forma explícita: aaaa-mm-dd aaaa-mm-dd — usada pra casar exatamente
+        # com o filtro de período do relatório
+        start_date = date.fromisoformat(args[0])
+        end_date = date.fromisoformat(args[1])
+        if start_date > end_date:
+            raise SystemExit("A data inicial não pode ser maior que a final.")
+        dias = (end_date - start_date).days + 1
+    else:
+        dias = int(args[0]) if args else 28
+        end_date = datetime.now(tz).date() - timedelta(days=1)
+        start_date = end_date - timedelta(days=dias - 1)
+
     from_unix = int(datetime.combine(start_date, datetime.min.time()).replace(tzinfo=tz).timestamp())
     to_unix = int(datetime.combine(end_date, datetime.max.time()).replace(tzinfo=tz).timestamp())
 
