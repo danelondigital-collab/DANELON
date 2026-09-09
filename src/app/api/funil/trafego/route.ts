@@ -36,6 +36,14 @@ function classificar(sourceMedium: string): { grupo: string; pago: boolean } {
   return { grupo: 'Outros', pago: false }
 }
 
+/** Nome amigável da plataforma do link de bio (o utm_source do link curto). */
+const PLATAFORMA_BIO: Record<string, string> = {
+  instagram: 'Instagram',
+  ig: 'Instagram',
+  tiktok: 'TikTok',
+  facebook: 'Facebook',
+}
+
 interface Row {
   dimensionValues: { value: string }[]
   metricValues: { value: string }[]
@@ -85,10 +93,12 @@ export async function GET(request: NextRequest) {
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
         limit: '20',
       }),
-      // link na bio por perfil (utm_campaign)
+      // link na bio por perfil (utm_campaign) e por plataforma (utm_source).
+      // A plataforma entra como dimensão porque o mesmo perfil pode ter link de
+      // bio no Instagram e no TikTok — sem ela os dois viram um número só.
       runReport({
         dateRanges,
-        dimensions: [{ name: 'sessionCampaignName' }],
+        dimensions: [{ name: 'sessionCampaignName' }, { name: 'sessionSource' }],
         metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
         dimensionFilter: {
           andGroup: {
@@ -99,7 +109,7 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
-        limit: '15',
+        limit: '30',
       }),
       // a home (elainedanelon.com.br/) isolada: é a página que está no link da
       // bio de todos os perfis, então é nela que o tráfego de Instagram cai
@@ -178,6 +188,7 @@ export async function GET(request: NextRequest) {
       })),
       porPerfil: ((perfilRaw.rows || []) as Row[]).map(r => ({
         perfil: r.dimensionValues[0].value.replace('perfil_', ''),
+        fonte: PLATAFORMA_BIO[r.dimensionValues[1]?.value?.toLowerCase()] || r.dimensionValues[1]?.value || '—',
         sessoes: num(r.metricValues[0]?.value),
         visitantes: num(r.metricValues[1]?.value),
       })),

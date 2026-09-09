@@ -58,6 +58,8 @@ interface FonteFunil {
 
 interface PerfilFunil {
   perfil: string
+  /** plataforma do link de bio (Instagram, TikTok…) */
+  fonte: string
   sessoes: number
   visitantes: number
 }
@@ -238,7 +240,9 @@ export default function InvestimentoSection({
       const chave = normalizarUnidade(u)
 
       const lancamento = investimentos.find(i => normalizarUnidade(i.unidade) === chave)
-      const perfil = porPerfil.find(p => normalizarUnidade(p.perfil).includes(chave))
+      // Soma todas as plataformas: a mesma unidade pode ter link de bio no
+      // Instagram e no TikTok, e pegar só o primeiro subcontaria a visita.
+      const perfis = porPerfil.filter(p => normalizarUnidade(p.perfil).includes(chave))
       const botao = botoes.find(b => normalizarUnidade(b.nome).includes(chave))
 
       return {
@@ -246,11 +250,11 @@ export default function InvestimentoSection({
         valor: lancamento ? Number(lancamento.valor) : null,
         impressoes: lancamento?.impressoes ?? null,
         cliquesMeta: lancamento?.cliques ?? null,
-        visitasPerfil: perfil?.sessoes ?? null,
-        pessoasPerfil: perfil?.visitantes ?? null,
+        visitasPerfil: perfis.length > 0 ? perfis.reduce((s, p) => s + p.sessoes, 0) : null,
+        pessoasPerfil: perfis.length > 0 ? perfis.reduce((s, p) => s + p.visitantes, 0) : null,
         cliquesBotao: botao?.cliques ?? null,
         pessoasBotao: botao?.pessoas ?? null,
-        temDado: Boolean(lancamento || perfil || botao),
+        temDado: Boolean(lancamento || perfis.length > 0 || botao),
       }
     }).filter(u => u.temDado)
   }, [investimentos, porPerfil, botoes])

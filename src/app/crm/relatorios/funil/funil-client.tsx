@@ -55,7 +55,8 @@ interface TrafegoFunil {
   home: { sessoes: number; visitantes: number; pageViews: number }
   porFonte: FonteFunil[]
   botoes: { nome: string; cliques: number; pessoas: number }[]
-  porPerfil: { perfil: string; sessoes: number; visitantes: number }[]
+  /** fonte = plataforma do link de bio; o mesmo perfil pode ter link no Instagram e no TikTok */
+  porPerfil: { perfil: string; fonte: string; sessoes: number; visitantes: number }[]
 }
 
 interface IniciativaCanal {
@@ -629,9 +630,20 @@ export default function FunilClient() {
               <p className="text-[11px] text-gray-400 mb-2">Desse total, o que veio identificado por link de bio:</p>
               <ul className="space-y-2.5">
               {trafego?.porPerfil.map(p => (
-                <li key={p.perfil}>
+                <li key={`${p.perfil}-${p.fonte}`}>
                   <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-gray-600">{p.perfil}</span>
+                    <span className="text-gray-600 flex items-center gap-1.5">
+                      {p.perfil}
+                      <span
+                        className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 font-medium"
+                        style={{
+                          backgroundColor: `${corFonte(p.fonte)}1A`,
+                          color: corFonte(p.fonte) === '#D1D5DB' ? '#6B7280' : corFonte(p.fonte),
+                        }}
+                      >
+                        {p.fonte}
+                      </span>
+                    </span>
                     <span className="flex items-baseline gap-1.5">
                       <span className="font-semibold text-gray-900 tabular-nums">{fmt(p.sessoes)}</span>
                       <span className="text-xs text-gray-400 tabular-nums">({fmt(p.visitantes)} pessoas)</span>
@@ -640,7 +652,7 @@ export default function FunilClient() {
                   <Barra
                     valor={p.sessoes}
                     max={Math.max(...(trafego?.porPerfil.map(x => x.sessoes) || [1]), 1)}
-                    cor="#C13584"
+                    cor={corFonte(p.fonte) === '#D1D5DB' ? '#C13584' : corFonte(p.fonte)}
                   />
                 </li>
               ))}
