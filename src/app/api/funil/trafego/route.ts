@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     const endDate = endParam && DATE_RE.test(endParam) ? endParam : DEFAULT_END
     const dateRanges = [{ startDate, endDate }]
 
-    const [totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw] = await Promise.all([
+    const [totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw, cliquesTotalRaw] = await Promise.all([
       // topo do funil, sem fatiar
       runReport({
         dateRanges,
@@ -125,6 +125,15 @@ export async function GET(request: NextRequest) {
           },
         },
       }),
+      // Pessoas DISTINTAS que clicaram em qualquer botão de contato — sem
+      // nenhuma dimensão de propósito. "Usuários" não é somável: quem clica em
+      // Morumbi e em Goiânia aparece nas duas linhas, então somar as linhas por
+      // botão inflava o total em mais de 4x (22.630 contra 5.364 reais).
+      runReport({
+        dateRanges,
+        metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
+        dimensionFilter: hostAndButtonClicksFilter(),
+      }),
     ])
 
     // junta sessões + cliques na mesma chave de origem, depois agrupa por plataforma
@@ -162,8 +171,11 @@ export async function GET(request: NextRequest) {
 
     const totaisRow = totais.rows?.[0]?.metricValues
     const homeRow = homeRaw.rows?.[0]?.metricValues
-    const totalCliques = porFonte.reduce((s, f) => s + f.cliques, 0)
-    const totalUsuariosQueClicaram = porFonte.reduce((s, f) => s + f.usuariosQueClicaram, 0)
+    // Vem da consulta sem dimensão: é gente distinta de verdade, não a soma das
+    // linhas por fonte (que contava duas vezes quem visitou por origens diferentes).
+    const cliquesTotalRow = cliquesTotalRaw.rows?.[0]?.metricValues
+    const totalCliques = num(cliquesTotalRow?.[0]?.value)
+    const totalUsuariosQueClicaram = num(cliquesTotalRow?.[1]?.value)
 
     return NextResponse.json({
       updatedAt: new Date().toISOString(),

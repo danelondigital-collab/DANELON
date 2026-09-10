@@ -663,10 +663,24 @@ export default function FunilClient() {
 
         {/* Botões mais clicados */}
         <div className="bg-white rounded-xl border border-amber-200 p-5">
-          <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-1.5">
+          <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
             Qual unidade a pessoa procurou
-            <InfoTooltip text="Cliques por botão de contato do site, e ao lado quantas pessoas diferentes clicaram — a mesma pessoa pode clicar mais de uma vez, então cliques costuma ser maior que pessoas." />
+            <InfoTooltip text="Cliques por botão de contato do site, e ao lado quantas pessoas diferentes clicaram naquele botão. ATENÇÃO: as linhas NÃO podem ser somadas — quem clicou em Morumbi e em Goiânia aparece nas duas, então somar conta a mesma pessoa várias vezes. O total real de gente está logo acima da lista." />
           </p>
+
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3.5 py-2.5 mb-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs text-gray-600">Pessoas diferentes que clicaram em algum botão</span>
+              <span className="text-xl font-bold tabular-nums" style={{ color: GOLD }}>
+                {fmt(trafego?.totais.usuariosQueClicaram ?? 0)}
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1 leading-snug">
+              Não some as linhas abaixo: a mesma pessoa costuma clicar em vários botões e aparece em
+              todos eles. Somar dá cerca de 4x este número.
+            </p>
+          </div>
+
           <ul className="space-y-2.5">
             {(trafego?.botoes || []).map(b => (
               <li key={b.nome}>
