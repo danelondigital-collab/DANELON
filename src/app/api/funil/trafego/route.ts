@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { runReport, hostFilter, hostAndButtonClicksFilter, DEFAULT_START, DEFAULT_END } from '@/lib/ga4'
+import { runReport, hostFilter, DEFAULT_START, DEFAULT_END } from '@/lib/ga4'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +10,7 @@ function num(v: string | undefined) {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 /**
- * Agrupa o "origem / meio" cru do GA4 nas plataformas que a Danelon usa.
+ * Agrupa o "origem / meio" cru do GA4 nas plataformas que a DANELON usa.
  * Cada plataforma pode aparecer com vários source/medium diferentes (ex: o
  * Instagram chega como `ig / social`, `l.instagram.com / referral` e
  * `instagram.com / referral`), e olhar linha a linha esconde o total real.
@@ -44,8 +44,11 @@ function classificar(sourceMedium: string): { grupo: string; pago: boolean } {
  * 5,02 por sessão, sempre igual entre as 4 unidades + curso + loja — não é
  * intenção de contato, é clique de tráfego amplo e barato.
  *
- * Por isso o relatório calcula o ranking também sem essa fonte. O total cheio
- * continua aparecendo ao lado, pra não esconder nada.
+ * Por decisão do time, essa fonte fica FORA de todos os números deste
+ * relatório — não só do ranking. O gasto dela continua visível na seção de
+ * investimento, marcado como fora do funil, pra verba nenhuma sumir do
+ * controle. TikTok orgânico (link na bio, perfil) não é afetado: o filtro só
+ * pega mídia paga.
  */
 const SEM_TIKTOK_PAGO = {
   notExpression: {
@@ -69,6 +72,31 @@ interface Row {
   metricValues: { value: string }[]
 }
 
+type Expressao = Record<string, unknown>
+
+/** Host + fora o TikTok pago: é a base de TODO número deste relatório. */
+function base(...extras: Expressao[]) {
+  return { andGroup: { expressions: [hostFilter(), SEM_TIKTOK_PAGO, ...extras] } }
+}
+
+/** Só os eventos de clique em botão de contato. */
+const BOTAO = {
+  filter: { fieldName: 'eventName', stringFilter: { matchType: 'BEGINS_WITH' as const, value: 'Botão' } },
+}
+
+/**
+ * Páginas dedicadas dos links de bio do TikTok. Foram criadas como páginas
+ * próprias (e não como redirecionamento com utm), então não chegam com
+ * medium=bio como as do Instagram — a única forma de identificá-las é pela
+ * página de entrada.
+ */
+const PAGINAS_BIO_TIKTOK: Record<string, string> = {
+  '/tiktok': 'danelonoficial',
+  '/tiktok/': 'danelonoficial',
+  '/tiktok-elaine': 'elainedanelon',
+  '/tiktok-elaine/': 'elainedanelon',
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -80,20 +108,20 @@ export async function GET(request: NextRequest) {
 
     const [
       totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw,
-      cliquesTotalRaw, botoesLimpoRaw, cliquesTotalLimpoRaw,
+      cliquesTotalRaw, bioTikTokRaw,
     ] = await Promise.all([
       // topo do funil, sem fatiar
       runReport({
         dateRanges,
         metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'screenPageViews' }],
-        dimensionFilter: hostFilter(),
+        dimensionFilter: base(),
       }),
       // sessões, visitantes e visualizações por origem
       runReport({
         dateRanges,
         dimensions: [{ name: 'sessionSourceMedium' }],
         metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'screenPageViews' }],
-        dimensionFilter: hostFilter(),
+        dimensionFilter: base(),
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         limit: '40',
       }),
@@ -103,7 +131,7 @@ export async function GET(request: NextRequest) {
         dateRanges,
         dimensions: [{ name: 'sessionSourceMedium' }],
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
-        dimensionFilter: hostAndButtonClicksFilter(),
+        dimensionFilter: base(BOTAO),
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
         limit: '40',
       }),
@@ -112,7 +140,7 @@ export async function GET(request: NextRequest) {
         dateRanges,
         dimensions: [{ name: 'eventName' }],
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
-        dimensionFilter: hostAndButtonClicksFilter(),
+        dimensionFilter: base(BOTAO),
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
         limit: '20',
       }),
@@ -123,14 +151,9 @@ export async function GET(request: NextRequest) {
         dateRanges,
         dimensions: [{ name: 'sessionCampaignName' }, { name: 'sessionSource' }],
         metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
-        dimensionFilter: {
-          andGroup: {
-            expressions: [
-              hostFilter(),
-              { filter: { fieldName: 'sessionMedium', stringFilter: { matchType: 'EXACT' as const, value: 'bio' } } },
-            ],
-          },
-        },
+        dimensionFilter: base({
+          filter: { fieldName: 'sessionMedium', stringFilter: { matchType: 'EXACT' as const, value: 'bio' } },
+        }),
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         limit: '30',
       }),
@@ -139,14 +162,9 @@ export async function GET(request: NextRequest) {
       runReport({
         dateRanges,
         metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'screenPageViews' }],
-        dimensionFilter: {
-          andGroup: {
-            expressions: [
-              hostFilter(),
-              { filter: { fieldName: 'landingPage', stringFilter: { matchType: 'EXACT' as const, value: '/' } } },
-            ],
-          },
-        },
+        dimensionFilter: base({
+          filter: { fieldName: 'landingPage', stringFilter: { matchType: 'EXACT' as const, value: '/' } },
+        }),
       }),
       // Pessoas DISTINTAS que clicaram em qualquer botão de contato — sem
       // nenhuma dimensão de propósito. "Usuários" não é somável: quem clica em
@@ -155,26 +173,21 @@ export async function GET(request: NextRequest) {
       runReport({
         dateRanges,
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
-        dimensionFilter: hostAndButtonClicksFilter(),
+        dimensionFilter: base(BOTAO),
       }),
-      // os mesmos dois relatórios acima, agora sem o tráfego pago do TikTok:
-      // é o recorte que mostra a procura real por unidade
+      // links de bio do TikTok: identificados pela página de entrada, porque
+      // foram criados como páginas próprias e não carregam utm
       runReport({
         dateRanges,
-        dimensions: [{ name: 'eventName' }],
-        metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
-        dimensionFilter: {
-          andGroup: { expressions: [hostAndButtonClicksFilter(), SEM_TIKTOK_PAGO] },
-        },
-        orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
-        limit: '20',
-      }),
-      runReport({
-        dateRanges,
-        metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
-        dimensionFilter: {
-          andGroup: { expressions: [hostAndButtonClicksFilter(), SEM_TIKTOK_PAGO] },
-        },
+        dimensions: [{ name: 'landingPage' }],
+        metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
+        dimensionFilter: base({
+          filter: {
+            fieldName: 'landingPage',
+            inListFilter: { values: Object.keys(PAGINAS_BIO_TIKTOK) },
+          },
+        }),
+        limit: '10',
       }),
     ])
 
@@ -218,9 +231,6 @@ export async function GET(request: NextRequest) {
     const cliquesTotalRow = cliquesTotalRaw.rows?.[0]?.metricValues
     const totalCliques = num(cliquesTotalRow?.[0]?.value)
     const totalUsuariosQueClicaram = num(cliquesTotalRow?.[1]?.value)
-    const cliquesLimpoRow = cliquesTotalLimpoRaw.rows?.[0]?.metricValues
-    const totalCliquesSemTikTokPago = num(cliquesLimpoRow?.[0]?.value)
-    const totalUsuariosQueClicaramSemTikTokPago = num(cliquesLimpoRow?.[1]?.value)
 
     return NextResponse.json({
       updatedAt: new Date().toISOString(),
@@ -231,8 +241,6 @@ export async function GET(request: NextRequest) {
         pageViews: num(totaisRow?.[2]?.value),
         cliques: totalCliques,
         usuariosQueClicaram: totalUsuariosQueClicaram,
-        cliquesSemTikTokPago: totalCliquesSemTikTokPago,
-        usuariosQueClicaramSemTikTokPago: totalUsuariosQueClicaramSemTikTokPago,
       },
       home: {
         sessoes: num(homeRow?.[0]?.value),
@@ -240,36 +248,37 @@ export async function GET(request: NextRequest) {
         pageViews: num(homeRow?.[2]?.value),
       },
       porFonte,
-      botoes: (() => {
-        // indexa o recorte limpo pelo nome do evento pra casar com o total
-        const limpo = new Map<string, { cliques: number; pessoas: number }>()
-        for (const r of (botoesLimpoRaw.rows || []) as Row[]) {
-          limpo.set(r.dimensionValues[0].value, {
-            cliques: num(r.metricValues[0]?.value),
-            pessoas: num(r.metricValues[1]?.value),
-          })
-        }
-        return ((botoesRaw.rows || []) as Row[])
-          .map(r => {
-            const evento = r.dimensionValues[0].value
-            const semTikTok = limpo.get(evento) || { cliques: 0, pessoas: 0 }
-            return {
-              nome: evento.replace('Botão_', '').replace(/_/g, ' '),
-              cliques: num(r.metricValues[0]?.value),
-              pessoas: num(r.metricValues[1]?.value),
-              cliquesSemTikTokPago: semTikTok.cliques,
-              pessoasSemTikTokPago: semTikTok.pessoas,
-            }
-          })
-          // ordena pela procura real, não pelo volume inflado
-          .sort((a, b) => b.cliquesSemTikTokPago - a.cliquesSemTikTokPago)
-      })(),
-      porPerfil: ((perfilRaw.rows || []) as Row[]).map(r => ({
-        perfil: r.dimensionValues[0].value.replace('perfil_', ''),
-        fonte: PLATAFORMA_BIO[r.dimensionValues[1]?.value?.toLowerCase()] || r.dimensionValues[1]?.value || '—',
-        sessoes: num(r.metricValues[0]?.value),
-        visitantes: num(r.metricValues[1]?.value),
+      botoes: ((botoesRaw.rows || []) as Row[]).map(r => ({
+        nome: r.dimensionValues[0].value.replace('Botão_', '').replace(/_/g, ' '),
+        cliques: num(r.metricValues[0]?.value),
+        pessoas: num(r.metricValues[1]?.value),
       })),
+      porPerfil: (() => {
+        // Instagram: identificado pela etiqueta (utm_campaign + utm_source)
+        const perfis = ((perfilRaw.rows || []) as Row[]).map(r => ({
+          perfil: r.dimensionValues[0].value.replace('perfil_', ''),
+          fonte: PLATAFORMA_BIO[r.dimensionValues[1]?.value?.toLowerCase()] || r.dimensionValues[1]?.value || '—',
+          sessoes: num(r.metricValues[0]?.value),
+          visitantes: num(r.metricValues[1]?.value),
+        }))
+
+        // TikTok: identificado pela página de entrada. Como /tiktok e /tiktok/
+        // são a mesma coisa pro GA4, agrupa antes de somar.
+        const tiktok = new Map<string, { sessoes: number; visitantes: number }>()
+        for (const r of (bioTikTokRaw.rows || []) as Row[]) {
+          const perfil = PAGINAS_BIO_TIKTOK[r.dimensionValues[0].value]
+          if (!perfil) continue
+          const cur = tiktok.get(perfil) || { sessoes: 0, visitantes: 0 }
+          cur.sessoes += num(r.metricValues[0]?.value)
+          cur.visitantes += num(r.metricValues[1]?.value)
+          tiktok.set(perfil, cur)
+        }
+        for (const [perfil, v] of tiktok) {
+          perfis.push({ perfil, fonte: 'TikTok', sessoes: v.sessoes, visitantes: v.visitantes })
+        }
+
+        return perfis.sort((a, b) => b.sessoes - a.sessoes)
+      })(),
     })
   } catch (error) {
     console.error('Erro ao montar o funil de tráfego (GA4):', error)

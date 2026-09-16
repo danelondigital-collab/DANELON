@@ -10,6 +10,25 @@ import InvestimentoSection from './investimento-section'
 
 const GOLD = '#B8924A'
 const fmtDate = (d: Date) => format(d, 'yyyy-MM-dd')
+
+/** A marca sempre em caixa alta no relatório, venha de onde vier o texto. */
+const comDanelon = (s: string) => s.replace(/danelon/gi, 'DANELON')
+
+/**
+ * Nome de perfil legível. O que vem do GA4 é o slug cru da etiqueta
+ * (perfil_danelonoficial) ou da página (/tiktok), e "danelonoficial" grudado
+ * fica ruim de ler — ainda mais com a marca em caixa alta no meio da palavra.
+ */
+const PERFIL_LABEL: Record<string, string> = {
+  danelonoficial: 'DANELON Oficial',
+  elainedanelon: 'Elaine DANELON',
+  academy: 'DANELON Academy',
+  goiania: 'Goiânia',
+  santoandre: 'Santo André',
+  morumbi: 'Morumbi',
+  alphaville: 'Alphaville',
+}
+const rotuloPerfil = (p: string) => PERFIL_LABEL[p.toLowerCase()] || comDanelon(p)
 const fmt = (n: number) => n.toLocaleString('pt-BR')
 const fmtPct = (n: number) =>
   `${(n * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
@@ -51,17 +70,10 @@ interface FonteFunil {
 interface TrafegoFunil {
   updatedAt: string
   range: { startDate: string; endDate: string }
-  totais: {
-    sessoes: number; visitantes: number; pageViews: number; cliques: number; usuariosQueClicaram: number
-    /** mesmo número, tirando o tráfego pago do TikTok, que clica em quase todos os botões */
-    cliquesSemTikTokPago: number; usuariosQueClicaramSemTikTokPago: number
-  }
+  totais: { sessoes: number; visitantes: number; pageViews: number; cliques: number; usuariosQueClicaram: number }
   home: { sessoes: number; visitantes: number; pageViews: number }
   porFonte: FonteFunil[]
-  botoes: {
-    nome: string; cliques: number; pessoas: number
-    cliquesSemTikTokPago: number; pessoasSemTikTokPago: number
-  }[]
+  botoes: { nome: string; cliques: number; pessoas: number }[]
   /** fonte = plataforma do link de bio; o mesmo perfil pode ter link no Instagram e no TikTok */
   porPerfil: { perfil: string; fonte: string; sessoes: number; visitantes: number }[]
 }
@@ -381,6 +393,19 @@ export default function FunilClient() {
         <p className="text-xs text-gray-400 mt-2">Período: {periodo}</p>
       </div>
 
+      {/* Aviso de escopo: sem isso os números parecem ter despencado sem motivo */}
+      <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex items-start gap-2.5">
+        <AlertTriangle className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+        <p className="text-xs text-gray-600 leading-relaxed">
+          <strong className="text-gray-800">Este relatório não inclui o TikTok Ads.</strong>{' '}
+          Aquela fonte clicava em quase todos os botões da página em cada sessão (5,0 por sessão,
+          contra ~1,2 de qualquer outra origem) e respondia por 97% dos cliques — inflava o volume e
+          escondia a procura real por unidade. Os números abaixo são só de tráfego com intenção
+          verificável: link na bio, Instagram, Google, TikTok orgânico e acesso direto. A verba do
+          TikTok Ads continua visível na seção de investimento, marcada como fora do funil.
+        </p>
+      </div>
+
       {erroTrafego && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{erroTrafego}</div>
       )}
@@ -527,7 +552,7 @@ export default function FunilClient() {
                   <th className="text-right font-medium pb-2">
                     <span className="inline-flex items-center gap-1">
                       Clicaram
-                      <InfoTooltip text="Dessas pessoas, quantas clicaram em algum botão de contato (unidade, curso, loja) — ou seja, demonstraram intenção de falar com a Danelon." />
+                      <InfoTooltip text="Dessas pessoas, quantas clicaram em algum botão de contato (unidade, curso, loja) — ou seja, demonstraram intenção de falar com a DANELON." />
                     </span>
                   </th>
                   <th className="text-right font-medium pb-2 pl-4">
@@ -607,7 +632,7 @@ export default function FunilClient() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-1.5">
             Link na bio, por perfil
-            <InfoTooltip text="Sessões que entraram pelos links curtos configurados na bio de cada perfil do Instagram (elainedanelon.com.br/ig, /elaine, /morumbi etc). Só conta a partir do momento em que cada perfil trocou o link." />
+            <InfoTooltip text="Sessões que entraram pelos links de bio de cada perfil. No Instagram são links curtos com etiqueta (/ig, /elaine, /morumbi etc); no TikTok são páginas próprias (/tiktok e /tiktok-elaine), identificadas pela página de entrada. Só conta a partir do momento em que cada perfil trocou o link." />
           </p>
 
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-3 mb-4">
@@ -640,7 +665,7 @@ export default function FunilClient() {
                 <li key={`${p.perfil}-${p.fonte}`}>
                   <div className="flex items-center justify-between text-sm mb-1">
                     <span className="text-gray-600 flex items-center gap-1.5">
-                      {p.perfil}
+                      {rotuloPerfil(p.perfil)}
                       <span
                         className="text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 font-medium"
                         style={{
@@ -678,18 +703,12 @@ export default function FunilClient() {
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3.5 py-2.5 mb-3">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-xs text-gray-600">Pessoas diferentes que clicaram em algum botão</span>
-              <span className="flex items-baseline gap-2">
-                <span className="text-xl font-bold tabular-nums" style={{ color: GOLD }}>
-                  {fmt(trafego?.totais.usuariosQueClicaramSemTikTokPago ?? 0)}
-                </span>
-                <span className="text-xs text-gray-400 tabular-nums">
-                  ({fmt(trafego?.totais.usuariosQueClicaram ?? 0)} com TikTok pago)
-                </span>
+              <span className="text-xl font-bold tabular-nums" style={{ color: GOLD }}>
+                {fmt(trafego?.totais.usuariosQueClicaram ?? 0)}
               </span>
             </div>
             <p className="text-[11px] text-gray-500 mt-1 leading-snug">
-              Sem o TikTok pago, que clica em quase todos os botões e mascara a procura real.
-              Também não some as linhas: a mesma pessoa aparece em todos os botões em que clicou.
+              Não some as linhas abaixo: a mesma pessoa aparece em todos os botões em que clicou.
             </p>
           </div>
 
@@ -697,21 +716,13 @@ export default function FunilClient() {
             {(trafego?.botoes || []).map(b => (
               <li key={b.nome}>
                 <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="text-gray-600">{b.nome}</span>
+                  <span className="text-gray-600">{comDanelon(b.nome)}</span>
                   <span className="flex items-baseline gap-1.5">
-                    <span className="font-semibold tabular-nums" style={{ color: GOLD }}>
-                      {fmt(b.cliquesSemTikTokPago)}
-                    </span>
-                    <span className="text-xs text-gray-400 tabular-nums">
-                      ({fmt(b.pessoasSemTikTokPago)} pessoas · {fmt(b.cliques)} com TikTok)
-                    </span>
+                    <span className="font-semibold tabular-nums" style={{ color: GOLD }}>{fmt(b.cliques)}</span>
+                    <span className="text-xs text-gray-400 tabular-nums">({fmt(b.pessoas)} pessoas)</span>
                   </span>
                 </div>
-                <Barra
-                  valor={b.cliquesSemTikTokPago}
-                  max={Math.max(...(trafego?.botoes.map(x => x.cliquesSemTikTokPago) || [1]), 1)}
-                  cor={GOLD}
-                />
+                <Barra valor={b.cliques} max={Math.max(...(trafego?.botoes.map(x => x.cliques) || [1]), 1)} cor={GOLD} />
               </li>
             ))}
           </ul>
@@ -807,7 +818,7 @@ export default function FunilClient() {
           <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
             <p className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
               <Megaphone className="w-3.5 h-3.5" /> Quem começou a conversa, por canal
-              <InfoTooltip text="Quem mandou a PRIMEIRA mensagem de cada conversa nova: a própria Danelon (equipe ou automação) abordando, ou a pessoa procurando por conta própria. Contar conversa sem essa distinção infla o resultado do tráfego pago com contato que a gente foi buscar." />
+              <InfoTooltip text="Quem mandou a PRIMEIRA mensagem de cada conversa nova: a própria DANELON (equipe ou automação) abordando, ou a pessoa procurando por conta própria. Contar conversa sem essa distinção infla o resultado do tráfego pago com contato que a gente foi buscar." />
             </p>
             {snapshotForaDoFiltro && (
               <span className="text-[11px] font-semibold bg-amber-100 text-amber-800 rounded-md px-2 py-1 flex items-center gap-1.5">
@@ -877,7 +888,7 @@ export default function FunilClient() {
               <p className="text-[11px] text-gray-500 leading-relaxed">
                 <strong className="text-gray-600">Quem começou cada conversa ainda não foi calculado.</strong>{' '}
                 Parte do que aparece em &quot;Conversas por canal&quot; é a própria equipe (ou automação)
-                mandando a primeira mensagem, não a pessoa procurando a Danelon — sobretudo no Instagram. Rode{' '}
+                mandando a primeira mensagem, não a pessoa procurando a DANELON — sobretudo no Instagram. Rode{' '}
                 <code className="bg-gray-100 px-1 rounded">scripts/kommo_iniciativa.py</code> pra gerar esse
                 recorte (não roda ao vivo: exige varrer o histórico de mensagens do Kommo, o que leva minutos).
               </p>

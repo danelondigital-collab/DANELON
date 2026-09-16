@@ -20,8 +20,38 @@ const GRUPOS_POR_PLATAFORMA: Record<string, string[]> = {
 
 const PLATAFORMAS = Object.keys(GRUPOS_POR_PLATAFORMA)
 
+/**
+ * O TikTok Ads saiu de todos os números de tráfego do relatório: a fonte clica
+ * em quase todos os botões da página em cada sessão (5,0 por sessão, contra
+ * ~1,2 de qualquer outra), o que inflava os cliques e mascarava a procura real
+ * por unidade. A verba continua aqui, à vista, mas sem visita e sem contato pra
+ * dividir — por isso ela não entra em custo por contato nem no total comercial.
+ */
+const PLATAFORMA_FORA_DO_FUNIL = 'TikTok Ads'
+
 /** As 4 unidades físicas — usado no lançamento e pra casar com GA4 (porPerfil/botões). */
 const UNIDADES = ['Morumbi', 'Santo André', 'Alphaville', 'Goiânia']
+
+/**
+ * Tipo de campanha. Sem isso o total da plataforma junta objetivos que não têm
+ * nada a ver um com o outro — a verba que busca cliente e a que busca
+ * funcionário, por exemplo. Os dois remarketings ficam separados porque
+ * atingem públicos diferentes: quem interagiu com o curso e quem interagiu
+ * com os perfis do salão.
+ */
+const CATEGORIAS = ['Curso', 'RMK Curso', 'RMK Salão', 'Unidades', 'País/Estados', 'Contratação']
+
+/** Contratação é verba de RH, não de aquisição — some no custo por contato de cliente. */
+const CATEGORIA_NAO_COMERCIAL = 'Contratação'
+
+const COR_CATEGORIA: Record<string, string> = {
+  'Curso': '#B8924A',
+  'RMK Curso': '#D4B678',
+  'RMK Salão': '#8B6F3D',
+  'Unidades': '#0F766E',
+  'País/Estados': '#1F2937',
+  'Contratação': '#9CA3AF',
+}
 
 /** Remove acento/espaço/caixa pra comparar nomes de unidade vindos de fontes diferentes
  * (formulário, campanha do GA4 "perfil_santoandre", evento de botão "Unidade Santo Andre"). */
@@ -34,6 +64,7 @@ interface Investimento {
   plataforma: string
   destino: 'site' | 'perfil'
   unidade: string
+  categoria: string
   mes: string
   valor: number
   impressoes: number | null
@@ -101,6 +132,7 @@ export default function InvestimentoSection({
   const [plataforma, setPlataforma] = useState('TikTok Ads')
   const [destino, setDestino] = useState<'site' | 'perfil'>('site')
   const [unidade, setUnidade] = useState('')
+  const [categoria, setCategoria] = useState('')
   const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7))
   const [valor, setValor] = useState('')
   const [impressoes, setImpressoes] = useState('')
@@ -140,7 +172,7 @@ export default function InvestimentoSection({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          plataforma, destino, unidade, mes: `${mes}-01`, valor,
+          plataforma, destino, unidade, categoria, mes: `${mes}-01`, valor,
           impressoes: impressoes || null,
           cliques: cliques || null,
           resultados: resultados || null,
@@ -214,12 +246,37 @@ export default function InvestimentoSection({
         custoPorVisita: visitas > 0 ? gastoTotal / visitas : null,
         custoPorContato: contatos > 0 ? gastoTotal / contatos : null,
         temLancamento: doPeriodo.length > 0,
+        foraDoFunil: p === PLATAFORMA_FORA_DO_FUNIL,
       }
     }).filter(l => l.temLancamento || l.visitas > 0)
   }, [investimentos, porFonte])
 
-  const totalGasto = linhas.reduce((s, l) => s + l.gastoTotal, 0)
-  const totalContatos = linhas.reduce((s, l) => s + l.contatos, 0)
+  /** Gasto por tipo de campanha, somando todas as plataformas e unidades.
+   * Diferente da tabela por plataforma, aqui os lançamentos por unidade CONTAM:
+   * eles são justamente o detalhe da categoria "Unidades". */
+  const porCategoria = useMemo(() => {
+    const acc = new Map<string, number>()
+    for (const i of investimentos) {
+      const c = i.categoria || 'Sem tipo'
+      acc.set(c, (acc.get(c) || 0) + Number(i.valor))
+    }
+    return Array.from(acc.entries())
+      .map(([categoria, valor]) => ({ categoria, valor }))
+      .sort((a, b) => b.valor - a.valor)
+  }, [investimentos])
+
+  const totalCategorias = porCategoria.reduce((s, c) => s + c.valor, 0)
+  /** Verba que de fato busca cliente E aparece no funil: tira contratação (RH)
+   * e tira a plataforma que ficou fora do relatório por qualidade de tráfego. */
+  const totalComercial = investimentos
+    .filter(i => i.categoria !== CATEGORIA_NAO_COMERCIAL && i.plataforma !== PLATAFORMA_FORA_DO_FUNIL)
+    .reduce((s, i) => s + Number(i.valor), 0)
+
+  // o total da tabela ignora a plataforma fora do funil: ela tem gasto, mas não
+  // tem visita nem contato pra dividir, e entraria distorcendo o custo médio
+  const linhasNoFunil = linhas.filter(l => !l.foraDoFunil)
+  const totalGasto = linhasNoFunil.reduce((s, l) => s + l.gastoTotal, 0)
+  const totalContatos = linhasNoFunil.reduce((s, l) => s + l.contatos, 0)
   const algumLancamento = investimentos.length > 0
 
   // melhor e pior custo por contato, pra destacar na tabela
@@ -284,7 +341,7 @@ export default function InvestimentoSection({
 
       {formAberto && (
         <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 mb-4">
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Plataforma</label>
               <select value={plataforma} onChange={e => setPlataforma(e.target.value)}
@@ -312,6 +369,17 @@ export default function InvestimentoSection({
                 className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
                 <option value="">— geral —</option>
                 {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                Tipo
+                <InfoTooltip text="Que tipo de campanha é essa verba: Curso, remarketing do curso, remarketing do salão, unidade específica, alcance nacional/estadual ou contratação. Contratação é verba de RH — entra no total, mas fica fora do custo por contato de cliente." />
+              </label>
+              <select value={categoria} onChange={e => setCategoria(e.target.value)}
+                className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
+                <option value="">— sem tipo —</option>
+                {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
@@ -415,6 +483,58 @@ export default function InvestimentoSection({
         </div>
       )}
 
+      {/* Por tipo de campanha: onde a verba está indo, independente de plataforma */}
+      {!carregando && porCategoria.length > 0 && (
+        <div className="mb-5">
+          <p className="text-xs text-gray-500 mb-2.5 flex items-center gap-1">
+            Onde a verba está indo, por tipo de campanha
+            <InfoTooltip text="Soma de todas as plataformas por objetivo da campanha. Contratação aparece porque é dinheiro gasto de verdade, mas é verba de RH: ela não busca cliente, então fica fora do total comercial usado pra julgar aquisição." />
+          </p>
+          <div className="h-3 rounded-full overflow-hidden flex bg-gray-100 mb-2.5">
+            {porCategoria.map(c => (
+              <div
+                key={c.categoria}
+                title={`${c.categoria}: ${fmtBRL(c.valor)}`}
+                style={{
+                  width: `${totalCategorias > 0 ? (c.valor / totalCategorias) * 100 : 0}%`,
+                  backgroundColor: COR_CATEGORIA[c.categoria] || '#D1D5DB',
+                }}
+              />
+            ))}
+          </div>
+          <div className="space-y-1.5">
+            {porCategoria.map(c => (
+              <div key={c.categoria} className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-gray-600">
+                  <span className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: COR_CATEGORIA[c.categoria] || '#D1D5DB' }} />
+                  {c.categoria}
+                  {c.categoria === CATEGORIA_NAO_COMERCIAL && (
+                    <span className="text-[10px] uppercase tracking-wide bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">
+                      RH, não é aquisição
+                    </span>
+                  )}
+                </span>
+                <span className="flex items-baseline gap-2">
+                  <span className="tabular-nums font-medium text-gray-800">{fmtBRL(c.valor)}</span>
+                  <span className="tabular-nums text-gray-400 w-11 text-right">
+                    {totalCategorias > 0 ? `${((c.valor / totalCategorias) * 100).toFixed(1)}%` : '—'}
+                  </span>
+                </span>
+              </div>
+            ))}
+            {totalComercial !== totalCategorias && (
+              <div className="flex items-center justify-between text-xs pt-2 mt-1 border-t border-gray-100">
+                <span className="text-gray-500">
+                  Total comercial (sem contratação e sem {PLATAFORMA_FORA_DO_FUNIL})
+                </span>
+                <span className="tabular-nums font-semibold text-gray-800">{fmtBRL(totalComercial)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {carregando ? (
         <p className="text-sm text-gray-400 py-6 text-center flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" /> Carregando lançamentos…
@@ -454,7 +574,14 @@ export default function InvestimentoSection({
                 {linhas.map(l => (
                   <tr key={l.plataforma} className="hover:bg-gray-50/60">
                     <td className="py-2.5 text-gray-700">
-                      {l.plataforma}
+                      <span className="flex items-center gap-1.5 flex-wrap">
+                        {l.plataforma}
+                        {l.foraDoFunil && (
+                          <span className="text-[10px] uppercase tracking-wide bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">
+                            fora do funil
+                          </span>
+                        )}
+                      </span>
                       {l.gastoPerfil > 0 && (
                         <span className="block text-[10px] text-gray-400">
                           {fmtBRL(l.gastoSite)} site · {fmtBRL(l.gastoPerfil)} perfil
