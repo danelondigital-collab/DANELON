@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investimento_trafego')
-    .select('id, plataforma, destino, unidade, mes, valor, impressoes, cliques, resultados, observacoes')
+    .select('id, plataforma, destino, unidade, categoria, mes, valor, impressoes, cliques, resultados, observacoes')
     .order('mes', { ascending: false })
     .order('plataforma')
 
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     plataforma?: string
     destino?: string
     unidade?: string
+    categoria?: string
     mes?: string
     valor?: number | string
     impressoes?: number | string | null
@@ -79,6 +80,7 @@ export async function POST(request: NextRequest) {
   const plataforma = (body.plataforma || '').trim()
   const destino = (body.destino || 'site').trim()
   const unidade = (body.unidade || '').trim()
+  const categoria = (body.categoria || '').trim()
   const mes = (body.mes || '').trim()
   const valor = typeof body.valor === 'string' ? parseFloat(body.valor.replace(',', '.')) : body.valor
 
@@ -112,6 +114,7 @@ export async function POST(request: NextRequest) {
         plataforma,
         destino,
         unidade,
+        categoria,
         mes: `${mes.slice(0, 7)}-01`, // normaliza sempre pro dia 1
         valor,
         impressoes,
@@ -119,7 +122,7 @@ export async function POST(request: NextRequest) {
         resultados,
         observacoes: body.observacoes?.trim() || null,
       },
-      { onConflict: 'plataforma,destino,mes,unidade' }
+      { onConflict: 'plataforma,destino,mes,unidade,categoria' }
     )
     .select()
     .single()

@@ -393,19 +393,6 @@ export default function FunilClient() {
         <p className="text-xs text-gray-400 mt-2">Período: {periodo}</p>
       </div>
 
-      {/* Aviso de escopo: sem isso os números parecem ter despencado sem motivo */}
-      <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex items-start gap-2.5">
-        <AlertTriangle className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-        <p className="text-xs text-gray-600 leading-relaxed">
-          <strong className="text-gray-800">Este relatório não inclui o TikTok Ads.</strong>{' '}
-          Aquela fonte clicava em quase todos os botões da página em cada sessão (5,0 por sessão,
-          contra ~1,2 de qualquer outra origem) e respondia por 97% dos cliques — inflava o volume e
-          escondia a procura real por unidade. Os números abaixo são só de tráfego com intenção
-          verificável: link na bio, Instagram, Google, TikTok orgânico e acesso direto. A verba do
-          TikTok Ads continua visível na seção de investimento, marcada como fora do funil.
-        </p>
-      </div>
-
       {erroTrafego && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{erroTrafego}</div>
       )}
