@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
 
     const [
       totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw,
-      cliquesTotalRaw, bioTikTokRaw,
+      cliquesTotalRaw, tiktokQueClicouRaw, bioTikTokRaw,
     ] = await Promise.all([
       // topo do funil, sem fatiar
       runReport({
@@ -162,14 +162,20 @@ export async function GET(request: NextRequest) {
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         limit: '30',
       }),
-      // a home (elainedanelon.com.br/) isolada: é a página que está no link da
-      // bio de todos os perfis, então é nela que o tráfego de Instagram cai
+      // A home (elainedanelon.com.br/) isolada. Este é o único quadro que conta
+      // TODAS as fontes, TikTok pago incluído: ele se chama "total da página",
+      // então excluir alguém aqui seria mentir sobre o que a página recebeu.
       runReport({
         dateRanges,
         metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'screenPageViews' }],
-        dimensionFilter: base({
-          filter: { fieldName: 'landingPage', stringFilter: { matchType: 'EXACT' as const, value: '/' } },
-        }),
+        dimensionFilter: {
+          andGroup: {
+            expressions: [
+              hostFilter(),
+              { filter: { fieldName: 'landingPage', stringFilter: { matchType: 'EXACT' as const, value: '/' } } },
+            ],
+          },
+        },
       }),
       // Pessoas DISTINTAS que clicaram em qualquer botão de contato — sem
       // nenhuma dimensão de propósito. "Usuários" não é somável: quem clica em
@@ -181,6 +187,29 @@ export async function GET(request: NextRequest) {
         dateRanges,
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
         dimensionFilter: base(BOTAO),
+      }),
+      // TikTok pago, mas SÓ quem chegou a clicar num botão de contato.
+      // É essa fatia que volta pro relatório: das ~92 mil sessões que a fonte
+      // traz, as que demonstraram alguma intenção. O resto (visita que não
+      // clicou) fica de fora porque é volume demais pra comparar com qualquer
+      // outra origem — 98% das sessões do site.
+      runReport({
+        dateRanges,
+        metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'eventCount' }],
+        dimensionFilter: {
+          andGroup: {
+            expressions: [
+              hostFilter(),
+              {
+                filter: {
+                  fieldName: 'sessionSourceMedium',
+                  stringFilter: { matchType: 'FULL_REGEXP' as const, value: '^tiktok / (paid|cpc|ppc).*' },
+                },
+              },
+              BOTAO,
+            ],
+          },
+        },
       }),
       // links de bio do TikTok: identificados pela página de entrada, porque
       // foram criados como páginas próprias e não carregam utm
@@ -223,11 +252,33 @@ export async function GET(request: NextRequest) {
       acc.set(grupo, cur)
     }
 
+    // A fatia do TikTok pago que clicou entra como uma fonte própria. Ela conta
+    // PESSOAS, não sessões: o problema dessa fonte é a mesma pessoa gerar várias
+    // sessões (recarrega a página 1,8 vez por sessão), e pessoa única não carrega
+    // essa inflação.
+    const ttRow = tiktokQueClicouRaw.rows?.[0]?.metricValues
+    const ttPessoas = num(ttRow?.[1]?.value)
+    if (ttPessoas > 0) {
+      acc.set('TikTok Ads', {
+        grupo: 'TikTok Ads',
+        pago: true,
+        sessoes: num(ttRow?.[0]?.value),
+        visitantes: ttPessoas,
+        pageViews: 0, // não dá pra recortar "visualização de quem clicou"
+        cliques: num(ttRow?.[2]?.value),
+        usuariosQueClicaram: ttPessoas,
+        origens: ['tiktok / paid'],
+      })
+    }
+
     const porFonte = Array.from(acc.values())
       .map(f => ({
         ...f,
         // % dos visitantes daquela fonte que chegaram a clicar num botão de contato
         taxaContato: f.visitantes > 0 ? f.usuariosQueClicaram / f.visitantes : 0,
+        // no TikTok pago a linha já entra filtrada por quem clicou, então a taxa
+        // dá 100% por construção e não se compara com a das outras fontes
+        somenteQuemClicou: f.grupo === 'TikTok Ads',
       }))
       .sort((a, b) => b.sessoes - a.sessoes)
 
@@ -243,11 +294,13 @@ export async function GET(request: NextRequest) {
       updatedAt: new Date().toISOString(),
       range: { startDate, endDate },
       totais: {
-        sessoes: num(totaisRow?.[0]?.value),
-        visitantes: num(totaisRow?.[1]?.value),
+        // visitas e pessoas somam a fatia do TikTok que clicou; visualizações
+        // não, porque o GA4 não dá como recortar "views de quem clicou"
+        sessoes: num(totaisRow?.[0]?.value) + num(ttRow?.[0]?.value),
+        visitantes: num(totaisRow?.[1]?.value) + ttPessoas,
         pageViews: num(totaisRow?.[2]?.value),
-        cliques: totalCliques,
-        usuariosQueClicaram: totalUsuariosQueClicaram,
+        cliques: totalCliques + num(ttRow?.[2]?.value),
+        usuariosQueClicaram: totalUsuariosQueClicaram + ttPessoas,
       },
       home: {
         sessoes: num(homeRow?.[0]?.value),
