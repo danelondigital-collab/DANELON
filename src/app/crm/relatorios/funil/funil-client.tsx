@@ -74,6 +74,8 @@ interface TrafegoFunil {
   home: { sessoes: number; visitantes: number; pageViews: number }
   porFonte: FonteFunil[]
   botoes: { nome: string; cliques: number; pessoas: number }[]
+  /** total que casa com a lista de botões: sem TikTok pago, igual às linhas */
+  botoesTotal: { cliques: number; pessoas: number }
   /** fonte = plataforma do link de bio; o mesmo perfil pode ter link no Instagram e no TikTok */
   porPerfil: { perfil: string; fonte: string; sessoes: number; visitantes: number }[]
 }
@@ -684,18 +686,19 @@ export default function FunilClient() {
         <div className="bg-white rounded-xl border border-amber-200 p-5">
           <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
             Qual unidade a pessoa procurou
-            <InfoTooltip text="O ranking usa o clique SEM o tráfego pago do TikTok. Motivo: essa fonte clica em quase todos os botões da página em cada sessão (5,0 por sessão, contra ~1,2 de qualquer outra origem) e responde por 97% dos cliques — com ela no meio, as 4 unidades empatam artificialmente e a procura real some. O total cheio aparece em cinza, do lado, pra não esconder nada." />
+            <InfoTooltip text="Este quadro é o único que sai sem NENHUM tráfego pago do TikTok, Vendas inclusive. Motivo: essas sessões clicam em 4 a 5 botões diferentes cada uma (contra ~1,2 de qualquer outra origem) e respondem por 97% dos cliques do site — com elas no meio, as quatro unidades empatam e a procura real desaparece. Os demais quadros da página incluem a campanha Vendas normalmente." />
           </p>
 
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3.5 py-2.5 mb-3">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-xs text-gray-600">Pessoas diferentes que clicaram em algum botão</span>
               <span className="text-xl font-bold tabular-nums" style={{ color: GOLD }}>
-                {fmt(trafego?.totais.usuariosQueClicaram ?? 0)}
+                {fmt(trafego?.botoesTotal.pessoas ?? 0)}
               </span>
             </div>
             <p className="text-[11px] text-gray-500 mt-1 leading-snug">
-              Não some as linhas abaixo: a mesma pessoa aparece em todos os botões em que clicou.
+              Sem tráfego pago do TikTok, pra não embaralhar a comparação entre unidades. Também não
+              some as linhas: a mesma pessoa aparece em todos os botões em que clicou.
             </p>
           </div>
 

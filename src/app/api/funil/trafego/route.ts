@@ -36,27 +36,45 @@ function classificar(sourceMedium: string): { grupo: string; pago: boolean } {
   return { grupo: 'Outros', pago: false }
 }
 
-/**
- * O tráfego pago do TikTok clica em quase todos os botões da página em cada
- * sessão (5,0 por sessão em setembro, contra ~1,2 de toda outra fonte), e como
- * ele responde por 97% dos cliques, o ranking de unidades vira um empate
- * artificial que esconde a demanda real. Medido em jul/ago/set: 3,98 → 4,99 →
- * 5,02 por sessão, sempre igual entre as 4 unidades + curso + loja — não é
- * intenção de contato, é clique de tráfego amplo e barato.
- *
- * Por decisão do time, essa fonte fica FORA de todos os números deste
- * relatório — não só do ranking. O gasto dela continua visível na seção de
- * investimento, marcado como fora do funil, pra verba nenhuma sumir do
- * controle. TikTok orgânico (link na bio, perfil) não é afetado: o filtro só
- * pega mídia paga.
- */
-const SEM_TIKTOK_PAGO = {
-  notExpression: {
-    filter: {
-      fieldName: 'sessionSourceMedium',
-      stringFilter: { matchType: 'FULL_REGEXP' as const, value: '^tiktok / (paid|cpc|ppc).*' },
-    },
+const TIKTOK_PAGO = {
+  filter: {
+    fieldName: 'sessionSourceMedium',
+    stringFilter: { matchType: 'FULL_REGEXP' as const, value: '^tiktok / (paid|cpc|ppc).*' },
   },
+}
+
+/**
+ * Campanha de Shop/Vendas do TikTok. O nome vem do utm_campaign que o próprio
+ * TikTok preenche (macro __CAMPAIGN_NAME__ no link de destino) e carrega um
+ * carimbo de data ("Vendas20260826165023"), então o casamento é por prefixo —
+ * campanha nova de Vendas entra sozinha, sem precisar mexer aqui.
+ */
+const TIKTOK_VENDAS = {
+  filter: {
+    fieldName: 'sessionCampaignName',
+    stringFilter: { matchType: 'FULL_REGEXP' as const, value: '^Vendas.*' },
+  },
+}
+
+/** Fora todo TikTok pago, inclusive Vendas. Só o ranking de unidades usa isso. */
+const SEM_TIKTOK_PAGO = { notExpression: TIKTOK_PAGO }
+
+/**
+ * Base do relatório: fica de fora o tráfego pago AMPLO do TikTok (as campanhas
+ * "Tráfego"), mas a campanha de Shop/Vendas continua contando.
+ *
+ * Por quê: essas sessões clicam em 4 a 5 botões diferentes cada uma, contra
+ * ~1,2 de qualquer outra origem, e respondem por 97% dos cliques do site —
+ * com elas no meio, as quatro unidades empatam e a procura real some.
+ *
+ * O que NÃO se pode concluir daí é que seja tráfego falso: engajamento de
+ * 43,5% e 88s de permanência são de gente real (tráfego de robô fica em ~0%).
+ * O padrão de recarregar a mesma página 1,8 vez por sessão sugere que o link
+ * do WhatsApp não abre pelo navegador interno do TikTok e a pessoa fica
+ * tentando outro botão — problema a investigar no site, não no relatório.
+ */
+const SEM_TIKTOK_AMPLO = {
+  orGroup: { expressions: [SEM_TIKTOK_PAGO, TIKTOK_VENDAS] },
 }
 
 /** Nome amigável da plataforma do link de bio (o utm_source do link curto). */
@@ -74,9 +92,9 @@ interface Row {
 
 type Expressao = Record<string, unknown>
 
-/** Host + fora o TikTok pago: é a base de TODO número deste relatório. */
+/** Host + fora o TikTok pago amplo: é a base de TODO número deste relatório. */
 function base(...extras: Expressao[]) {
-  return { andGroup: { expressions: [hostFilter(), SEM_TIKTOK_PAGO, ...extras] } }
+  return { andGroup: { expressions: [hostFilter(), SEM_TIKTOK_AMPLO, ...extras] } }
 }
 
 /** Só os eventos de clique em botão de contato. */
@@ -108,7 +126,7 @@ export async function GET(request: NextRequest) {
 
     const [
       totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw,
-      cliquesTotalRaw, bioTikTokRaw,
+      cliquesTotalRaw, cliquesRankingRaw, bioTikTokRaw,
     ] = await Promise.all([
       // topo do funil, sem fatiar
       runReport({
@@ -135,12 +153,14 @@ export async function GET(request: NextRequest) {
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
         limit: '40',
       }),
-      // cliques por botão (qual unidade a pessoa procurou)
+      // Cliques por botão (qual unidade a pessoa procurou). Aqui sai TODO TikTok
+      // pago, Vendas inclusive: é a campanha com mais cliques por sessão (5,16),
+      // e é exatamente esse padrão que embaralha o ranking entre as unidades.
       runReport({
         dateRanges,
         dimensions: [{ name: 'eventName' }],
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
-        dimensionFilter: base(BOTAO),
+        dimensionFilter: base(BOTAO, SEM_TIKTOK_PAGO),
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
         limit: '20',
       }),
@@ -170,10 +190,19 @@ export async function GET(request: NextRequest) {
       // nenhuma dimensão de propósito. "Usuários" não é somável: quem clica em
       // Morumbi e em Goiânia aparece nas duas linhas, então somar as linhas por
       // botão inflava o total em mais de 4x (22.630 contra 5.364 reais).
+      // Total do FUNIL: mesma população das visitas (com Vendas), senão a taxa
+      // de conversão compara grupos diferentes e sai errada.
       runReport({
         dateRanges,
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
         dimensionFilter: base(BOTAO),
+      }),
+      // Total do CARD DE RANKING: sem nenhum TikTok pago, pra casar com a lista
+      // de botões logo abaixo dele.
+      runReport({
+        dateRanges,
+        metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
+        dimensionFilter: base(BOTAO, SEM_TIKTOK_PAGO),
       }),
       // links de bio do TikTok: identificados pela página de entrada, porque
       // foram criados como páginas próprias e não carregam utm
@@ -253,6 +282,11 @@ export async function GET(request: NextRequest) {
         cliques: num(r.metricValues[0]?.value),
         pessoas: num(r.metricValues[1]?.value),
       })),
+      /** total que casa com a lista de botões acima (sem nenhum TikTok pago) */
+      botoesTotal: {
+        cliques: num(cliquesRankingRaw.rows?.[0]?.metricValues?.[0]?.value),
+        pessoas: num(cliquesRankingRaw.rows?.[0]?.metricValues?.[1]?.value),
+      },
       porPerfil: (() => {
         // Instagram: identificado pela etiqueta (utm_campaign + utm_source)
         const perfis = ((perfilRaw.rows || []) as Row[]).map(r => ({
