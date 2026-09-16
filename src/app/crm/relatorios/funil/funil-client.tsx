@@ -63,7 +63,10 @@ interface FonteFunil {
   pageViews: number
   cliques: number
   usuariosQueClicaram: number
-  taxaContato: number
+  /** null quando a fonte entra só com clique e não há visita pra dividir */
+  taxaContato: number | null
+  /** fonte que entra no relatório apenas pelo clique (TikTok pago) */
+  soCliques: boolean
   origens: string[]
 }
 
@@ -504,7 +507,9 @@ export default function FunilClient() {
           <InfoTooltip text="Volume não é qualidade. A coluna que importa é a taxa de contato: de cada 100 pessoas que aquela fonte trouxe, quantas chegaram a clicar num botão de contato." />
         </p>
         <p className="text-xs text-gray-400 mb-4">
-          Ordenado por volume. A última coluna mostra quem realmente vira conversa.
+          Ordenado por volume. A última coluna mostra quem realmente vira conversa. A linha marcada
+          como <strong>só cliques</strong> entra apenas com o clique: o volume de visitas dela é
+          desproporcional (98% das sessões do site) e não soma no topo do funil.
         </p>
 
         {carregandoTrafego && !trafego ? (
@@ -564,22 +569,39 @@ export default function FunilClient() {
                             pago
                           </span>
                         )}
+                        {f.soCliques && (
+                          <span className="text-[9px] uppercase tracking-wide bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">
+                            só cliques
+                          </span>
+                        )}
                       </div>
-                      <div className="mt-1.5 max-w-[220px]">
-                        <Barra valor={f.sessoes} max={maxSessoes} cor={corFonte(f.grupo)} />
-                      </div>
+                      {!f.soCliques && (
+                        <div className="mt-1.5 max-w-[220px]">
+                          <Barra valor={f.sessoes} max={maxSessoes} cor={corFonte(f.grupo)} />
+                        </div>
+                      )}
                     </td>
-                    <td className="text-right tabular-nums text-gray-700 align-top pt-3">{fmt(f.sessoes)}</td>
-                    <td className="text-right tabular-nums font-semibold text-gray-800 align-top pt-3">{fmt(f.visitantes)}</td>
-                    <td className="text-right tabular-nums text-gray-400 align-top pt-3">{fmt(f.pageViews)}</td>
+                    <td className="text-right tabular-nums text-gray-700 align-top pt-3">
+                      {f.soCliques ? <span className="text-gray-300">—</span> : fmt(f.sessoes)}
+                    </td>
+                    <td className="text-right tabular-nums font-semibold text-gray-800 align-top pt-3">
+                      {f.soCliques ? <span className="text-gray-300 font-normal">—</span> : fmt(f.visitantes)}
+                    </td>
+                    <td className="text-right tabular-nums text-gray-400 align-top pt-3">
+                      {f.soCliques ? <span className="text-gray-300">—</span> : fmt(f.pageViews)}
+                    </td>
                     <td className="text-right tabular-nums text-gray-500 align-top pt-3">{fmt(f.usuariosQueClicaram)}</td>
                     <td className="text-right align-top pt-3 pl-4">
-                      <span
-                        className="font-semibold tabular-nums"
-                        style={{ color: f.taxaContato >= 0.3 ? '#15803D' : f.taxaContato >= 0.1 ? GOLD : '#B91C1C' }}
-                      >
-                        {fmtPct(f.taxaContato)}
-                      </span>
+                      {f.taxaContato === null ? (
+                        <span className="text-gray-300 tabular-nums">—</span>
+                      ) : (
+                        <span
+                          className="font-semibold tabular-nums"
+                          style={{ color: f.taxaContato >= 0.3 ? '#15803D' : f.taxaContato >= 0.1 ? GOLD : '#B91C1C' }}
+                        >
+                          {fmtPct(f.taxaContato)}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

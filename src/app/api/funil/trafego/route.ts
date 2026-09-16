@@ -92,8 +92,22 @@ interface Row {
 
 type Expressao = Record<string, unknown>
 
-/** Host + fora o TikTok pago amplo: é a base de TODO número deste relatório. */
+/**
+ * Base de TODO número de volume: visitas, pessoas e visualizações saem sem
+ * nenhum TikTok pago. O volume dessa fonte é desproporcional (98% das sessões
+ * do site) e afogaria qualquer comparação.
+ */
 function base(...extras: Expressao[]) {
+  return { andGroup: { expressions: [hostFilter(), SEM_TIKTOK_PAGO, ...extras] } }
+}
+
+/**
+ * Exceção: só na tabela de fontes o CLIQUE da campanha de Shop aparece, pra dar
+ * pra enxergar o que o TikTok entrega. Só o clique — a linha dele fica sem
+ * visita e sem visualização de propósito, e esse clique não entra no total de
+ * visitas do site.
+ */
+function baseComVendas(...extras: Expressao[]) {
   return { andGroup: { expressions: [hostFilter(), SEM_TIKTOK_AMPLO, ...extras] } }
 }
 
@@ -126,7 +140,7 @@ export async function GET(request: NextRequest) {
 
     const [
       totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw,
-      cliquesTotalRaw, cliquesRankingRaw, bioTikTokRaw,
+      cliquesTotalRaw, bioTikTokRaw,
     ] = await Promise.all([
       // topo do funil, sem fatiar
       runReport({
@@ -143,13 +157,13 @@ export async function GET(request: NextRequest) {
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         limit: '40',
       }),
-      // quem clicou em botão de contato, por origem -- é o que liga o topo
-      // (visita) ao fundo (conversa), e revela a qualidade de cada fonte
+      // Quem clicou em botão de contato, por origem. Único lugar que inclui a
+      // campanha de Shop do TikTok — e só o clique dela, sem visita.
       runReport({
         dateRanges,
         dimensions: [{ name: 'sessionSourceMedium' }],
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
-        dimensionFilter: base(BOTAO),
+        dimensionFilter: baseComVendas(BOTAO),
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
         limit: '40',
       }),
@@ -190,19 +204,12 @@ export async function GET(request: NextRequest) {
       // nenhuma dimensão de propósito. "Usuários" não é somável: quem clica em
       // Morumbi e em Goiânia aparece nas duas linhas, então somar as linhas por
       // botão inflava o total em mais de 4x (22.630 contra 5.364 reais).
-      // Total do FUNIL: mesma população das visitas (com Vendas), senão a taxa
-      // de conversão compara grupos diferentes e sai errada.
+      // Serve tanto pro funil quanto pro card de ranking: os dois olham a mesma
+      // população (sem TikTok pago), então o número é o mesmo.
       runReport({
         dateRanges,
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
         dimensionFilter: base(BOTAO),
-      }),
-      // Total do CARD DE RANKING: sem nenhum TikTok pago, pra casar com a lista
-      // de botões logo abaixo dele.
-      runReport({
-        dateRanges,
-        metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
-        dimensionFilter: base(BOTAO, SEM_TIKTOK_PAGO),
       }),
       // links de bio do TikTok: identificados pela página de entrada, porque
       // foram criados como páginas próprias e não carregam utm
@@ -248,10 +255,14 @@ export async function GET(request: NextRequest) {
     const porFonte = Array.from(acc.values())
       .map(f => ({
         ...f,
-        // % dos visitantes daquela fonte que chegaram a clicar num botão de contato
-        taxaContato: f.visitantes > 0 ? f.usuariosQueClicaram / f.visitantes : 0,
+        // % dos visitantes daquela fonte que chegaram a clicar num botão de contato.
+        // null (e não 0) quando a fonte entra só com clique, sem visita pra
+        // dividir — é o caso do TikTok pago: 0% daria a impressão de fonte ruim,
+        // quando na verdade a conta não existe.
+        taxaContato: f.visitantes > 0 ? f.usuariosQueClicaram / f.visitantes : null,
+        soCliques: f.visitantes === 0 && f.usuariosQueClicaram > 0,
       }))
-      .sort((a, b) => b.sessoes - a.sessoes)
+      .sort((a, b) => (b.sessoes - a.sessoes) || (b.cliques - a.cliques))
 
     const totaisRow = totais.rows?.[0]?.metricValues
     const homeRow = homeRaw.rows?.[0]?.metricValues
@@ -283,10 +294,7 @@ export async function GET(request: NextRequest) {
         pessoas: num(r.metricValues[1]?.value),
       })),
       /** total que casa com a lista de botões acima (sem nenhum TikTok pago) */
-      botoesTotal: {
-        cliques: num(cliquesRankingRaw.rows?.[0]?.metricValues?.[0]?.value),
-        pessoas: num(cliquesRankingRaw.rows?.[0]?.metricValues?.[1]?.value),
-      },
+      botoesTotal: { cliques: totalCliques, pessoas: totalUsuariosQueClicaram },
       porPerfil: (() => {
         // Instagram: identificado pela etiqueta (utm_campaign + utm_source)
         const perfis = ((perfilRaw.rows || []) as Row[]).map(r => ({
