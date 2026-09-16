@@ -64,8 +64,6 @@ interface FonteFunil {
   cliques: number
   usuariosQueClicaram: number
   taxaContato: number
-  /** linha que já entra filtrada por quem clicou — taxa de 100% é construção, não mérito */
-  somenteQuemClicou: boolean
   origens: string[]
 }
 
@@ -406,7 +404,7 @@ export default function FunilClient() {
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <p className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
             Funil completo
-            <InfoTooltip text="As três primeiras etapas vêm do Google Analytics (o que acontece no site). As três de baixo vêm do Kommo (o que acontece na conversa). Os dois sistemas não se conversam: uma conversa que chega no WhatsApp não carrega de qual anúncio a pessoa veio. ATENÇÃO na taxa de conversão: do TikTok pago só entra quem já clicou, então essa gente conta nas duas primeiras etapas E na terceira — o que empurra a conversão do funil pra perto de 80% por construção, não por mérito." />
+            <InfoTooltip text="As três primeiras etapas vêm do Google Analytics (o que acontece no site). As três de baixo vêm do Kommo (o que acontece na conversa). Os dois sistemas não se conversam: uma conversa que chega no WhatsApp não carrega de qual anúncio a pessoa veio." />
           </p>
           {(carregandoTrafego || carregandoKommo) && (
             <span className="text-xs text-violet-400 flex items-center gap-1">
@@ -506,9 +504,7 @@ export default function FunilClient() {
           <InfoTooltip text="Volume não é qualidade. A coluna que importa é a taxa de contato: de cada 100 pessoas que aquela fonte trouxe, quantas chegaram a clicar num botão de contato." />
         </p>
         <p className="text-xs text-gray-400 mb-4">
-          Ordenado por volume. A última coluna mostra quem realmente vira conversa. A linha do
-          TikTok pago entra só com <strong>quem clicou</strong> — as ~92 mil sessões que ele traz
-          por período afogariam qualquer comparação, então a taxa de contato dela não se aplica.
+          Ordenado por volume. A última coluna mostra quem realmente vira conversa.
         </p>
 
         {carregandoTrafego && !trafego ? (
@@ -568,11 +564,6 @@ export default function FunilClient() {
                             pago
                           </span>
                         )}
-                        {f.somenteQuemClicou && (
-                          <span className="text-[9px] uppercase tracking-wide bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">
-                            só quem clicou
-                          </span>
-                        )}
                       </div>
                       <div className="mt-1.5 max-w-[220px]">
                         <Barra valor={f.sessoes} max={maxSessoes} cor={corFonte(f.grupo)} />
@@ -583,18 +574,12 @@ export default function FunilClient() {
                     <td className="text-right tabular-nums text-gray-400 align-top pt-3">{fmt(f.pageViews)}</td>
                     <td className="text-right tabular-nums text-gray-500 align-top pt-3">{fmt(f.usuariosQueClicaram)}</td>
                     <td className="text-right align-top pt-3 pl-4">
-                      {f.somenteQuemClicou ? (
-                        <span className="text-gray-300 tabular-nums" title="A linha já entra filtrada por quem clicou, então a taxa seria sempre 100%">
-                          —
-                        </span>
-                      ) : (
-                        <span
-                          className="font-semibold tabular-nums"
-                          style={{ color: f.taxaContato >= 0.3 ? '#15803D' : f.taxaContato >= 0.1 ? GOLD : '#B91C1C' }}
-                        >
-                          {fmtPct(f.taxaContato)}
-                        </span>
-                      )}
+                      <span
+                        className="font-semibold tabular-nums"
+                        style={{ color: f.taxaContato >= 0.3 ? '#15803D' : f.taxaContato >= 0.1 ? GOLD : '#B91C1C' }}
+                      >
+                        {fmtPct(f.taxaContato)}
+                      </span>
                     </td>
                   </tr>
                 ))}
