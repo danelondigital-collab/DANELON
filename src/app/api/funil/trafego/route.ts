@@ -162,20 +162,14 @@ export async function GET(request: NextRequest) {
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         limit: '30',
       }),
-      // A home (elainedanelon.com.br/) isolada. Este é o único quadro que conta
-      // TODAS as fontes, TikTok pago incluído: ele se chama "total da página",
-      // então excluir alguém aqui seria mentir sobre o que a página recebeu.
+      // a home (elainedanelon.com.br/) isolada: é a página que está no link da
+      // bio de todos os perfis, então é nela que o tráfego de Instagram cai
       runReport({
         dateRanges,
         metrics: [{ name: 'sessions' }, { name: 'activeUsers' }, { name: 'screenPageViews' }],
-        dimensionFilter: {
-          andGroup: {
-            expressions: [
-              hostFilter(),
-              { filter: { fieldName: 'landingPage', stringFilter: { matchType: 'EXACT' as const, value: '/' } } },
-            ],
-          },
-        },
+        dimensionFilter: base({
+          filter: { fieldName: 'landingPage', stringFilter: { matchType: 'EXACT' as const, value: '/' } },
+        }),
       }),
       // Pessoas DISTINTAS que clicaram em qualquer botão de contato — sem
       // nenhuma dimensão de propósito. "Usuários" não é somável: quem clica em

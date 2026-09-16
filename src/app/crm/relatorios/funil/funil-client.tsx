@@ -428,11 +428,12 @@ export default function FunilClient() {
       {/* ── A PÁGINA DO LINK NA BIO ─────────────────────────────── */}
       <div className="bg-white rounded-xl border border-amber-200 p-5">
         <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-          <Eye className="w-3.5 h-3.5" /> elainedanelon.com.br — total da página, somando todas as fontes
-          <InfoTooltip text="Números da página inicial isolada, somando TODAS as origens. Atenção: essa página não recebe só quem vem do link na bio — o anúncio do TikTok aponta direto pra ela também, e é de onde vem a maior parte desse número. A composição está logo abaixo." />
+          <Eye className="w-3.5 h-3.5" /> elainedanelon.com.br — total da página
+          <InfoTooltip text="Números da página inicial isolada, somando as origens que este relatório considera — ou seja, sem o tráfego pago do TikTok, igual ao resto da página. Essa home não recebe só quem vem do link na bio: também cai aqui quem chega por Instagram, Google e acesso direto. A composição de cada origem está logo abaixo." />
         </p>
         <p className="text-xs text-gray-400 mb-4">
-          Todas as origens somadas. A fatia de cada uma está na barra abaixo e na tabela seguinte.
+          Sem o tráfego pago do TikTok, como todo o relatório. A fatia de cada origem está na barra
+          abaixo e na tabela seguinte.
         </p>
         <div className="grid grid-cols-3 gap-4">
           <div>
@@ -627,7 +628,7 @@ export default function FunilClient() {
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-3 mb-4">
             <span className="text-gray-700 font-medium text-sm flex items-center gap-1 mb-2">
               www.elainedanelon.com.br (raiz)
-              <InfoTooltip text="Total de visitas na home, somando TODAS as origens — TikTok Ads, link de bio identificado, acesso direto, tudo. Não é mais um perfil da lista abaixo, é o total geral pra comparar com o que veio identificado por link de bio." />
+              <InfoTooltip text="Total de visitas na home somando as origens consideradas no relatório (sem TikTok pago): link de bio identificado, Instagram, Google, acesso direto. Não é mais um perfil da lista abaixo — é o total geral, pra comparar com o quanto veio identificado por link de bio." />
             </span>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -639,7 +640,7 @@ export default function FunilClient() {
                 <p className="text-[11px] text-gray-500">pessoas únicas</p>
               </div>
             </div>
-            <p className="text-[11px] text-gray-400 mt-2">Inclui todas as origens, não só link de bio</p>
+            <p className="text-[11px] text-gray-400 mt-2">Inclui as demais origens, não só link de bio</p>
           </div>
 
           {(trafego?.porPerfil.length || 0) === 0 ? (
