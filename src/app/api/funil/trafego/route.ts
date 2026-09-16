@@ -36,45 +36,32 @@ function classificar(sourceMedium: string): { grupo: string; pago: boolean } {
   return { grupo: 'Outros', pago: false }
 }
 
-const TIKTOK_PAGO = {
-  filter: {
-    fieldName: 'sessionSourceMedium',
-    stringFilter: { matchType: 'FULL_REGEXP' as const, value: '^tiktok / (paid|cpc|ppc).*' },
-  },
-}
-
 /**
- * Campanha de Shop/Vendas do TikTok. O nome vem do utm_campaign que o próprio
- * TikTok preenche (macro __CAMPAIGN_NAME__ no link de destino) e carrega um
- * carimbo de data ("Vendas20260826165023"), então o casamento é por prefixo —
- * campanha nova de Vendas entra sozinha, sem precisar mexer aqui.
- */
-const TIKTOK_VENDAS = {
-  filter: {
-    fieldName: 'sessionCampaignName',
-    stringFilter: { matchType: 'FULL_REGEXP' as const, value: '^Vendas.*' },
-  },
-}
-
-/** Fora todo TikTok pago, inclusive Vendas. Só o ranking de unidades usa isso. */
-const SEM_TIKTOK_PAGO = { notExpression: TIKTOK_PAGO }
-
-/**
- * Base do relatório: fica de fora o tráfego pago AMPLO do TikTok (as campanhas
- * "Tráfego"), mas a campanha de Shop/Vendas continua contando.
+ * Todo o tráfego pago do TikTok fica fora deste relatório.
  *
  * Por quê: essas sessões clicam em 4 a 5 botões diferentes cada uma, contra
- * ~1,2 de qualquer outra origem, e respondem por 97% dos cliques do site —
- * com elas no meio, as quatro unidades empatam e a procura real some.
+ * ~1,2 de qualquer outra origem, e respondem por 97% dos cliques do site. O
+ * volume também é desproporcional — 98% das sessões — então qualquer quadro
+ * que as inclua vira um retrato do TikTok, não do negócio.
  *
  * O que NÃO se pode concluir daí é que seja tráfego falso: engajamento de
- * 43,5% e 88s de permanência são de gente real (tráfego de robô fica em ~0%).
- * O padrão de recarregar a mesma página 1,8 vez por sessão sugere que o link
- * do WhatsApp não abre pelo navegador interno do TikTok e a pessoa fica
- * tentando outro botão — problema a investigar no site, não no relatório.
+ * 43,5% e 88s de permanência são de gente real (tráfego de robô fica em ~0%,
+ * como a linha "(not set)" do próprio relatório). O padrão de recarregar a
+ * mesma página 1,8 vez por sessão sugere que o link do WhatsApp não abre pelo
+ * navegador interno do TikTok e a pessoa fica tentando outro botão — problema
+ * a investigar no site, não no relatório.
+ *
+ * O gasto continua visível na seção de investimento, marcado como fora do
+ * funil. TikTok orgânico (link na bio, perfil) não é afetado: o filtro só pega
+ * mídia paga.
  */
-const SEM_TIKTOK_AMPLO = {
-  orGroup: { expressions: [SEM_TIKTOK_PAGO, TIKTOK_VENDAS] },
+const SEM_TIKTOK_PAGO = {
+  notExpression: {
+    filter: {
+      fieldName: 'sessionSourceMedium',
+      stringFilter: { matchType: 'FULL_REGEXP' as const, value: '^tiktok / (paid|cpc|ppc).*' },
+    },
+  },
 }
 
 /** Nome amigável da plataforma do link de bio (o utm_source do link curto). */
@@ -92,23 +79,9 @@ interface Row {
 
 type Expressao = Record<string, unknown>
 
-/**
- * Base de TODO número de volume: visitas, pessoas e visualizações saem sem
- * nenhum TikTok pago. O volume dessa fonte é desproporcional (98% das sessões
- * do site) e afogaria qualquer comparação.
- */
+/** Host + fora o TikTok pago: é a base de TODO número deste relatório. */
 function base(...extras: Expressao[]) {
   return { andGroup: { expressions: [hostFilter(), SEM_TIKTOK_PAGO, ...extras] } }
-}
-
-/**
- * Exceção: só na tabela de fontes o CLIQUE da campanha de Shop aparece, pra dar
- * pra enxergar o que o TikTok entrega. Só o clique — a linha dele fica sem
- * visita e sem visualização de propósito, e esse clique não entra no total de
- * visitas do site.
- */
-function baseComVendas(...extras: Expressao[]) {
-  return { andGroup: { expressions: [hostFilter(), SEM_TIKTOK_AMPLO, ...extras] } }
 }
 
 /** Só os eventos de clique em botão de contato. */
@@ -157,24 +130,22 @@ export async function GET(request: NextRequest) {
         orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
         limit: '40',
       }),
-      // Quem clicou em botão de contato, por origem. Único lugar que inclui a
-      // campanha de Shop do TikTok — e só o clique dela, sem visita.
+      // quem clicou em botão de contato, por origem -- é o que liga o topo
+      // (visita) ao fundo (conversa), e revela a qualidade de cada fonte
       runReport({
         dateRanges,
         dimensions: [{ name: 'sessionSourceMedium' }],
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
-        dimensionFilter: baseComVendas(BOTAO),
+        dimensionFilter: base(BOTAO),
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
         limit: '40',
       }),
-      // Cliques por botão (qual unidade a pessoa procurou). Aqui sai TODO TikTok
-      // pago, Vendas inclusive: é a campanha com mais cliques por sessão (5,16),
-      // e é exatamente esse padrão que embaralha o ranking entre as unidades.
+      // cliques por botão (qual unidade a pessoa procurou)
       runReport({
         dateRanges,
         dimensions: [{ name: 'eventName' }],
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
-        dimensionFilter: base(BOTAO, SEM_TIKTOK_PAGO),
+        dimensionFilter: base(BOTAO),
         orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
         limit: '20',
       }),
@@ -255,14 +226,10 @@ export async function GET(request: NextRequest) {
     const porFonte = Array.from(acc.values())
       .map(f => ({
         ...f,
-        // % dos visitantes daquela fonte que chegaram a clicar num botão de contato.
-        // null (e não 0) quando a fonte entra só com clique, sem visita pra
-        // dividir — é o caso do TikTok pago: 0% daria a impressão de fonte ruim,
-        // quando na verdade a conta não existe.
-        taxaContato: f.visitantes > 0 ? f.usuariosQueClicaram / f.visitantes : null,
-        soCliques: f.visitantes === 0 && f.usuariosQueClicaram > 0,
+        // % dos visitantes daquela fonte que chegaram a clicar num botão de contato
+        taxaContato: f.visitantes > 0 ? f.usuariosQueClicaram / f.visitantes : 0,
       }))
-      .sort((a, b) => (b.sessoes - a.sessoes) || (b.cliques - a.cliques))
+      .sort((a, b) => b.sessoes - a.sessoes)
 
     const totaisRow = totais.rows?.[0]?.metricValues
     const homeRow = homeRaw.rows?.[0]?.metricValues

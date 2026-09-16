@@ -63,10 +63,7 @@ interface FonteFunil {
   pageViews: number
   cliques: number
   usuariosQueClicaram: number
-  /** null quando a fonte entra só com clique e não há visita pra dividir */
-  taxaContato: number | null
-  /** fonte que entra no relatório apenas pelo clique (TikTok pago) */
-  soCliques: boolean
+  taxaContato: number
   origens: string[]
 }
 
@@ -507,9 +504,7 @@ export default function FunilClient() {
           <InfoTooltip text="Volume não é qualidade. A coluna que importa é a taxa de contato: de cada 100 pessoas que aquela fonte trouxe, quantas chegaram a clicar num botão de contato." />
         </p>
         <p className="text-xs text-gray-400 mb-4">
-          Ordenado por volume. A última coluna mostra quem realmente vira conversa. A linha marcada
-          como <strong>só cliques</strong> entra apenas com o clique: o volume de visitas dela é
-          desproporcional (98% das sessões do site) e não soma no topo do funil.
+          Ordenado por volume. A última coluna mostra quem realmente vira conversa.
         </p>
 
         {carregandoTrafego && !trafego ? (
@@ -569,39 +564,22 @@ export default function FunilClient() {
                             pago
                           </span>
                         )}
-                        {f.soCliques && (
-                          <span className="text-[9px] uppercase tracking-wide bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">
-                            só cliques
-                          </span>
-                        )}
                       </div>
-                      {!f.soCliques && (
-                        <div className="mt-1.5 max-w-[220px]">
-                          <Barra valor={f.sessoes} max={maxSessoes} cor={corFonte(f.grupo)} />
-                        </div>
-                      )}
+                      <div className="mt-1.5 max-w-[220px]">
+                        <Barra valor={f.sessoes} max={maxSessoes} cor={corFonte(f.grupo)} />
+                      </div>
                     </td>
-                    <td className="text-right tabular-nums text-gray-700 align-top pt-3">
-                      {f.soCliques ? <span className="text-gray-300">—</span> : fmt(f.sessoes)}
-                    </td>
-                    <td className="text-right tabular-nums font-semibold text-gray-800 align-top pt-3">
-                      {f.soCliques ? <span className="text-gray-300 font-normal">—</span> : fmt(f.visitantes)}
-                    </td>
-                    <td className="text-right tabular-nums text-gray-400 align-top pt-3">
-                      {f.soCliques ? <span className="text-gray-300">—</span> : fmt(f.pageViews)}
-                    </td>
+                    <td className="text-right tabular-nums text-gray-700 align-top pt-3">{fmt(f.sessoes)}</td>
+                    <td className="text-right tabular-nums font-semibold text-gray-800 align-top pt-3">{fmt(f.visitantes)}</td>
+                    <td className="text-right tabular-nums text-gray-400 align-top pt-3">{fmt(f.pageViews)}</td>
                     <td className="text-right tabular-nums text-gray-500 align-top pt-3">{fmt(f.usuariosQueClicaram)}</td>
                     <td className="text-right align-top pt-3 pl-4">
-                      {f.taxaContato === null ? (
-                        <span className="text-gray-300 tabular-nums">—</span>
-                      ) : (
-                        <span
-                          className="font-semibold tabular-nums"
-                          style={{ color: f.taxaContato >= 0.3 ? '#15803D' : f.taxaContato >= 0.1 ? GOLD : '#B91C1C' }}
-                        >
-                          {fmtPct(f.taxaContato)}
-                        </span>
-                      )}
+                      <span
+                        className="font-semibold tabular-nums"
+                        style={{ color: f.taxaContato >= 0.3 ? '#15803D' : f.taxaContato >= 0.1 ? GOLD : '#B91C1C' }}
+                      >
+                        {fmtPct(f.taxaContato)}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -708,7 +686,7 @@ export default function FunilClient() {
         <div className="bg-white rounded-xl border border-amber-200 p-5">
           <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
             Qual unidade a pessoa procurou
-            <InfoTooltip text="Este quadro é o único que sai sem NENHUM tráfego pago do TikTok, Vendas inclusive. Motivo: essas sessões clicam em 4 a 5 botões diferentes cada uma (contra ~1,2 de qualquer outra origem) e respondem por 97% dos cliques do site — com elas no meio, as quatro unidades empatam e a procura real desaparece. Os demais quadros da página incluem a campanha Vendas normalmente." />
+            <InfoTooltip text="Cliques por botão de contato do site, e ao lado quantas pessoas diferentes clicaram naquele botão. Como todo o relatório, sai sem o tráfego pago do TikTok — aquelas sessões clicavam em 4 a 5 botões cada uma e deixavam as quatro unidades empatadas, escondendo a procura real." />
           </p>
 
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3.5 py-2.5 mb-3">
@@ -719,8 +697,7 @@ export default function FunilClient() {
               </span>
             </div>
             <p className="text-[11px] text-gray-500 mt-1 leading-snug">
-              Sem tráfego pago do TikTok, pra não embaralhar a comparação entre unidades. Também não
-              some as linhas: a mesma pessoa aparece em todos os botões em que clicou.
+              Não some as linhas abaixo: a mesma pessoa aparece em todos os botões em que clicou.
             </p>
           </div>
 
