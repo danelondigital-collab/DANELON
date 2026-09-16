@@ -51,10 +51,17 @@ interface FonteFunil {
 interface TrafegoFunil {
   updatedAt: string
   range: { startDate: string; endDate: string }
-  totais: { sessoes: number; visitantes: number; pageViews: number; cliques: number; usuariosQueClicaram: number }
+  totais: {
+    sessoes: number; visitantes: number; pageViews: number; cliques: number; usuariosQueClicaram: number
+    /** mesmo número, tirando o tráfego pago do TikTok, que clica em quase todos os botões */
+    cliquesSemTikTokPago: number; usuariosQueClicaramSemTikTokPago: number
+  }
   home: { sessoes: number; visitantes: number; pageViews: number }
   porFonte: FonteFunil[]
-  botoes: { nome: string; cliques: number; pessoas: number }[]
+  botoes: {
+    nome: string; cliques: number; pessoas: number
+    cliquesSemTikTokPago: number; pessoasSemTikTokPago: number
+  }[]
   /** fonte = plataforma do link de bio; o mesmo perfil pode ter link no Instagram e no TikTok */
   porPerfil: { perfil: string; fonte: string; sessoes: number; visitantes: number }[]
 }
@@ -665,19 +672,24 @@ export default function FunilClient() {
         <div className="bg-white rounded-xl border border-amber-200 p-5">
           <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
             Qual unidade a pessoa procurou
-            <InfoTooltip text="Cliques por botão de contato do site, e ao lado quantas pessoas diferentes clicaram naquele botão. ATENÇÃO: as linhas NÃO podem ser somadas — quem clicou em Morumbi e em Goiânia aparece nas duas, então somar conta a mesma pessoa várias vezes. O total real de gente está logo acima da lista." />
+            <InfoTooltip text="O ranking usa o clique SEM o tráfego pago do TikTok. Motivo: essa fonte clica em quase todos os botões da página em cada sessão (5,0 por sessão, contra ~1,2 de qualquer outra origem) e responde por 97% dos cliques — com ela no meio, as 4 unidades empatam artificialmente e a procura real some. O total cheio aparece em cinza, do lado, pra não esconder nada." />
           </p>
 
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3.5 py-2.5 mb-3">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-xs text-gray-600">Pessoas diferentes que clicaram em algum botão</span>
-              <span className="text-xl font-bold tabular-nums" style={{ color: GOLD }}>
-                {fmt(trafego?.totais.usuariosQueClicaram ?? 0)}
+              <span className="flex items-baseline gap-2">
+                <span className="text-xl font-bold tabular-nums" style={{ color: GOLD }}>
+                  {fmt(trafego?.totais.usuariosQueClicaramSemTikTokPago ?? 0)}
+                </span>
+                <span className="text-xs text-gray-400 tabular-nums">
+                  ({fmt(trafego?.totais.usuariosQueClicaram ?? 0)} com TikTok pago)
+                </span>
               </span>
             </div>
             <p className="text-[11px] text-gray-500 mt-1 leading-snug">
-              Não some as linhas abaixo: a mesma pessoa costuma clicar em vários botões e aparece em
-              todos eles. Somar dá cerca de 4x este número.
+              Sem o TikTok pago, que clica em quase todos os botões e mascara a procura real.
+              Também não some as linhas: a mesma pessoa aparece em todos os botões em que clicou.
             </p>
           </div>
 
@@ -687,11 +699,19 @@ export default function FunilClient() {
                 <div className="flex items-center justify-between text-sm mb-1">
                   <span className="text-gray-600">{b.nome}</span>
                   <span className="flex items-baseline gap-1.5">
-                    <span className="font-semibold tabular-nums" style={{ color: GOLD }}>{fmt(b.cliques)}</span>
-                    <span className="text-xs text-gray-400 tabular-nums">({fmt(b.pessoas)} pessoas)</span>
+                    <span className="font-semibold tabular-nums" style={{ color: GOLD }}>
+                      {fmt(b.cliquesSemTikTokPago)}
+                    </span>
+                    <span className="text-xs text-gray-400 tabular-nums">
+                      ({fmt(b.pessoasSemTikTokPago)} pessoas · {fmt(b.cliques)} com TikTok)
+                    </span>
                   </span>
                 </div>
-                <Barra valor={b.cliques} max={Math.max(...(trafego?.botoes.map(x => x.cliques) || [1]), 1)} cor={GOLD} />
+                <Barra
+                  valor={b.cliquesSemTikTokPago}
+                  max={Math.max(...(trafego?.botoes.map(x => x.cliquesSemTikTokPago) || [1]), 1)}
+                  cor={GOLD}
+                />
               </li>
             ))}
           </ul>

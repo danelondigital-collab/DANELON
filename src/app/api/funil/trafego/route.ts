@@ -36,6 +36,26 @@ function classificar(sourceMedium: string): { grupo: string; pago: boolean } {
   return { grupo: 'Outros', pago: false }
 }
 
+/**
+ * O tráfego pago do TikTok clica em quase todos os botões da página em cada
+ * sessão (5,0 por sessão em setembro, contra ~1,2 de toda outra fonte), e como
+ * ele responde por 97% dos cliques, o ranking de unidades vira um empate
+ * artificial que esconde a demanda real. Medido em jul/ago/set: 3,98 → 4,99 →
+ * 5,02 por sessão, sempre igual entre as 4 unidades + curso + loja — não é
+ * intenção de contato, é clique de tráfego amplo e barato.
+ *
+ * Por isso o relatório calcula o ranking também sem essa fonte. O total cheio
+ * continua aparecendo ao lado, pra não esconder nada.
+ */
+const SEM_TIKTOK_PAGO = {
+  notExpression: {
+    filter: {
+      fieldName: 'sessionSourceMedium',
+      stringFilter: { matchType: 'FULL_REGEXP' as const, value: '^tiktok / (paid|cpc|ppc).*' },
+    },
+  },
+}
+
 /** Nome amigável da plataforma do link de bio (o utm_source do link curto). */
 const PLATAFORMA_BIO: Record<string, string> = {
   instagram: 'Instagram',
@@ -58,7 +78,10 @@ export async function GET(request: NextRequest) {
     const endDate = endParam && DATE_RE.test(endParam) ? endParam : DEFAULT_END
     const dateRanges = [{ startDate, endDate }]
 
-    const [totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw, cliquesTotalRaw] = await Promise.all([
+    const [
+      totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw,
+      cliquesTotalRaw, botoesLimpoRaw, cliquesTotalLimpoRaw,
+    ] = await Promise.all([
       // topo do funil, sem fatiar
       runReport({
         dateRanges,
@@ -134,6 +157,25 @@ export async function GET(request: NextRequest) {
         metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
         dimensionFilter: hostAndButtonClicksFilter(),
       }),
+      // os mesmos dois relatórios acima, agora sem o tráfego pago do TikTok:
+      // é o recorte que mostra a procura real por unidade
+      runReport({
+        dateRanges,
+        dimensions: [{ name: 'eventName' }],
+        metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
+        dimensionFilter: {
+          andGroup: { expressions: [hostAndButtonClicksFilter(), SEM_TIKTOK_PAGO] },
+        },
+        orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+        limit: '20',
+      }),
+      runReport({
+        dateRanges,
+        metrics: [{ name: 'eventCount' }, { name: 'activeUsers' }],
+        dimensionFilter: {
+          andGroup: { expressions: [hostAndButtonClicksFilter(), SEM_TIKTOK_PAGO] },
+        },
+      }),
     ])
 
     // junta sessões + cliques na mesma chave de origem, depois agrupa por plataforma
@@ -176,6 +218,9 @@ export async function GET(request: NextRequest) {
     const cliquesTotalRow = cliquesTotalRaw.rows?.[0]?.metricValues
     const totalCliques = num(cliquesTotalRow?.[0]?.value)
     const totalUsuariosQueClicaram = num(cliquesTotalRow?.[1]?.value)
+    const cliquesLimpoRow = cliquesTotalLimpoRaw.rows?.[0]?.metricValues
+    const totalCliquesSemTikTokPago = num(cliquesLimpoRow?.[0]?.value)
+    const totalUsuariosQueClicaramSemTikTokPago = num(cliquesLimpoRow?.[1]?.value)
 
     return NextResponse.json({
       updatedAt: new Date().toISOString(),
@@ -186,6 +231,8 @@ export async function GET(request: NextRequest) {
         pageViews: num(totaisRow?.[2]?.value),
         cliques: totalCliques,
         usuariosQueClicaram: totalUsuariosQueClicaram,
+        cliquesSemTikTokPago: totalCliquesSemTikTokPago,
+        usuariosQueClicaramSemTikTokPago: totalUsuariosQueClicaramSemTikTokPago,
       },
       home: {
         sessoes: num(homeRow?.[0]?.value),
@@ -193,11 +240,30 @@ export async function GET(request: NextRequest) {
         pageViews: num(homeRow?.[2]?.value),
       },
       porFonte,
-      botoes: ((botoesRaw.rows || []) as Row[]).map(r => ({
-        nome: r.dimensionValues[0].value.replace('Botão_', '').replace(/_/g, ' '),
-        cliques: num(r.metricValues[0]?.value),
-        pessoas: num(r.metricValues[1]?.value),
-      })),
+      botoes: (() => {
+        // indexa o recorte limpo pelo nome do evento pra casar com o total
+        const limpo = new Map<string, { cliques: number; pessoas: number }>()
+        for (const r of (botoesLimpoRaw.rows || []) as Row[]) {
+          limpo.set(r.dimensionValues[0].value, {
+            cliques: num(r.metricValues[0]?.value),
+            pessoas: num(r.metricValues[1]?.value),
+          })
+        }
+        return ((botoesRaw.rows || []) as Row[])
+          .map(r => {
+            const evento = r.dimensionValues[0].value
+            const semTikTok = limpo.get(evento) || { cliques: 0, pessoas: 0 }
+            return {
+              nome: evento.replace('Botão_', '').replace(/_/g, ' '),
+              cliques: num(r.metricValues[0]?.value),
+              pessoas: num(r.metricValues[1]?.value),
+              cliquesSemTikTokPago: semTikTok.cliques,
+              pessoasSemTikTokPago: semTikTok.pessoas,
+            }
+          })
+          // ordena pela procura real, não pelo volume inflado
+          .sort((a, b) => b.cliquesSemTikTokPago - a.cliquesSemTikTokPago)
+      })(),
       porPerfil: ((perfilRaw.rows || []) as Row[]).map(r => ({
         perfil: r.dimensionValues[0].value.replace('perfil_', ''),
         fonte: PLATAFORMA_BIO[r.dimensionValues[1]?.value?.toLowerCase()] || r.dimensionValues[1]?.value || '—',
