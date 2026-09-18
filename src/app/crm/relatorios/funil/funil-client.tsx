@@ -7,6 +7,7 @@ import {
   UserPlus, HelpCircle, Briefcase, TrendingDown, AlertTriangle, Megaphone,
 } from 'lucide-react'
 import InvestimentoSection from './investimento-section'
+import SemanaSection from './semana-section'
 
 const GOLD = '#B8924A'
 const fmtDate = (d: Date) => format(d, 'yyyy-MM-dd')
@@ -944,6 +945,12 @@ export default function FunilClient() {
           porPerfil={trafego?.porPerfil || []}
           botoes={trafego?.botoes || []}
         />
+      </div>
+
+      {/* ── SEMANA ─────────────────────────────────────────────── */}
+      <div>
+        <p className="text-[11px] uppercase tracking-wider text-gray-400 mb-2 font-medium">Semana</p>
+        <SemanaSection />
       </div>
 
       {trafego && (

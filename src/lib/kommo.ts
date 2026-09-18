@@ -290,9 +290,15 @@ interface LeadRaw {
   created_at: number
 }
 
+/** Dia (yyyy-mm-dd) no fuso de Brasília — é o dia que a equipe enxerga. */
+function diaBR(unix: number) {
+  return new Date((unix - 3 * 3600) * 1000).toISOString().slice(0, 10)
+}
+
 /** Busca os leads criados no período, paginando, e agrupa por pipeline. */
 async function leadsPorPipeline(fromUnix: number, toUnix: number) {
   const porPipeline = new Map<number, number>()
+  const comercialPorDia = new Map<string, number>()
   let total = 0
   let capped = false
 
@@ -318,6 +324,10 @@ async function leadsPorPipeline(fromUnix: number, toUnix: number) {
     for (const l of leads) {
       total += 1
       porPipeline.set(l.pipeline_id, (porPipeline.get(l.pipeline_id) || 0) + 1)
+      if (PIPELINES_COMERCIAIS[l.pipeline_id]) {
+        const dia = diaBR(l.created_at)
+        comercialPorDia.set(dia, (comercialPorDia.get(dia) || 0) + 1)
+      }
     }
 
     if (!data?._links?.next || leads.length < PAGE_LIMIT) break
@@ -343,7 +353,10 @@ async function leadsPorPipeline(fromUnix: number, toUnix: number) {
   }
 
   detalhe.sort((a, b) => b.leads - a.leads)
-  return { total, comercial, recrutamento, outros, detalhe, capped }
+  return {
+    total, comercial, recrutamento, outros, detalhe, capped,
+    comercialPorDia: Object.fromEntries(comercialPorDia) as Record<string, number>,
+  }
 }
 
 /**
@@ -367,6 +380,7 @@ export async function funilFundo(fromUnix: number, toUnix: number) {
 
   const porCanal = new Map<string, number>()
   const porPerfil = new Map<string, number>()
+  const porDia = new Map<string, number>()
   const itemsInWindow: { contactId?: number; createdAt: number }[] = []
   let totalConversas = 0
   let capped = false
@@ -383,6 +397,8 @@ export async function funilFundo(fromUnix: number, toUnix: number) {
 
       totalConversas += 1
       itemsInWindow.push({ contactId: item._embedded?.contacts?.[0]?.id, createdAt })
+      const dia = diaBR(createdAt)
+      porDia.set(dia, (porDia.get(dia) || 0) + 1)
 
       const canal = CANAL_LABEL[item.metadata?.service || ''] || 'Outro'
       porCanal.set(canal, (porCanal.get(canal) || 0) + 1)
@@ -413,6 +429,7 @@ export async function funilFundo(fromUnix: number, toUnix: number) {
       total: totalConversas,
       porCanal: Array.from(porCanal, ([canal, total]) => ({ canal, total })).sort((a, b) => b.total - a.total),
       porPerfil: Array.from(porPerfil, ([perfil, total]) => ({ perfil, total })).sort((a, b) => b.total - a.total).slice(0, 12),
+      porDia: Object.fromEntries(porDia) as Record<string, number>,
       capped,
     },
     leads,
