@@ -35,21 +35,20 @@ const UNIDADES = ['Morumbi', 'Santo André', 'Alphaville', 'Goiânia']
 /**
  * Tipo de campanha. Sem isso o total da plataforma junta objetivos que não têm
  * nada a ver um com o outro — a verba que busca cliente e a que busca
- * funcionário, por exemplo. Os dois remarketings ficam separados porque
- * atingem públicos diferentes: quem interagiu com o curso e quem interagiu
- * com os perfis do salão.
+ * funcionário, por exemplo. A classificação é por campanha: Curso junta a
+ * campanha do curso e o remarketing dele (KMT CURSO); Genérico junta o que
+ * divulga a marca sem unidade definida (Reconhecimento Nacional e o RMK dos
+ * perfis DANELON/Elaine).
  */
-const CATEGORIAS = ['Curso', 'RMK Curso', 'RMK Salão', 'Unidades', 'País/Estados', 'Contratação']
+const CATEGORIAS = ['Curso', 'Genérico', 'Unidades', 'Contratação']
 
 /** Contratação é verba de RH, não de aquisição — some no custo por contato de cliente. */
 const CATEGORIA_NAO_COMERCIAL = 'Contratação'
 
 const COR_CATEGORIA: Record<string, string> = {
   'Curso': '#B8924A',
-  'RMK Curso': '#D4B678',
-  'RMK Salão': '#8B6F3D',
+  'Genérico': '#1F2937',
   'Unidades': '#0F766E',
-  'País/Estados': '#1F2937',
   'Contratação': '#9CA3AF',
 }
 
