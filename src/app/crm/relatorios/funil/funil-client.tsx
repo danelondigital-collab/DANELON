@@ -73,6 +73,7 @@ interface TrafegoFunil {
   range: { startDate: string; endDate: string }
   totais: { sessoes: number; visitantes: number; pageViews: number; cliques: number; usuariosQueClicaram: number }
   home: { sessoes: number; visitantes: number; pageViews: number }
+  paginasBio: { sessoes: number; visitantes: number }
   porFonte: FonteFunil[]
   botoes: { nome: string; cliques: number; pessoas: number }[]
   /** total que casa com a lista de botões: sem TikTok pago, igual às linhas */
@@ -628,20 +629,22 @@ export default function FunilClient() {
 
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-3 mb-4">
             <span className="text-gray-700 font-medium text-sm flex items-center gap-1 mb-2">
-              www.elainedanelon.com.br (raiz)
-              <InfoTooltip text="Total de visitas na home somando as origens consideradas no relatório (sem TikTok pago): link de bio identificado, Instagram, Google, acesso direto. Não é mais um perfil da lista abaixo — é o total geral, pra comparar com o quanto veio identificado por link de bio." />
+              Páginas do link na bio
+              <InfoTooltip text="Todas as visitas que entraram pelas páginas usadas nos links de bio: a página inicial (elainedanelon.com.br, onde caem os links do Instagram) e as páginas do TikTok (/tiktok e /tiktok-elaine). Soma todas as origens, não só quem veio da bio — por isso é o total que contém a lista abaixo. Pessoas únicas contam cada pessoa uma vez, mesmo que tenha entrado por mais de uma página." />
             </span>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-xl font-bold text-gray-900 tabular-nums">{fmt(trafego?.home.sessoes ?? 0)}</p>
+                <p className="text-xl font-bold text-gray-900 tabular-nums">{fmt(trafego?.paginasBio.sessoes ?? 0)}</p>
                 <p className="text-[11px] text-gray-500">visitas</p>
               </div>
               <div>
-                <p className="text-xl font-bold text-gray-900 tabular-nums">{fmt(trafego?.home.visitantes ?? 0)}</p>
+                <p className="text-xl font-bold text-gray-900 tabular-nums">{fmt(trafego?.paginasBio.visitantes ?? 0)}</p>
                 <p className="text-[11px] text-gray-500">pessoas únicas</p>
               </div>
             </div>
-            <p className="text-[11px] text-gray-400 mt-2">Inclui as demais origens, não só link de bio</p>
+            <p className="text-[11px] text-gray-400 mt-2">
+              elainedanelon.com.br + /tiktok + /tiktok-elaine · inclui as demais origens, não só link de bio
+            </p>
           </div>
 
           {(trafego?.porPerfil.length || 0) === 0 ? (

@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     const [
       totais, porFonteRaw, cliquesPorFonteRaw, botoesRaw, perfilRaw, homeRaw,
-      cliquesTotalRaw, bioTikTokRaw,
+      cliquesTotalRaw, bioTikTokRaw, paginasBioRaw,
     ] = await Promise.all([
       // topo do funil, sem fatiar
       runReport({
@@ -170,6 +170,35 @@ export async function GET(request: NextRequest) {
         ),
         limit: '10',
       }),
+      // Total das páginas de entrada do link na bio: a home (onde caem os links
+      // do Instagram) + as páginas do TikTok. Só a home não servia de total pra
+      // lista de perfis — os links do TikTok caem em outra página, então a lista
+      // chegava a somar mais que o "total". Sem dimensão: pessoa distinta de
+      // verdade. Nas páginas do TikTok aplica a mesma exclusão de sessão sem
+      // origem da lista por perfil, pra os dois números olharem a mesma coisa.
+      runReport({
+        dateRanges,
+        metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
+        dimensionFilter: base({
+          orGroup: {
+            expressions: [
+              { filter: { fieldName: 'landingPage', stringFilter: { matchType: 'EXACT' as const, value: '/' } } },
+              {
+                andGroup: {
+                  expressions: [
+                    { filter: { fieldName: 'landingPage', inListFilter: { values: Object.keys(PAGINAS_BIO_TIKTOK) } } },
+                    {
+                      notExpression: {
+                        filter: { fieldName: 'sessionSource', inListFilter: { values: ['(not set)', '(data not available)'] } },
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+      }),
     ])
 
     // junta sessões + cliques na mesma chave de origem, depois agrupa por plataforma
@@ -207,6 +236,7 @@ export async function GET(request: NextRequest) {
 
     const totaisRow = totais.rows?.[0]?.metricValues
     const homeRow = homeRaw.rows?.[0]?.metricValues
+    const paginasBioRow = paginasBioRaw.rows?.[0]?.metricValues
     // Vem da consulta sem dimensão: é gente distinta de verdade, não a soma das
     // linhas por fonte (que contava duas vezes quem visitou por origens diferentes).
     const cliquesTotalRow = cliquesTotalRaw.rows?.[0]?.metricValues
@@ -227,6 +257,10 @@ export async function GET(request: NextRequest) {
         sessoes: num(homeRow?.[0]?.value),
         visitantes: num(homeRow?.[1]?.value),
         pageViews: num(homeRow?.[2]?.value),
+      },
+      paginasBio: {
+        sessoes: num(paginasBioRow?.[0]?.value),
+        visitantes: num(paginasBioRow?.[1]?.value),
       },
       porFonte,
       botoes: ((botoesRaw.rows || []) as Row[]).map(r => ({
