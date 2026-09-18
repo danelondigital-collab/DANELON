@@ -52,6 +52,13 @@ const COR_CATEGORIA: Record<string, string> = {
   'Contratação': '#9CA3AF',
 }
 
+/** Como a Meta aparece na tabela: Salão fica com tudo que não é Curso nem Contratação. */
+const RECORTES_META = [
+  { rotulo: 'Meta · Salão', pertence: (c: string) => c !== 'Curso' && c !== CATEGORIA_NAO_COMERCIAL, comFunil: true },
+  { rotulo: 'Meta · Curso', pertence: (c: string) => c === 'Curso', comFunil: false },
+  { rotulo: 'Meta · Contratação', pertence: (c: string) => c === CATEGORIA_NAO_COMERCIAL, comFunil: false },
+]
+
 /** Remove acento/espaço/caixa pra comparar nomes de unidade vindos de fontes diferentes
  * (formulário, campanha do GA4 "perfil_santoandre", evento de botão "Unidade Santo Andre"). */
 function normalizarUnidade(s: string) {
@@ -204,13 +211,26 @@ export default function InvestimentoSection({
   }
 
   /** Cruza o gasto de cada plataforma com as visitas e contatos que ela gerou.
-   * Ignora lançamentos por unidade aqui — eles já estão contados dentro do
-   * lançamento geral da plataforma (ex: "Meta / perfil" cobre as campanhas
-   * das 4 unidades + as gerais); somar os dois juntaria o mesmo real duas vezes.
-   * O detalhe por unidade aparece à parte, no "Funil por unidade" abaixo. */
+   * Os lançamentos por unidade entram: desde a classificação por campanha, a
+   * verba das unidades só existe neles (o lançamento geral não a repete).
+   *
+   * A Meta é quebrada em Salão, Curso e Contratação: são públicos e objetivos
+   * diferentes, e misturar curso e vaga de emprego no custo do salão distorce
+   * a conta. Curso e Contratação mostram gasto e topo do funil da plataforma,
+   * mas não visita/contato — o GA4 não separa por campanha da Meta, então
+   * visita e contato ficam todos na linha do Salão. */
   const linhas = useMemo(() => {
-    return PLATAFORMAS.map(p => {
-      const doPeriodo = investimentos.filter(i => i.plataforma === p && !i.unidade)
+    const recortes = PLATAFORMAS.flatMap(p =>
+      p === 'Meta'
+        ? RECORTES_META.map(r => ({
+            plataforma: p,
+            rotulo: r.rotulo,
+            doPeriodo: investimentos.filter(i => i.plataforma === p && r.pertence(i.categoria)),
+            comFunil: r.comFunil,
+          }))
+        : [{ plataforma: p, rotulo: p, doPeriodo: investimentos.filter(i => i.plataforma === p), comFunil: true }]
+    )
+    return recortes.map(({ plataforma: p, rotulo, doPeriodo, comFunil }) => {
       const gastoSite = doPeriodo.filter(i => i.destino === 'site').reduce((s, i) => s + Number(i.valor), 0)
       const gastoPerfil = doPeriodo.filter(i => i.destino === 'perfil').reduce((s, i) => s + Number(i.valor), 0)
       const gastoTotal = gastoSite + gastoPerfil
@@ -224,13 +244,15 @@ export default function InvestimentoSection({
       const cliquesPlataforma = somaOpcional('cliques')
       const resultadosPlataforma = somaOpcional('resultados')
 
-      const grupos = GRUPOS_POR_PLATAFORMA[p]
+      const grupos = comFunil ? GRUPOS_POR_PLATAFORMA[p] : []
       const fontes = porFonte.filter(f => grupos.includes(f.grupo))
       const visitas = fontes.reduce((s, f) => s + f.sessoes, 0)
       const contatos = fontes.reduce((s, f) => s + f.usuariosQueClicaram, 0)
 
       return {
         plataforma: p,
+        rotulo,
+        comFunil,
         gastoSite,
         gastoPerfil,
         gastoTotal,
@@ -271,9 +293,10 @@ export default function InvestimentoSection({
     .filter(i => i.categoria !== CATEGORIA_NAO_COMERCIAL && i.plataforma !== PLATAFORMA_FORA_DO_FUNIL)
     .reduce((s, i) => s + Number(i.valor), 0)
 
-  // o total da tabela ignora a plataforma fora do funil: ela tem gasto, mas não
-  // tem visita nem contato pra dividir, e entraria distorcendo o custo médio
-  const linhasNoFunil = linhas.filter(l => !l.foraDoFunil)
+  // o total da tabela ignora o que não tem visita nem contato pra dividir
+  // (plataforma fora do funil, Curso e Contratação da Meta): entraria
+  // distorcendo o custo médio
+  const linhasNoFunil = linhas.filter(l => !l.foraDoFunil && l.comFunil)
   const totalGasto = linhasNoFunil.reduce((s, l) => s + l.gastoTotal, 0)
   const totalContatos = linhasNoFunil.reduce((s, l) => s + l.contatos, 0)
   const algumLancamento = investimentos.length > 0
@@ -295,7 +318,14 @@ export default function InvestimentoSection({
     return UNIDADES.map(u => {
       const chave = normalizarUnidade(u)
 
-      const lancamento = investimentos.find(i => normalizarUnidade(i.unidade) === chave)
+      // soma os meses: um filtro que atravessa agosto e setembro tem um
+      // lançamento de cada, e pegar só o primeiro mostrava meio período
+      const daUnidade = investimentos.filter(i => normalizarUnidade(i.unidade) === chave)
+      const somaCampo = (c: 'impressoes' | 'cliques') =>
+        daUnidade.some(i => i[c] !== null) ? daUnidade.reduce((s, i) => s + (i[c] ?? 0), 0) : null
+      const lancamento = daUnidade.length > 0
+        ? { valor: daUnidade.reduce((s, i) => s + Number(i.valor), 0), impressoes: somaCampo('impressoes'), cliques: somaCampo('cliques') }
+        : null
       // Soma todas as plataformas: a mesma unidade pode ter link de bio no
       // Instagram e no TikTok, e pegar só o primeiro subcontaria a visita.
       const perfis = porPerfil.filter(p => normalizarUnidade(p.perfil).includes(chave))
@@ -453,8 +483,8 @@ export default function InvestimentoSection({
             {linhas
               .filter(l => l.impressoesPlataforma !== null || l.cliquesPlataforma !== null || l.resultadosPlataforma !== null)
               .map(l => (
-                <div key={l.plataforma} className="rounded-lg border border-gray-200 p-3.5">
-                  <p className="text-xs font-semibold text-gray-700 mb-2.5">{l.plataforma}</p>
+                <div key={l.rotulo} className="rounded-lg border border-gray-200 p-3.5">
+                  <p className="text-xs font-semibold text-gray-700 mb-2.5">{l.rotulo}</p>
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-500 flex items-center gap-1"><Eye className="w-3 h-3" /> Impressões</span>
@@ -571,13 +601,13 @@ export default function InvestimentoSection({
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {linhas.map(l => (
-                  <tr key={l.plataforma} className="hover:bg-gray-50/60">
+                  <tr key={l.rotulo} className="hover:bg-gray-50/60">
                     <td className="py-2.5 text-gray-700">
                       <span className="flex items-center gap-1.5 flex-wrap">
-                        {l.plataforma}
-                        {l.foraDoFunil && (
+                        {l.rotulo}
+                        {(l.foraDoFunil || !l.comFunil) && (
                           <span className="text-[10px] uppercase tracking-wide bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">
-                            fora do funil
+                            {l.foraDoFunil ? 'fora do funil' : 'fora do custo do salão'}
                           </span>
                         )}
                       </span>
@@ -590,8 +620,8 @@ export default function InvestimentoSection({
                     <td className="text-right tabular-nums text-gray-700">
                       {l.gastoTotal > 0 ? fmtBRL(l.gastoTotal) : <span className="text-gray-300">não lançado</span>}
                     </td>
-                    <td className="text-right tabular-nums text-gray-500">{fmt(l.visitas)}</td>
-                    <td className="text-right tabular-nums text-gray-500">{fmt(l.contatos)}</td>
+                    <td className="text-right tabular-nums text-gray-500">{l.comFunil ? fmt(l.visitas) : '—'}</td>
+                    <td className="text-right tabular-nums text-gray-500">{l.comFunil ? fmt(l.contatos) : '—'}</td>
                     <td className="text-right tabular-nums text-gray-500">
                       {l.custoPorVisita !== null ? fmtBRL(l.custoPorVisita) : '—'}
                     </td>
