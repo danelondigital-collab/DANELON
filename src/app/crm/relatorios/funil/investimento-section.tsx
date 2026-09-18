@@ -272,6 +272,33 @@ export default function InvestimentoSection({
     }).filter(l => l.temLancamento || l.visitas > 0)
   }, [investimentos, porFonte])
 
+  /** Lançamentos agrupados do mesmo jeito que a tabela (Meta em Salão/Curso/
+   * Contratação), ordenados por destino, tipo, unidade e mês pra leitura. */
+  const gruposLancamentos = useMemo(() => {
+    const rotuloDe = (i: Investimento) =>
+      i.plataforma === 'Meta'
+        ? (RECORTES_META.find(r => r.pertence(i.categoria))?.rotulo ?? 'Meta')
+        : i.plataforma
+    const ordem = [...RECORTES_META.map(r => r.rotulo), ...PLATAFORMAS.filter(p => p !== 'Meta')]
+    const grupos = new Map<string, Investimento[]>()
+    for (const i of investimentos) {
+      const r = rotuloDe(i)
+      grupos.set(r, [...(grupos.get(r) || []), i])
+    }
+    return Array.from(grupos.entries())
+      .sort(([a], [b]) => (ordem.indexOf(a) + 1 || 99) - (ordem.indexOf(b) + 1 || 99))
+      .map(([rotulo, itens]) => ({
+        rotulo,
+        itens: [...itens].sort((a, b) =>
+          a.destino.localeCompare(b.destino)
+          || (a.categoria || '').localeCompare(b.categoria || '')
+          || (a.unidade || '').localeCompare(b.unidade || '')
+          || a.mes.localeCompare(b.mes)),
+        perfil: itens.filter(i => i.destino === 'perfil').reduce((s, i) => s + Number(i.valor), 0),
+        site: itens.filter(i => i.destino === 'site').reduce((s, i) => s + Number(i.valor), 0),
+      }))
+  }, [investimentos])
+
   /** Gasto por tipo de campanha, somando todas as plataformas e unidades.
    * Diferente da tabela por plataforma, aqui os lançamentos por unidade CONTAM:
    * eles são justamente o detalhe da categoria "Unidades". */
@@ -662,25 +689,52 @@ export default function InvestimentoSection({
 
           {/* lançamentos individuais, pra conferir e corrigir */}
           <div className="mt-5 pt-4 border-t border-gray-100">
-            <p className="text-xs text-gray-500 mb-2">Lançamentos no período</p>
-            <ul className="space-y-1.5">
-              {investimentos.map(i => (
-                <li key={i.id} className="flex items-center justify-between text-xs text-gray-600 group">
-                  <span>
-                    {i.plataforma}
-                    <span className="text-gray-400"> · {i.destino === 'perfil' ? 'perfil' : 'site'}{i.unidade ? ` · ${i.unidade}` : ''} · </span>
-                    {new Date(i.mes + 'T12:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <span className="tabular-nums font-medium text-gray-700">{fmtBRL(Number(i.valor))}</span>
-                    <button onClick={() => excluir(i.id)}
-                      className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </span>
-                </li>
+            <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
+              Lançamentos no período
+              <InfoTooltip text="Agrupados como na tabela acima. 'Perfil' é verba de campanha que leva pro Instagram; 'Site' é a que leva direto pro site." />
+            </p>
+            <div className="space-y-4">
+              {gruposLancamentos.map(g => (
+                <div key={g.rotulo}>
+                  <div className="flex items-center justify-between text-xs mb-1.5 pb-1 border-b border-gray-100">
+                    <span className="font-semibold text-gray-700">{g.rotulo}</span>
+                    <span className="flex items-baseline gap-2">
+                      {g.perfil > 0 && g.site > 0 && (
+                        <span className="text-[10px] text-gray-400 tabular-nums">
+                          {fmtBRL(g.perfil)} perfil · {fmtBRL(g.site)} site
+                        </span>
+                      )}
+                      <span className="tabular-nums font-semibold text-gray-800">{fmtBRL(g.perfil + g.site)}</span>
+                    </span>
+                  </div>
+                  <ul className="space-y-1">
+                    {g.itens.map(i => (
+                      <li key={i.id} className="flex items-center justify-between text-xs text-gray-600 group pl-2">
+                        <span className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 ${
+                            i.destino === 'perfil' ? 'bg-pink-50 text-pink-700' : 'bg-sky-50 text-sky-700'
+                          }`}>
+                            {i.destino === 'perfil' ? 'perfil' : 'site'}
+                          </span>
+                          {i.categoria || 'Sem tipo'}
+                          {i.unidade && <span className="text-gray-400">· {i.unidade}</span>}
+                          <span className="text-gray-400">
+                            · {new Date(i.mes + 'T12:00:00').toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-3">
+                          <span className="tabular-nums font-medium text-gray-700">{fmtBRL(Number(i.valor))}</span>
+                          <button onClick={() => excluir(i.id)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
