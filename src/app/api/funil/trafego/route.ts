@@ -54,12 +54,17 @@ function classificar(sourceMedium: string): { grupo: string; pago: boolean } {
  * O gasto continua visível na seção de investimento, marcado como fora do
  * funil. TikTok orgânico (link na bio, perfil) não é afetado: o filtro só pega
  * mídia paga.
+ *
+ * pangleglobal.com é a rede de anúncios do TikTok (apps parceiros). Anúncio
+ * entregue ali chega sem UTM, como "referral" — em set/2026 uma campanha
+ * apontada pra /tiktok trouxe ~1.400 sessões/dia por esse caminho e aparecia
+ * como se fosse gente vindo do link na bio.
  */
 const SEM_TIKTOK_PAGO = {
   notExpression: {
     filter: {
       fieldName: 'sessionSourceMedium',
-      stringFilter: { matchType: 'FULL_REGEXP' as const, value: '^tiktok / (paid|cpc|ppc).*' },
+      stringFilter: { matchType: 'FULL_REGEXP' as const, value: '^tiktok / (paid|cpc|ppc).*|.*pangle.*' },
     },
   },
 }
@@ -183,17 +188,30 @@ export async function GET(request: NextRequest) {
         dimensionFilter: base(BOTAO),
       }),
       // links de bio do TikTok: identificados pela página de entrada, porque
-      // foram criados como páginas próprias e não carregam utm
+      // foram criados como páginas próprias e não carregam utm. Sessão sem
+      // origem ("(not set)" / "(data not available)") fica de fora: nessas
+      // páginas ela só aparece junto com campanha paga apontada pra elas
+      // (0% de engajamento), não com gente vindo do perfil.
       runReport({
         dateRanges,
         dimensions: [{ name: 'landingPage' }],
         metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
-        dimensionFilter: base({
-          filter: {
-            fieldName: 'landingPage',
-            inListFilter: { values: Object.keys(PAGINAS_BIO_TIKTOK) },
+        dimensionFilter: base(
+          {
+            filter: {
+              fieldName: 'landingPage',
+              inListFilter: { values: Object.keys(PAGINAS_BIO_TIKTOK) },
+            },
           },
-        }),
+          {
+            notExpression: {
+              filter: {
+                fieldName: 'sessionSource',
+                inListFilter: { values: ['(not set)', '(data not available)'] },
+              },
+            },
+          },
+        ),
         limit: '10',
       }),
     ])
